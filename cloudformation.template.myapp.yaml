@@ -1,0 +1,51 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  AWS CloudFormation ECS MyApp service deploy
+
+Parameters:
+  # Resources
+  Cluster:
+    Type: String
+  ECSTGMyApp:
+    Type: String
+  ECSServiceRole:
+    Type: String
+  # Configurations
+  DBAddress:
+    Type: String
+  DockerImage:
+    Type: String
+
+# Resources documentation
+# http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-template-resource-type-ref.html
+Resources:
+  #####################################################################################
+  # Start of ECS Service
+  #####################################################################################
+  MyApp:
+    Type: "AWS::ECS::Service"
+    Properties:
+      Cluster: !Ref Cluster
+      DesiredCount: 2
+      TaskDefinition: !Ref MyAppDefinition
+      LoadBalancers:
+      - ContainerName: myapp
+        ContainerPort: 3000
+        TargetGroupArn: !Ref ECSTGMyApp
+      Role: !Ref ECSServiceRole
+  MyAppDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub "${AWS::StackName}-myapp"
+      ContainerDefinitions:
+      - Name: myapp
+        Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${DockerImage}
+        Memory: '300'
+        Environment:
+        - Name: MYSQL_CONNECTION_STRING
+          Value: !Ref DBAddress
+        PortMappings:
+        - ContainerPort: 3000
+  #####################################################################################
+  # End of ECS
+  #####################################################################################
