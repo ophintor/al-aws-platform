@@ -13,7 +13,7 @@ Notes:
 *Note*: you need to specify your key name on parameters _KeyName_!
 
 ```
-aws cloudformation deploy --region "eu-west-1" --template-file "cloudformation.template.yaml" --stack-name "test-stack" --capabilities "CAPABILITY_NAMED_IAM" --parameter-overrides KeyName="mykey"
+aws cloudformation deploy --region "eu-west-1" --template-file "cloudformation/infrastructure.yaml" --stack-name "test-stack" --capabilities "CAPABILITY_NAMED_IAM" --parameter-overrides KeyName="mykey"
 ```
 
 ### Deploy the code to code commit (It will trigger the code pipeline)

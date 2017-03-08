@@ -944,7 +944,7 @@ Resources:
             StackName: !Sub ${AWS::StackName}-MyApp-Service
             Capabilities: CAPABILITY_NAMED_IAM
             # TemplatePath: Template::cloudformation.template.myapp.yaml
-            TemplatePath: SourceOutput::cloudformation.template.myapp.yaml
+            TemplatePath: SourceOutput::cloudformation/myapp.template.yaml
             RoleArn: !GetAtt CloudFormationExecutionRole.Arn
             # Can't be a YAML object:  Value of property Configuration must be an object with String (or simple type) properties
             # ParameterOverrides
