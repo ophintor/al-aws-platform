@@ -6,8 +6,15 @@ Mappings:
     t2.micro:
       Arch: 64HVM
   AWSRegionArch2AMI:
+    us-east-1:
+      64HVM: ami-6edd3078
     eu-west-1:
       64HVM: ami-d8f4deab
+  AWSRegionECSAMI:
+    us-east-1:
+      ecs: ami-b2df2ca4
+    eu-west-1:
+      ecs: ami-a7f2acc1
 Outputs:
   WebsiteURLCodeDeployLB:
     Description: Website
@@ -103,7 +110,7 @@ Resources:
       # Maybe useful: http://docs.aws.amazon.com/AmazonVPC/latest/UserGuide/VPC_DHCP_Options.html
       CidrBlock: 10.250.0.0/24
       # TODO: AvailabilityZone as paramenter!
-      AvailabilityZone: "eu-west-1a"
+      AvailabilityZone: !Select [0, !GetAZs "" ]
       MapPublicIpOnLaunch: true
       Tags:
       - Key: Name
@@ -115,7 +122,7 @@ Resources:
       VpcId: !Ref myVPC
       CidrBlock: 10.250.2.0/24
       # TODO: AvailabilityZone as paramenter!
-      AvailabilityZone: "eu-west-1b"
+      AvailabilityZone: !Select [1, !GetAZs "" ]
       MapPublicIpOnLaunch: true
       Tags:
       - Key: Name
@@ -127,7 +134,7 @@ Resources:
       VpcId: !Ref myVPC
       CidrBlock: 10.250.100.0/24
       # TODO: AvailabilityZone as paramenter!
-      AvailabilityZone: "eu-west-1a"
+      AvailabilityZone: !Select [0, !GetAZs "" ]
       Tags:
       - Key: Name
         Value: !Sub "${AWS::StackName}-PrivateSubnet01"
@@ -138,7 +145,7 @@ Resources:
       VpcId: !Ref myVPC
       CidrBlock: 10.250.101.0/24
       # TODO: AvailabilityZone as paramenter!
-      AvailabilityZone: "eu-west-1b"
+      AvailabilityZone: !Select [1, !GetAZs "" ]
       Tags:
       - Key: Name
         Value: !Sub "${AWS::StackName}-PrivateSubnet02"
@@ -266,7 +273,7 @@ Resources:
     Properties:
       # AMI list: http://docs.aws.amazon.com/AmazonECS/latest/developerguide/launch_container_instance.html
       InstanceType: t2.micro
-      ImageId: ami-a7f2acc1
+      ImageId: !FindInMap [ AWSRegionECSAMI,  !Ref 'AWS::Region', 'ecs' ]
       KeyName: !Ref KeyName
       SecurityGroups: [ !Ref EcsSecurityGroup ]
       IamInstanceProfile: !Ref EC2InstanceProfile
@@ -455,7 +462,7 @@ Resources:
             - codecommit:Get*
             - codecommit:GitPull
             Resource:
-            - !Sub "arn:aws:codecommit:eu-west-1:${AWS::AccountId}:${AWS::StackName}-myapp"
+            - !Sub "arn:aws:codecommit:${AWS::Region}:${AWS::AccountId}:${AWS::StackName}-myapp"
   DevGroup:
     Type: "AWS::IAM::Group"
     Properties:
@@ -479,7 +486,7 @@ Resources:
             - codecommit:GitPull
             - codecommit:GitPush
             Resource:
-            - !Sub "arn:aws:codecommit:eu-west-1:${AWS::AccountId}:${AWS::StackName}-myapp"
+            - !Sub "arn:aws:codecommit:${AWS::Region}:${AWS::AccountId}:${AWS::StackName}-myapp"
   CodeRepo:
     Type: AWS::CodeCommit::Repository
     Properties:
