@@ -7,12 +7,20 @@ Mappings:
       Arch: 64HVM
   AWSRegionArch2AMI:
     us-east-1:
-      64HVM: ami-6edd3078
+      64HVM: ami-0b33d91d
+    us-east-2:
+      64HVM: ami-c55673a0
+    us-west-2:
+      64HVM: ami-f173cc91
     eu-west-1:
-      64HVM: ami-d8f4deab
+      64HVM: ami-70edb016
   AWSRegionECSAMI:
     us-east-1:
       ecs: ami-b2df2ca4
+    us-east-2:
+      ecs: ami-832b0ee6
+    us-west-2:
+      ecs: ami-022b9262
     eu-west-1:
       ecs: ami-a7f2acc1
 Outputs:
