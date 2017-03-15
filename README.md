@@ -8,6 +8,12 @@ Notes:
 
 ## How to run
 
+### Prerequisites
+
+ * AWS IAM user within product development account
+ * AWS CLI installed
+ * AWS credentials configured
+
 ### Launch the stack
 
 *Note*: you need to specify your key name on parameters _KeyName_!
