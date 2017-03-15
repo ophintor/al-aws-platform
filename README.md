@@ -4,7 +4,7 @@ This is a cloud infrastructure build on top of AWS services. To be able to deplo
 You can use the AWS User Interface to deploy the code as well as the [CLI](https://aws.amazon.com/cli/).
 Check their documentation how to configure your AWS [CLI](https://aws.amazon.com/cli/).
 
-This repo contains a simple _todo application_ written in NodeJS and all the AWS configurations to
+This repo contains a simple _todo application_ written in NodeJS and all the AWS configurations.
 
 **Notes**:
 
@@ -16,6 +16,15 @@ The repo have a working demo that  creates several AWS resources, creates a CD (
 Instances where the code will run. The demo uses the NodeJS code present on this repo to show the workflow.
 
 ### Prerequisites
+
+There are only 4 regions supporting all the resources required to create the stack:
+
+ * Virginia: **us-east-1**
+ * Ohio: **us-east-2**
+ * Oregon: **us-west-2**
+ * Ireland: **eu-west-1**
+
+You need also to have an AWS account and configure the [AWS CLI](https://aws.amazon.com/cli/):
 
  * AWS IAM user within product development account
  * AWS CLI installed
