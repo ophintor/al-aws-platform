@@ -4,15 +4,22 @@ phases:
   pre_build:
     commands:
       - echo Logging in to Amazon ECR...
+      - echo -n "$CODEBUILD_BUILD_ID" | sed "s/.*:\([[:xdigit:]]\{7\}\).*/\1/" > /tmp/build_id
+      - printf "%s" "$REPOSITORY_URI" "$(cat /tmp/build_id)" > /tmp/build_tag
+      - printf '{"tag":"%s"}' "$(cat /tmp/build_id)" > /tmp/build.json
       - $(aws ecr get-login --region $AWS_DEFAULT_REGION)
   build:
     commands:
       - echo Build started on `date`
-      - echo Building the Docker image...          
-      - docker build -t $IMAGE_REPO_NAME:$IMAGE_TAG .
-      - docker tag $IMAGE_REPO_NAME:$IMAGE_TAG $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME:$IMAGE_TAG      
+      - echo Building the Docker image...
+      - docker build -t $IMAGE_REPO_NAME:$(cat /tmp/build_tag) .
+      - docker tag $IMAGE_REPO_NAME:$(cat /tmp/build_tag) $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME:$(cat /tmp/build_tag)
   post_build:
     commands:
       - echo Build completed on `date`
       - echo Pushing the Docker image...
-      - docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME:$IMAGE_TAG
+      - docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME:$(cat /tmp/build_tag)
+
+artifacts:
+  files: /tmp/build.json
+  discard-paths: yes
