@@ -17,10 +17,10 @@ app.use(methodOverride('X-HTTP-Method-Override'));
 var mysql      = require('mysql');
 
 var connection = mysql.createConnection({
-  host     : process.env.MYSQL_CONNECTION_STRING || 'localhost',
-  user     : process.env.MYSQL_USER || 'root',
-  password : process.env.MYSQL_PASS || 'password',
-  database : process.env.MYSQL_DB || 'todo'
+  host     : process.env.DB_CONNECTIONSTRING || 'localhost',
+  user     : process.env.DB_USERNAME || 'admin',
+  password : process.env.DB_PASSWORD || 'password',
+  database : process.env.DB_NAME || 'todo'
 });
 
 function getTodos(res, next) {

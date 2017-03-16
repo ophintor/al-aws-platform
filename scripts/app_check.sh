@@ -4,7 +4,7 @@ set -xu
 
 PORT=3000
 
-for i in {1..10} ; do
+for i in {1..30} ; do
 	STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" "localhost:${PORT}")
 
 	if [ ${STATUS_CODE} -eq 200 ]; then

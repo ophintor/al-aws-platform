@@ -205,6 +205,198 @@ Resources:
   ####################################################################################
 
   ####################################################################################
+  # Start of Set Parameter Function
+  ####################################################################################
+  MyKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: Master key used by Parameter Store
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+        - Sid: Allow administration of the key
+          Effect: Allow
+          Principal:
+            AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+          Action: "*"
+          Resource: '*'
+        # Allow EncryptLambda function to use the key
+        - Effect: Allow
+          Action:
+          - kms:Encrypt
+          Principal:
+            AWS: !GetAtt LambdaRole.Arn
+          Resource: "*"
+        # TODO: This can be set in the key! but we don't have it here
+        - Effect: Allow
+          Action:
+          - kms:Decrypt
+          Principal:
+            AWS:
+            - !GetAtt CodeDeployLinuxEC2InstanceRole.Arn
+            - !GetAtt TaskRole.Arn
+          Resource: "*"
+  MyKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub 'alias/${AWS::StackName}-masterkey'
+      TargetKeyId: !Ref 'MyKey'
+
+  # Crate Log Group to setup the Retentio time of Lambda Logs
+  EncryptLambdaLogsGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${AWS::StackName}-set-param-store
+      RetentionInDays: 1
+  LambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${AWS::StackName}-Lambda-SetParamStore
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - lambda.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Policies:
+      - PolicyName: root
+        PolicyDocument:
+          Statement:
+          # Allow lambda to create log group
+          - Effect: "Allow"
+            Action:
+            - logs:CreateLogGroup
+            Resource:
+            - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+          # Create Log streams and write on it
+          - Effect: "Allow"
+            Action:
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+            Resource:
+            - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}-set-param-store"
+            - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}-set-param-store:*"
+          # Allow Lambda Function to set values into Parameters Store in a specific name space
+          - Effect: "Allow"
+            Action:
+            - ssm:PutParameter
+            Resource:
+            - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}.db.*'
+            # Used on AWS console to test the function ^.^
+            - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}.fn.test'
+  EncryptLambda:
+    Type: AWS::Lambda::Function
+    DependsOn: MyKeyAlias
+    Properties:
+      FunctionName: !Sub ${AWS::StackName}-set-param-store
+      Handler: index.lambda_handler
+      Role: !GetAtt 'LambdaRole.Arn'
+      Code:
+        ZipFile: |
+          import base64
+          import uuid
+          import httplib
+          import urlparse
+          import json
+          import boto3
+          import logging
+
+          # Configure logging
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+
+          # Response emit
+          def send_response(request, response, status=None, reason=None):
+            if status is not None:
+              response['Status'] = status
+
+            if reason is not None:
+              response['Reason'] = reason
+
+            if 'ResponseURL' in request and request['ResponseURL']:
+              url = urlparse.urlparse(request['ResponseURL'])
+              body = json.dumps(response)
+              https = httplib.HTTPSConnection(url.hostname)
+              https.request('PUT', url.path+'?'+url.query, body)
+
+            return response
+
+          # Main lambda function.
+          def lambda_handler(event, context):
+            logger.info('got event{}'.format(event))
+            logger.info('got context{}'.format(context))
+
+            response = {
+              'StackId': event['StackId'],
+              'RequestId': event['RequestId'],
+              'LogicalResourceId': event['LogicalResourceId'],
+              'Status': 'SUCCESS'
+            }
+
+            #Make sure that we have a Resource ID
+            if 'PhysicalResourceId' in event:
+              response['PhysicalResourceId'] = event['PhysicalResourceId']
+            else:
+              response['PhysicalResourceId'] = str(uuid.uuid4())
+
+            #Delete action is a NoOp
+            if event['RequestType'] == 'Delete':
+              logger.warning('Delete Event. Nothing to do!')
+              return send_response(event, response)
+
+            # WIP
+            if event['RequestType'] == 'Update':
+              logger.warning('Update Event. Nothing to do!')
+              return send_response(event, response)
+
+            try:
+              ResourceProperties = event['ResourceProperties']
+
+              # Save value into parameter store
+              psClient = boto3.client('ssm')
+              a = {
+                'Name': ResourceProperties['ParameterStoreName'],
+                'Value': ResourceProperties['Value'],
+                'Type': ResourceProperties['Type'],
+                'Overwrite': bool(ResourceProperties['Overwrite']) if 'Overwrite' in ResourceProperties else False,
+              }
+
+              if 'Description' in ResourceProperties:
+                a['Description'] = ResourceProperties['Description']
+
+              if 'KeyId' in ResourceProperties:
+                a['KeyId'] =  ResourceProperties['KeyId']
+
+              psClient.put_parameter(**a)
+
+              response['Reason'] = 'The value was successfully encrypted'
+            except Exception as e:
+              logger.error(e)
+              response['Status'] = 'FAILED'
+              response['Reason'] = 'Encryption Failed - See CloudWatch logs for the Lamba function backing the custom resource for details'
+
+            return send_response(event, response)
+      Runtime: python2.7
+      Timeout: '25'
+  StoreEncryptedDBPassword:
+    Type: 'Custom::SetParameterStore'
+    Properties:
+      ServiceToken: !GetAtt 'EncryptLambda.Arn'
+      # KeyId: !Ref 'MyKey'
+      KeyId: !Sub "alias/${AWS::StackName}-masterkey"
+      ParameterStoreName: !Sub '${AWS::StackName}.db.password'
+      Value: !Ref DBPassword
+      Description: "DataBase password"
+      Type: 'SecureString'
+      Overwrite: True
+  ####################################################################################
+  # End of Set Parameter Function
+  ####################################################################################
+
+  ####################################################################################
   # Start of RDS
   ####################################################################################
   DBSubnetGroup:
@@ -244,6 +436,34 @@ Resources:
       MasterUsername: !Ref DBUsername
       BackupRetentionPeriod: 0 # NOTE: This disables backups and speedups the provisioning tests...!
       DBSubnetGroupName: !Ref DBSubnetGroup
+  StoreDBAddress:
+    Type: 'Custom::SetParameterStore'
+    Properties:
+      ServiceToken: !GetAtt 'EncryptLambda.Arn'
+      ParameterStoreName: !Sub '${AWS::StackName}.db.connectionstring'
+      Value: !GetAtt DBInstance.Endpoint.Address
+      Description: "DataBase Address"
+      Type: 'String'
+      Overwrite: True
+  StoreDBUsername:
+    Type: 'Custom::SetParameterStore'
+    Properties:
+      ServiceToken: !GetAtt 'EncryptLambda.Arn'
+      # KeyId: !Ref 'MyKey'
+      ParameterStoreName: !Sub '${AWS::StackName}.db.username'
+      Value: !Ref DBUsername
+      Description: "DataBase username"
+      Type: 'String'
+      Overwrite: True
+  StoreDBName:
+    Type: 'Custom::SetParameterStore'
+    Properties:
+      ServiceToken: !GetAtt 'EncryptLambda.Arn'
+      ParameterStoreName: !Sub '${AWS::StackName}.db.name'
+      Value: !Ref DBName
+      Description: "DataBase Name"
+      Type: 'String'
+      Overwrite: True
   ####################################################################################
   # End of RDS
   ####################################################################################
@@ -452,6 +672,47 @@ Resources:
     Properties:
       LogGroupName: !Sub ${AWS::StackName}-ecs
       RetentionInDays: 1
+  TaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${AWS::StackName}-myapp-task-role
+      AssumeRolePolicyDocument:
+        Statement:
+        - Sid: '1'
+          Effect: Allow
+          Principal:
+            Service: [ ecs-tasks.amazonaws.com ]
+          Action: [ 'sts:AssumeRole' ]
+      Policies:
+        # Allow describe parameters to automate config process
+        - PolicyName: parameter-store-list
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                - ssm:DescribeParameters
+                Resource:
+                - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:*'
+        - PolicyName: parameter-store-db
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                - ssm:GetParameters
+                Resource:
+                - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}.db.*'
+        - PolicyName: parameter-store-app
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                - ssm:GetParameters
+                - ssm:PutParameter
+                Resource:
+                - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}.app.*'
   #####################################################################################
   # End of ECS
   #####################################################################################
@@ -659,6 +920,18 @@ Resources:
             - codepipeline:*
             - rds:DescribeDBInstances
             Resource: '*'
+          # Allow fetch from Parameters Store in a specific name space
+          - Effect: "Allow"
+            Action:
+            - ssm:GetParameters
+            Resource:
+            - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}.db.*'
+          # Allow describe parameters to automate config process
+          - Effect: "Allow"
+            Action:
+            - ssm:DescribeParameters
+            Resource:
+            - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:*'
       Path: /
   CodeDeployLinuxEC2InstanceRoleInstanceProfile:
     Type: AWS::IAM::InstanceProfile
@@ -739,7 +1012,7 @@ Resources:
           apt-get update
           apt-get install -y python-pip ruby wget
           # Used to get aws to describe RDS to get conneciton string!
-          apt install -y awscli
+          pip install awscli
 
           cd /home/ubuntu
 
@@ -982,10 +1255,12 @@ Resources:
             #   DBAddress: !GetAtt DBInstance.Endpoint.Address
             ParameterOverrides:  !Sub |
               {
+                "ParamsPrefix": "${AWS::StackName}",
                 "Cluster": "${ContainterCluster}",
                 "CloudwatchLogsGroup": "${ECSTasksLogsGroup}",
                 "DockerImageTag": { "Fn::GetParam" : [ "DockerImageOutput", "build.json", "tag" ] },
                 "DockerImage": "${AWS::StackName}-myapp",
+                "TaskRole": "${TaskRole}",
                 "ECSTGMyApp": "${ECSTGMyApp}",
                 "ECSServiceRole": "${ECSServiceRole}",
                 "DBAddress": "${DBInstance.Endpoint.Address}"

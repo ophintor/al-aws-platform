@@ -6,6 +6,8 @@ Parameters:
   # Resources
   Cluster:
     Type: String
+  TaskRole:
+    Type: String
   ECSTGMyApp:
     Type: String
   ECSServiceRole:
@@ -13,6 +15,8 @@ Parameters:
   CloudwatchLogsGroup:
     Type: String
   # Configurations
+  ParamsPrefix:
+    Type: String
   DBAddress:
     Type: String
   DockerImage:
@@ -41,12 +45,19 @@ Resources:
     Type: AWS::ECS::TaskDefinition
     Properties:
       Family: !Sub "${AWS::StackName}-myapp"
+      TaskRoleArn: !Ref TaskRole
       ContainerDefinitions:
       - Name: myapp
         Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${DockerImage}:${DockerImageTag}
         Memory: '300'
         Environment:
-        - Name: MYSQL_CONNECTION_STRING
+        - Name: SSM_DB_USERNAME
+          Value: !Sub "${ParamsPrefix}.db.username"
+        - Name: SSM_DB_PASSWORD
+          Value: !Sub "${ParamsPrefix}.db.password"
+        - Name: SSM_DB_NAME
+          Value: !Sub "${ParamsPrefix}.db.name"
+        - Name: DB_CONNECTIONSTRING
           Value: !Ref DBAddress
         PortMappings:
         - ContainerPort: 3000
