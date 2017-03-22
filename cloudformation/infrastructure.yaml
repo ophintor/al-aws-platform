@@ -442,6 +442,12 @@ Resources:
               - ecr:InitiateLayerUpload
               - ecr:UploadLayerPart
               - ecr:CompleteLayerUpload
+  # Crate Log Group to setup the Retentio time of ECS task logs
+  ECSTasksLogsGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub ${AWS::StackName}-ecs
+      RetentionInDays: 1
   #####################################################################################
   # End of ECS
   #####################################################################################
@@ -969,6 +975,7 @@ Resources:
             ParameterOverrides:  !Sub |
               {
                 "Cluster": "${ContainterCluster}",
+                "CloudwatchLogsGroup": "${ECSTasksLogsGroup}",
                 "DockerImageTag": { "Fn::GetParam" : [ "DockerImageOutput", "build.json", "tag" ] },
                 "DockerImage": "${AWS::StackName}-myapp",
                 "ECSTGMyApp": "${ECSTGMyApp}",

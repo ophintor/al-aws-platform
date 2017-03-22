@@ -10,6 +10,8 @@ Parameters:
     Type: String
   ECSServiceRole:
     Type: String
+  CloudwatchLogsGroup:
+    Type: String
   # Configurations
   DBAddress:
     Type: String
@@ -48,6 +50,12 @@ Resources:
           Value: !Ref DBAddress
         PortMappings:
         - ContainerPort: 3000
+        LogConfiguration:
+          LogDriver: awslogs
+          Options:
+            awslogs-group: !Ref 'CloudwatchLogsGroup'
+            awslogs-region: !Ref 'AWS::Region'
+            awslogs-stream-prefix: myapp
   #####################################################################################
   # End of ECS
   #####################################################################################
