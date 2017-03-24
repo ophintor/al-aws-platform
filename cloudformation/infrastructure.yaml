@@ -94,9 +94,9 @@ Parameters:
     Type: "AWS::EC2::KeyPair::KeyName"
 
 # Resources documentation
-# http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-template-resource-type-ref.html
+# http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-template-resource-type-ref.html
 Resources:
-  # TODO: this can be moved to another Cloudformation and use stack exports # http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-cfn-stack-exports.html
+  # TODO: this can be moved to another Cloudformation and use stack exports # http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-cfn-stack-exports.html
   ####################################################################################
   # Start of networking
   ####################################################################################
@@ -113,9 +113,9 @@ Resources:
     DependsOn: [ myVPC ]
     Properties:
       VpcId: !Ref myVPC
-      # TODO: DNS is set to: 10.250.0.2
-      # I wanted to used: 10.250.1.0/24 but then the server don't have access to DNS server :'(
-      # Maybe useful: http://docs.aws.amazon.com/AmazonVPC/latest/UserGuide/VPC_DHCP_Options.html
+      # TODO: DNS is set to: 10.250.0.2
+      # I wanted to used: 10.250.1.0/24 but then the server don't have access to DNS server :'(
+      # Maybe useful: http://docs.aws.amazon.com/AmazonVPC/latest/UserGuide/VPC_DHCP_Options.html
       CidrBlock: 10.250.0.0/24
       # TODO: AvailabilityZone as paramenter!
       AvailabilityZone: !Select [0, !GetAZs "" ]
@@ -529,14 +529,14 @@ Resources:
             - ecr:PutImage
             - ecr:UploadLayerPart
             Resource:
-            # TODO: paramenterize pm=test => ImageName
+            # TODO: paramenterize pm=test => ImageName
             - !Sub "arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/${AWS::StackName}-myapp"
           # Pull repo
           - Effect: "Allow"
             Action:
             - codecommit:GitPull
             Resource:
-            # TODO: paramenterize pm=test => RepositoryName
+            # TODO: paramenterize pm=test => RepositoryName
             - !Sub "arn:aws:codecommit:${AWS::Region}:${AWS::AccountId}:${AWS::StackName}-myapp"
           # Write build logs
           - Effect: "Allow"
@@ -545,7 +545,7 @@ Resources:
             - logs:CreateLogStream
             - logs:PutLogEvents
             Resource:
-            # TODO: paramenterize pm=test => ProjectName
+            # TODO: paramenterize pm=test => ProjectName
             - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-myapp:log-stream"
             - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-myapp:log-stream:*"
             - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-myapp-image:log-stream"
@@ -820,7 +820,7 @@ Resources:
             - codecommit:List*
             - codecommit:UploadArchive
             Resource:
-            # TODO: paramenterize pm=test => RepositoryName
+            # TODO: paramenterize pm=test => RepositoryName
             - !Sub "arn:aws:codecommit:${AWS::Region}:${AWS::AccountId}:${AWS::StackName}-myapp"
           - Effect: Allow
             Action:
