@@ -320,6 +320,10 @@ Resources:
         IpProtocol: tcp
         FromPort: '80'
         ToPort: '80'
+      - CidrIp: 0.0.0.0/0
+        IpProtocol: tcp
+        FromPort: '443'
+        ToPort: '443'
       Tags:
       - Key: Name
         Value: !Sub ${AWS::StackName}-ECS-LB
@@ -762,6 +766,10 @@ Resources:
         IpProtocol: tcp
         FromPort: '80'
         ToPort: '80'
+      - CidrIp: 0.0.0.0/0
+        IpProtocol: tcp
+        FromPort: '443'
+        ToPort: '443'
   CodeDeployALB:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     DependsOn: [ publicSubnet01, publicSubnet02, CodeDeployALBSecurityGroup ]
@@ -995,6 +1003,44 @@ Resources:
   #####################################################################################
   # Start of Public DNS
   #####################################################################################
+  CodeDeployLBCertifcate:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName: !Sub "ec2.${AWS::StackName}.al-labs.co.uk"
+      DomainValidationOptions:
+      - DomainName: !Sub "ec2.${AWS::StackName}.al-labs.co.uk"
+        ValidationDomain: "al-labs.co.uk"
+  ECSLBCertifcate:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName: !Sub "ecs.${AWS::StackName}.al-labs.co.uk"
+      DomainValidationOptions:
+      - DomainName: !Sub "ecs.${AWS::StackName}.al-labs.co.uk"
+        ValidationDomain: "al-labs.co.uk"
+  CodeDeployALBHTTPSListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    DependsOn: [ CodeDeployTG, CodeDeployALB, CodeDeployLBCertifcate ]
+    Properties:
+      DefaultActions:
+      - Type: forward
+        TargetGroupArn: !Ref CodeDeployTG
+      LoadBalancerArn: !Ref CodeDeployALB
+      Port: '443'
+      Protocol: HTTPS
+      Certificates:
+      - CertificateArn: !Ref CodeDeployLBCertifcate
+  ALBHTTPSListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    DependsOn: [ ECSTGMyApp, ECSALB, ECSLBCertifcate ]
+    Properties:
+      DefaultActions:
+      - Type: forward
+        TargetGroupArn: !Ref ECSTGMyApp
+      LoadBalancerArn: !Ref ECSALB
+      Port: '443'
+      Protocol: HTTPS
+      Certificates:
+      - CertificateArn: !Ref ECSLBCertifcate
   CodeDeployDNSRecord:
     Type: AWS::Route53::RecordSetGroup
     Properties:
