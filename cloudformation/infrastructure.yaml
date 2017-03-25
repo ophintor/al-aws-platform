@@ -991,3 +991,27 @@ Resources:
   #####################################################################################
   # End of CI/CD
   #####################################################################################
+
+  #####################################################################################
+  # Start of Public DNS
+  #####################################################################################
+  CodeDeployDNSRecord:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      HostedZoneName: al-labs.co.uk.
+      Comment: Zone apex alias targeted to myELB LoadBalancer.
+      RecordSets:
+      # One subdoamin for each type
+      - Name: !Sub "ec2.${AWS::StackName}.al-labs.co.uk."
+        Type: A
+        AliasTarget:
+          HostedZoneId: !GetAtt CodeDeployALB.CanonicalHostedZoneID
+          DNSName: !GetAtt CodeDeployALB.DNSName
+      - Name: !Sub "ecs.${AWS::StackName}.al-labs.co.uk."
+        Type: A
+        AliasTarget:
+          HostedZoneId: !GetAtt ECSALB.CanonicalHostedZoneID
+          DNSName: !GetAtt ECSALB.DNSName
+  #####################################################################################
+  # End of Public DNS
+  #####################################################################################
