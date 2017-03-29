@@ -792,7 +792,7 @@ Resources:
     DependsOn: [ MyAppDeployApplication, CodeDeployAutoScalingGroup, CodeDeployTrustRole ]
     Properties:
       ApplicationName: !Ref MyAppDeployApplication
-      DeploymentConfigName: "CodeDeployDefault.AllAtOnce"
+      DeploymentConfigName: "CodeDeployDefault.HalfAtATime"
       AutoScalingGroups: [ !Ref CodeDeployAutoScalingGroup ]
       ServiceRoleArn: !GetAtt CodeDeployTrustRole.Arn
   CodePipelineServiceRole:
