@@ -446,7 +446,7 @@ Resources:
               - ecr:InitiateLayerUpload
               - ecr:UploadLayerPart
               - ecr:CompleteLayerUpload
-  # Crate Log Group to setup the Retentio time of ECS task logs
+  # Crate Log Group to setup the retention time of ECS task logs
   ECSTasksLogsGroup:
     Type: AWS::Logs::LogGroup
     Properties:
