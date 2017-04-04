@@ -92,6 +92,24 @@ Parameters:
     MaxLength: '255'
     MinLength: '1'
     Type: "AWS::EC2::KeyPair::KeyName"
+  UseDNS:
+    Description: Enable/Disable DNS configurations
+    AllowedValues:
+    - Enable
+    - Disable
+    Default: Enable
+    Type: String
+  UseHTTPS:
+    Description: Enable/Disable HTTPs configuration
+    AllowedValues:
+    - Enable
+    - Disable
+    Default: Enable
+    Type: String
+
+Conditions:
+  cEnableDNS: !Equals [ !Ref UseDNS, True ]
+  cEnableHTTPS: !Equals [ !Ref UseHTTPS, True ]
 
 # Resources documentation
 # http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-template-resource-type-ref.html
@@ -1285,6 +1303,7 @@ Resources:
       DomainValidationOptions:
       - DomainName: !Sub "ec2.${AWS::StackName}.al-labs.co.uk"
         ValidationDomain: "al-labs.co.uk"
+    Condition: cEnableHTTPS
   ECSLBCertifcate:
     Type: AWS::CertificateManager::Certificate
     Properties:
@@ -1292,6 +1311,7 @@ Resources:
       DomainValidationOptions:
       - DomainName: !Sub "ecs.${AWS::StackName}.al-labs.co.uk"
         ValidationDomain: "al-labs.co.uk"
+    Condition: cEnableHTTPS
   CodeDeployALBHTTPSListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     DependsOn: [ CodeDeployTG, CodeDeployALB, CodeDeployLBCertifcate ]
@@ -1304,6 +1324,7 @@ Resources:
       Protocol: HTTPS
       Certificates:
       - CertificateArn: !Ref CodeDeployLBCertifcate
+    Condition: cEnableHTTPS
   ALBHTTPSListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     DependsOn: [ ECSTGMyApp, ECSALB, ECSLBCertifcate ]
@@ -1316,6 +1337,7 @@ Resources:
       Protocol: HTTPS
       Certificates:
       - CertificateArn: !Ref ECSLBCertifcate
+    Condition: cEnableHTTPS
   CodeDeployDNSRecord:
     Type: AWS::Route53::RecordSetGroup
     Properties:
@@ -1333,6 +1355,7 @@ Resources:
         AliasTarget:
           HostedZoneId: !GetAtt ECSALB.CanonicalHostedZoneID
           DNSName: !GetAtt ECSALB.DNSName
+    Condition: cEnableDNS
   #####################################################################################
   # End of Public DNS
   #####################################################################################
