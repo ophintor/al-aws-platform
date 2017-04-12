@@ -14,14 +14,6 @@
             },
             {
                 "Label": {
-                    "default": "Environment Type:"
-                }, 
-                "Parameters": [
-                    "EnvironmentType"
-                ]
-            }, 
-            {
-                "Label": {
                     "default": "Database Configuration:"
                 }, 
                 "Parameters": [
@@ -114,13 +106,6 @@
 	    "Default": "AL Cloud Platform",
       "AllowedPattern": "[\\x20-\\x7E]*",
       "ConstraintDescription": "Can contain only ASCII characters."
-    },
-    "EnvironmentType": {
-      "Description": "Environment Type",
-      "Type": "String",
-      "Default": "Prod",
-      "AllowedValues" : [ "Prod","Stage","Test"],
-      "ConstraintDescription": "must be a valid Environment type."
     },
     "HostedZoneID" :{
       "Description": "Name of an existing Amazon Route53 HostedZone ID. Defaults to al-labs.co.uk.",
@@ -349,7 +334,7 @@
                     "ssm:GetParameters"                    
                 ],
                 "Resource":[
-                    {"Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}.${EnvironmentType}.*"}                     
+                    {"Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}.*"}                     
                 ]
             },
             {
@@ -369,7 +354,7 @@
                     "logs:CreateLogGroup"                        
                 ],
                 "Resource":[
-                    {"Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${AWS::StackName}.${EnvironmentType}:*"}                                       
+                    {"Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${AWS::StackName}:*"}                                       
                 ]
             }                          
           ]
@@ -956,14 +941,7 @@
         "Type" : "AWS::Logs::LogGroup",
         "DeletionPolicy" : "Retain", 
         "Properties" : {
-            "LogGroupName" : {
-                "Fn::Join":[ ".",
-                    [
-                        {"Ref":"AWS::StackName"},                                   
-                        {"Ref":"EnvironmentType"}
-                    ]                                
-                ]            
-            },
+            "LogGroupName" : { "Ref":"AWS::StackName"},
             "RetentionInDays" : 1
         }
     },
@@ -1168,11 +1146,6 @@
                 "Key": { "Ref": "TagKey" },
                 "Value": { "Ref": "TagValue" },
                 "PropagateAtLaunch":"true"
-            },
-            {
-                "Key": "Environment",
-                "Value": { "Ref": "EnvironmentType" },
-                "PropagateAtLaunch":"true"
             }
             ]            
           },
@@ -1278,8 +1251,7 @@
         "Name": {
             "Fn::Join":[ ".",
                 [                                       
-                    {"Ref":"AWS::StackName"},                                      
-                    {"Ref":"EnvironmentType"},
+                    {"Ref":"AWS::StackName"},                                                          
                     "db",
                     "username"          
                 ]
@@ -1302,8 +1274,7 @@
         "Name": {
             "Fn::Join":[ ".",
                 [                                       
-                    {"Ref":"AWS::StackName"},                                      
-                    {"Ref":"EnvironmentType"},
+                    {"Ref":"AWS::StackName"},                                                          
                     "db",
                     "password"                  
                 ]
@@ -1326,8 +1297,7 @@
         "Name": {
             "Fn::Join":[ ".",
                 [                                       
-                    {"Ref":"AWS::StackName"},                                      
-                    {"Ref":"EnvironmentType"},
+                    {"Ref":"AWS::StackName"},                                                          
                     "db",
                     "name"
                 ]
@@ -1350,8 +1320,7 @@
         "Name": {
             "Fn::Join":[ ".",
                 [                                       
-                    {"Ref":"AWS::StackName"},                                      
-                    {"Ref":"EnvironmentType"},
+                    {"Ref":"AWS::StackName"},                                                          
                     "db",
                     "connectionstring"                    
                 ]
