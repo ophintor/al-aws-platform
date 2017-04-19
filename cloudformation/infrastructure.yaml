@@ -990,10 +990,10 @@ Resources:
             - logs:PutLogEvents
             Resource:
             # TODO: paramenterize pm=test => ProjectName
-            - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/${AWS::StackName}/aws/codebuild/myapp:log-stream"
-            - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/${AWS::StackName}/aws/codebuild/myapp:log-stream:*"
-            - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/${AWS::StackName}/aws/codebuild/myapp-image:log-stream"
-            - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/${AWS::StackName}/aws/codebuild/myapp-image:log-stream:*"
+            - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}myapp:log-stream"
+            - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}myapp:log-stream:*"
+            - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}myapp-image:log-stream"
+            - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}myapp-image:log-stream:*"
   MyAppBuildAartifact:
     Type: AWS::CodeBuild::Project
     DependsOn: [ CodeRepo, CodeBuildRole ]
