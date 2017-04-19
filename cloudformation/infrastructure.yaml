@@ -991,10 +991,10 @@ Resources:
             Resource:
             # TODO: paramenterize pm=test => ProjectName
             # TODO: See if it is possible to name space StackName at the start.
-            - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}myapp:log-stream"
-            - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}myapp:log-stream:*"
-            - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}myapp-image:log-stream"
-            - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}myapp-image:log-stream:*"
+            - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-myapp:log-stream"
+            - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-myapp:log-stream:*"
+            - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-myapp-image:log-stream"
+            - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-myapp-image:log-stream:*"
   MyAppBuildAartifact:
     Type: AWS::CodeBuild::Project
     DependsOn: [ CodeRepo, CodeBuildRole ]
@@ -1696,18 +1696,18 @@ Resources:
         Ref: ECSTasksLogsGroup
     Type: AWS::Logs::SubscriptionFilter
 
-  LogGrouptoLambdaMappingAppLogs:
-    DependsOn: LambdaInvokePermission
-    Properties:
-      DestinationArn: !GetAtt LogStreamer.Arn
-      FilterPattern:
-        Fn::FindInMap:
-        - FilterPatternLookup
-        - Other
-        - Pattern
-      LogGroupName:
-        Ref: AppLogsGroup
-    Type: AWS::Logs::SubscriptionFilter
+  # LogGrouptoLambdaMappingAppLogs:
+  #   DependsOn: LambdaInvokePermission
+  #   Properties:
+  #     DestinationArn: !GetAtt LogStreamer.Arn
+  #     FilterPattern:
+  #       Fn::FindInMap:
+  #       - FilterPatternLookup
+  #       - Other
+  #       - Pattern
+  #     LogGroupName:
+  #       Ref: AppLogsGroup
+  #   Type: AWS::Logs::SubscriptionFilter
 
   LogRole:
     Properties:
