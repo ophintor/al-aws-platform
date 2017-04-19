@@ -1696,18 +1696,17 @@ Resources:
         Ref: ECSTasksLogsGroup
     Type: AWS::Logs::SubscriptionFilter
 
-  # LogGrouptoLambdaMappingAppLogs:
-  #   DependsOn: LambdaInvokePermission
-  #   Properties:
-  #     DestinationArn: !GetAtt LogStreamer.Arn
-  #     FilterPattern:
-  #       Fn::FindInMap:
-  #       - FilterPatternLookup
-  #       - Other
-  #       - Pattern
-  #     LogGroupName:
-  #       Ref: AppLogsGroup
-  #   Type: AWS::Logs::SubscriptionFilter
+  LogGrouptoLambdaMappingAppLogs:
+    DependsOn: LambdaInvokePermission
+    Properties:
+      DestinationArn: !GetAtt LogStreamer.Arn
+      FilterPattern:
+        Fn::FindInMap:
+        - FilterPatternLookup
+        - Other
+        - Pattern
+      LogGroupName: !Sub /aws/codebuild/${AWS::StackName}-myapp
+    Type: AWS::Logs::SubscriptionFilter
 
   LogRole:
     Properties:
