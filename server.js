@@ -4,6 +4,10 @@ var app = express();
 var morgan = require('morgan');
 var bodyParser = require('body-parser');
 var methodOverride = require('method-override');
+var winston = require('winston');
+
+winston.log('info', 'Hello distributed log files!');
+winston.info('Hello again distributed logs');
 
 const PORT = process.env.PORT || 3000;
 
@@ -51,6 +55,7 @@ app.post('/api/todos', (req, res, next) => {
 
         getTodos(res, next);
     });
+    winston.info("TODO Added" + post);
 });
 
 app.delete('/api/todos/:todo_id', (req, res, next) => {
