@@ -447,7 +447,7 @@
                     {
                     "Sid": "Allow administration of the key",
                     "Effect": "Allow",
-                    "Principal": { "AWS": "arn:aws:iam::${AWS::AccountId}:user/${UserName}" },
+                    "Principal":{ "AWS" : {"Fn::Sub": "arn:aws:iam::${AWS::AccountId}:user/${UserName}" }}, 
                     "Action": [
                         "kms:Create*",
                         "kms:Describe*",
@@ -467,7 +467,7 @@
                     {
                     "Sid": "Allow use of the key",
                     "Effect": "Allow",
-                    "Principal": { "AWS": "arn:aws:iam::${AWS::AccountId}:user/${UserName}" },
+                    "Principal":{ "AWS" : {"Fn::Sub": "arn:aws:iam::${AWS::AccountId}:user/${UserName}" }}, 
                     "Action": [
                         "kms:Encrypt",
                         "kms:Decrypt",
