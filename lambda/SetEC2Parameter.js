@@ -4,19 +4,8 @@ exports.lambda_handler = function (event, context) {
     try {         
         var ssm = new AWS.SSM();        
         if(event.RequestType == 'Delete') {
-            var params = {
-                Name: event.ResourceProperties.Name
-            }
-            ssm.deleteParameter(params, function(err, data) {
-                console.log('Delete Called');
-                if (err){
-                    console.log(err, err.stack); // an error occurred                
-                } 
-                else{
-                    console.log(data);           // successful response
-                }
-                response.send(event, context, response.SUCCESS);     
-            });
+            console.log('Delete Called');
+            response.send(event, context, response.SUCCESS);     //do nothing and send success by default
         }
         var params = {
             Name: event.ResourceProperties.Name,
