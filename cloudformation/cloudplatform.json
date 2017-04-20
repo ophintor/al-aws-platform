@@ -41,7 +41,8 @@
                 }, 
                 "Parameters": [                        
                     "KeyPairName",
-                    "SSHLocation"                        
+                    "SSHLocation",
+                    "UserName"                        
                 ]
             },
             {
@@ -92,6 +93,11 @@
         "Default": "xavier.thomas@automationlogic.com",
         "AllowedPattern": "([a-zA-Z0-9_\\-\\.]+)@((\\[[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.)|(([a-zA-Z0-9\\-]+\\.)+))([a-zA-Z]{2,4}|[0-9]{1,3})(\\]?)",
         "ConstraintDescription": "must be a valid email address."
+    },
+    "UserName":{
+        "Description": "The EC2 tag key that identifies this as a target for deployments.",
+        "Type": "String",
+	    "Default": "xavier.thomas"
     },
     "TagKey": {
       "Description": "The EC2 tag key that identifies this as a target for deployments.",
@@ -419,7 +425,7 @@
                         "ssm:PutParameter"
                     ],
                     "Resource":[
-                        {"Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}.Prod.*"}                     
+                        {"Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}.*"}                     
                     ]
                 }                 
             ]
@@ -441,7 +447,7 @@
                     {
                     "Sid": "Allow administration of the key",
                     "Effect": "Allow",
-                    "Principal": { "AWS": "arn:aws:iam::505076813643:user/xavier.thomas" },
+                    "Principal": { "AWS": "arn:aws:iam::${AWS::AccountId}:user/${UserName}" },
                     "Action": [
                         "kms:Create*",
                         "kms:Describe*",
@@ -461,7 +467,7 @@
                     {
                     "Sid": "Allow use of the key",
                     "Effect": "Allow",
-                    "Principal": { "AWS": "arn:aws:iam::505076813643:user/xavier.thomas" },
+                    "Principal": { "AWS": "arn:aws:iam::${AWS::AccountId}:user/${UserName}" },
                     "Action": [
                         "kms:Encrypt",
                         "kms:Decrypt",
@@ -493,7 +499,7 @@
                     {
                     "Sid": "Allow use of the key",
                     "Effect": "Allow",
-                    "Principal": { "AWS": "arn:aws:iam::505076813643:user/devuser" },
+                    "Principal": { "AWS": "arn:aws:iam::${AWS::AccountId}:user/devuser" },
                     "Action": [
                         "kms:Encrypt",
                         "kms:Decrypt",
@@ -504,7 +510,7 @@
                     {
                     "Sid": "Allow use of the key",
                     "Effect": "Allow",
-                    "Principal": { "AWS": "arn:aws:iam::505076813643:user/qauser" },
+                    "Principal": { "AWS": "arn:aws:iam::${AWS::AccountId}:user/qauser" },
                     "Action": [                        
                         "kms:Decrypt"                        
                     ], 
@@ -1384,7 +1390,7 @@
                                   "ssm:GetParameters"                    
                               ],
                               "Resource":[
-                                  {"Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}.Prod.*"}                     
+                                  {"Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}.*"}                     
                               ]
                           },
                           {
@@ -1445,7 +1451,7 @@
                                     "ssm:PutParameter"                    
                                 ],
                                 "Resource":[
-                                    {"Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}.Prod.*"}                     
+                                    {"Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}.*"}                     
                                 ]
                             },
                             {
@@ -1454,7 +1460,7 @@
                                     "ssm:GetParameters"                    
                                 ],
                                 "Resource":[
-                                    {"Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}.Prod.*"}                     
+                                    {"Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}.*"}                     
                                 ]
                             },
                             {
@@ -1515,7 +1521,7 @@
                                     "ssm:PutParameter"                    
                                 ],
                                 "Resource":[
-                                    {"Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}.Prod.*"}                     
+                                    {"Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}.*"}                     
                                 ]
                             },
                             {
@@ -1524,7 +1530,7 @@
                                     "ssm:GetParameters"                    
                                 ],
                                 "Resource":[
-                                    {"Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}.Prod.*"}                     
+                                    {"Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}.*"}                     
                                 ]
                             },
                             {
