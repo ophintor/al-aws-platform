@@ -14,11 +14,13 @@ STACK_NAME=$(aws ec2 describe-tags \
 
 # This version exports automatically all the parameteres that the application have access
 # TODO: use NextToken to iterate parameteres
+rm -f ENV_VARIABLES.sh 2> /dev/null
 PARAMS=$(aws --region "${AWS_REGION}" ssm describe-parameters --max-results 50 --query 'Parameters[*].{Name:Name}' --output text)
 for param in $PARAMS ; do
 	value=$(aws --region "${AWS_REGION}" ssm get-parameters --names "${param}" --with-decryption --output text --query 'Parameters[0].Value' 2>/dev/null)
 	[ "$?" -eq "0" ] || continue
 	param=$(echo ${param} | sed "s/^${STACK_NAME}.//g" | tr '[:lower:].' '[:upper:]_')
+	echo "${param}"="${value}" >> ENV_VARIABLES.sh
 	export "${param}"="${value}"
 done
 
