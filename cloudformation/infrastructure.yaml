@@ -1617,7 +1617,7 @@ Resources:
           - elasticsearch
           - Ref: ClusterSize
         ZoneAwarenessEnabled: 'true'
-      ElasticsearchVersion: '2.3'
+      ElasticsearchVersion: '5.1'
       SnapshotOptions:
         AutomatedSnapshotStartHour: '1'
     Type: AWS::Elasticsearch::Domain
