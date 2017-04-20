@@ -454,6 +454,7 @@ Resources:
       MasterUsername: !Ref DBUsername
       BackupRetentionPeriod: 0 # NOTE: This disables backups and speedups the provisioning tests...!
       DBSubnetGroupName: !Ref DBSubnetGroup
+      BackupRetentionPeriod: '0'
   StoreDBAddress:
     Type: 'Custom::SetParameterStore'
     Properties:

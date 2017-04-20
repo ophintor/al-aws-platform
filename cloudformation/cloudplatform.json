@@ -1243,7 +1243,8 @@
         "DBSecurityGroups"  : [{ "Ref" : "DBSecurityGroup" }],
         "AllocatedStorage"  : { "Ref" : "DBAllocatedStorage" },
         "MasterUserPassword": { "Ref" : "DBPassword" },
-        "DBSubnetGroupName": {  "Ref" : "DBSubnetGroup" }
+        "DBSubnetGroupName": {  "Ref" : "DBSubnetGroup" },
+        "BackupRetentionPeriod": "0"
       }
     },
     "EncryptDBUSERNAME": {
