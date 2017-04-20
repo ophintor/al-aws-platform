@@ -448,7 +448,7 @@
                     {
                     "Sid": "Allow administration of the key",
                     "Effect": "Allow",
-                    "Principal":{ "AWS" : {"Fn::Sub": "arn:aws:iam::${AWS::AccountId}:user/${UserName}" }}, 
+                    "Principal":{ "AWS" : {"Fn::Sub": "arn:aws:iam::${AWS::AccountId}:user/${UserName}" }},                              
                     "Action": [
                         "kms:Create*",
                         "kms:Describe*",
@@ -468,7 +468,7 @@
                     {
                     "Sid": "Allow use of the key",
                     "Effect": "Allow",
-                    "Principal":{ "AWS" : {"Fn::Sub": "arn:aws:iam::${AWS::AccountId}:user/${UserName}" }}, 
+                    "Principal":{ "AWS" : {"Fn::Sub": "arn:aws:iam::${AWS::AccountId}:user/${UserName}" }},                              
                     "Action": [
                         "kms:Encrypt",
                         "kms:Decrypt",
@@ -476,15 +476,6 @@
                         "kms:GenerateDataKey*",
                         "kms:DescribeKey"
                     ], 
-                    "Resource": "*"
-                    },
-                    {
-                    "Sid": "Allow decrypting of any value encrypted under this key.",
-                    "Effect": "Allow",
-                    "Principal": { "AWS": {"Fn::GetAtt": [ "InstanceRole","Arn" ] } },
-                    "Action": [
-                        "kms:Decrypt"
-                    ],
                     "Resource": "*"
                     },
                     {
@@ -498,9 +489,18 @@
                     "Resource": "*"
                     },
                     {
+                    "Sid": "Allow decrypting of any value encrypted under this key.",
+                    "Effect": "Allow",
+                    "Principal": { "AWS": {"Fn::GetAtt": [ "InstanceRole","Arn" ] } },
+                    "Action": [
+                        "kms:Decrypt"
+                    ],
+                    "Resource": "*"
+                    },
+                    {
                     "Sid": "Allow use of the key",
                     "Effect": "Allow",
-                    "Principal": { "AWS": "arn:aws:iam::${AWS::AccountId}:user/devuser" },
+                    "Principal":{ "AWS" : {"Fn::Sub": "arn:aws:iam::${AWS::AccountId}:user/devuser" }},                            
                     "Action": [
                         "kms:Encrypt",
                         "kms:Decrypt",
@@ -511,16 +511,16 @@
                     {
                     "Sid": "Allow use of the key",
                     "Effect": "Allow",
-                    "Principal": { "AWS": "arn:aws:iam::${AWS::AccountId}:user/qauser" },
+                    "Principal":{ "AWS" : {"Fn::Sub": "arn:aws:iam::${AWS::AccountId}:user/qauser" }},                            
                     "Action": [                        
                         "kms:Decrypt"                        
                     ], 
                     "Resource": "*"
-                    }                                                   
+                    }                                                                                          
                 ]
             }
         }
-    },
+    },  
     "MyKeyAlias" : {
         "Type" : "AWS::KMS::Alias",
         "Properties" : {
