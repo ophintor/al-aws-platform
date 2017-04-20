@@ -417,11 +417,12 @@ Resources:
       TargetKeyId: !Ref 'MyKey'
 
   # Crate Log Group to setup the Retentio time of Lambda Logs
-  EncryptLambdaLogsGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: !Sub ${AWS::StackName}/aws/lambda/set-param-store
-      RetentionInDays: 1
+  # No logs currently being sent to log group TODO: Delete or send logs here
+  # EncryptLambdaLogsGroup:
+  #   Type: AWS::Logs::LogGroup
+  #   Properties:
+  #     LogGroupName: !Sub /aws/lambda/${AWS::StackName}-set-param-store
+  #     RetentionInDays: 1
   LambdaRole:
     Type: AWS::IAM::Role
     Properties:
@@ -839,11 +840,11 @@ Resources:
               - ecr:InitiateLayerUpload
               - ecr:UploadLayerPart
               - ecr:CompleteLayerUpload
-  # Crate Log Group to setup the retention time of ECS task logs
+  # Create Log Group to setup the retention time of ECS task logs
   ECSTasksLogsGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub ${AWS::StackName}/ecs
+      LogGroupName: !Sub /aws/ecs/${AWS::StackName}
       RetentionInDays: 1
   TaskRole:
     Type: AWS::IAM::Role
@@ -893,52 +894,53 @@ Resources:
   #####################################################################################
   # Start of CI/CD
   #####################################################################################
-  QAGroup:
-    Type: "AWS::IAM::Group"
-    Properties:
-      GroupName: !Sub ${AWS::StackName}-QA
-      ManagedPolicyArns: [ "arn:aws:iam::aws:policy/IAMReadOnlyAccess", "arn:aws:iam::aws:policy/IAMUserSSHKeys" ]
-      Policies:
-      - PolicyName: root
-        PolicyDocument:
-          Version: '2012-10-17'
-          Statement:
-          # Pull repo
-          - Effect: "Allow"
-            Action:
-            - codecommit:BatchGetRepositories
-            - codecommit:List*
-            Resource: "*"
-          - Effect: Allow
-            Action:
-            - codecommit:Get*
-            - codecommit:GitPull
-            Resource:
-            - !Sub "arn:aws:codecommit:${AWS::Region}:${AWS::AccountId}:${AWS::StackName}-myapp"
-  DevGroup:
-    Type: "AWS::IAM::Group"
-    Properties:
-      GroupName: !Sub ${AWS::StackName}-Dev
-      ManagedPolicyArns: [ "arn:aws:iam::aws:policy/IAMReadOnlyAccess", "arn:aws:iam::aws:policy/IAMUserSSHKeys" ]
-      Policies:
-      - PolicyName: root
-        PolicyDocument:
-          Version: '2012-10-17'
-          Statement:
-          # List repo
-          - Effect: "Allow"
-            Action:
-            - codecommit:BatchGetRepositories
-            - codecommit:List*
-            Resource: "*"
-          # Pull repo
-          - Effect: Allow
-            Action:
-            - codecommit:Get*
-            - codecommit:GitPull
-            - codecommit:GitPush
-            Resource:
-            - !Sub "arn:aws:codecommit:${AWS::Region}:${AWS::AccountId}:${AWS::StackName}-myapp"
+  # TODO: Groups not currently in use, delete or flesh out
+  # QAGroup:
+  #   Type: "AWS::IAM::Group"
+  #   Properties:
+  #     GroupName: !Sub ${AWS::StackName}-QA
+  #     ManagedPolicyArns: [ "arn:aws:iam::aws:policy/IAMReadOnlyAccess", "arn:aws:iam::aws:policy/IAMUserSSHKeys" ]
+  #     Policies:
+  #     - PolicyName: root
+  #       PolicyDocument:
+  #         Version: '2012-10-17'
+  #         Statement:
+  #         # Pull repo
+  #         - Effect: "Allow"
+  #           Action:
+  #           - codecommit:BatchGetRepositories
+  #           - codecommit:List*
+  #           Resource: "*"
+  #         - Effect: Allow
+  #           Action:
+  #           - codecommit:Get*
+  #           - codecommit:GitPull
+  #           Resource:
+  #           - !Sub "arn:aws:codecommit:${AWS::Region}:${AWS::AccountId}:${AWS::StackName}-myapp"
+  # DevGroup:
+  #   Type: "AWS::IAM::Group"
+  #   Properties:
+  #     GroupName: !Sub ${AWS::StackName}-Dev
+  #     ManagedPolicyArns: [ "arn:aws:iam::aws:policy/IAMReadOnlyAccess", "arn:aws:iam::aws:policy/IAMUserSSHKeys" ]
+  #     Policies:
+  #     - PolicyName: root
+  #       PolicyDocument:
+  #         Version: '2012-10-17'
+  #         Statement:
+  #         # List repo
+  #         - Effect: "Allow"
+  #           Action:
+  #           - codecommit:BatchGetRepositories
+  #           - codecommit:List*
+  #           Resource: "*"
+  #         # Pull repo
+  #         - Effect: Allow
+  #           Action:
+  #           - codecommit:Get*
+  #           - codecommit:GitPull
+  #           - codecommit:GitPush
+  #           Resource:
+  #           - !Sub "arn:aws:codecommit:${AWS::Region}:${AWS::AccountId}:${AWS::StackName}-myapp"
   CodeRepo:
     Type: AWS::CodeCommit::Repository
     Properties:
@@ -1692,8 +1694,7 @@ Resources:
         - FilterPatternLookup
         - ECS
         - Pattern
-      LogGroupName:
-        Ref: ECSTasksLogsGroup
+      LogGroupName: !Sub /aws/ecs/${AWS::StackName}
     Type: AWS::Logs::SubscriptionFilter
 
   LogGrouptoLambdaMappingAppLogs:
@@ -1706,6 +1707,18 @@ Resources:
         - Other
         - Pattern
       LogGroupName: !Sub /aws/codebuild/${AWS::StackName}-myapp
+    Type: AWS::Logs::SubscriptionFilter
+
+  LogGrouptoLambdaMappingAppImageLogs:
+    DependsOn: LambdaInvokePermission
+    Properties:
+      DestinationArn: !GetAtt LogStreamer.Arn
+      FilterPattern:
+        Fn::FindInMap:
+        - FilterPatternLookup
+        - Other
+        - Pattern
+      LogGroupName: !Sub /aws/codebuild/${AWS::StackName}-myapp-image
     Type: AWS::Logs::SubscriptionFilter
 
   LogRole:
