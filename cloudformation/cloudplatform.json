@@ -82,6 +82,9 @@
             },
             "HostedZoneID" : {
                 "default": "Hosted Zone ID"
+            },
+            "UseHTTPS": {
+              "default": "Use HTTPS"
             }
         }
     }
@@ -216,6 +219,15 @@
       "MaxValue": "1024",
       "MinValue": "5",
       "Type": "Number"
+    },
+    "UseHTTPS": {
+      "Description": "Enable / Disable HTTPS configuration.",
+      "AllowedValues": [
+        "Enable",
+        "Disable"
+      ],
+      "Default": "Enable",
+      "Type": "String"
     }
   },
   "Mappings":{
@@ -263,6 +275,9 @@
         "Ubuntu":"ami-7379e31f"
         }
     }
+  },
+  "Conditions": {
+    "cEnableHTTPS": {"Fn::Equals" : [{"Ref" : "UseHTTPS"}, "Enable"]}
   },
   "Resources":{
     "WaitHandle": {
@@ -851,7 +866,8 @@
                     "ValidationDomain" : "al-labs.co.uk"
                 }
             ]
-        }
+        },
+        "Condition": "cEnableHTTPS"
     },
     "ApplicationLoadBalancer":{
       "Type":"AWS::ElasticLoadBalancingV2::LoadBalancer",
@@ -926,7 +942,8 @@
             "LoadBalancerArn": { "Ref": "ApplicationLoadBalancer" },
             "Port": "443",
             "Protocol": "HTTPS"
-        }
+        },
+        "Condition": "cEnableHTTPS"
     },
     "DNSRecordSet" : {
         "Type" : "AWS::Route53::RecordSetGroup",
