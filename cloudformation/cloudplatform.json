@@ -7,7 +7,7 @@
             {
                 "Label": {
                     "default": "Domain Name:"
-                }, 
+                },
                 "Parameters": [
                     "HostedZoneID"
                 ]
@@ -15,21 +15,21 @@
             {
                 "Label": {
                     "default": "Database Configuration:"
-                }, 
+                },
                 "Parameters": [
-                    "DBName", 
-                    "DBUsername", 
-                    "DBPassword", 
-                    "DBInstanceClass", 
+                    "DBName",
+                    "DBUsername",
+                    "DBPassword",
+                    "DBInstanceClass",
                     "DBAllocatedStorage"
                 ]
-            }, 
+            },
             {
                 "Label": {
                     "default": "Auto-Scaling Web Server Group's Instance Configuration: "
-                }, 
+                },
                 "Parameters": [
-                    "InstanceType", 
+                    "InstanceType",
                     "InstanceCount",
                     "InstanceMaxCount",
                     "InstanceMinCount"
@@ -38,45 +38,45 @@
             {
                 "Label": {
                     "default": "Security: "
-                }, 
-                "Parameters": [                        
+                },
+                "Parameters": [
                     "KeyPairName",
                     "SSHLocation",
-                    "UserName"                        
+                    "UserName"
                 ]
             },
             {
                 "Label": {
                     "default": "Notification: "
-                }, 
-                "Parameters": [                        
-                    "OperatorEMail"                                          
+                },
+                "Parameters": [
+                    "OperatorEMail"
                 ]
             },
             {
                 "Label": {
                     "default": "Tags: "
-                }, 
-                "Parameters": [                        
+                },
+                "Parameters": [
                     "TagKey",
-                    "TagValue"                                                                  
+                    "TagValue"
                 ]
-            }                          
-            
-        ], 
+            }
+
+        ],
         "ParameterLabels": {
             "DBName": {
                 "default": "Database Name"
-            }, 
+            },
             "DBUsername": {
                 "default": "Database User Name"
-            }, 
+            },
             "DBPassword": {
                 "default": "Database Password"
-            }, 
+            },
             "DBInstanceClass": {
                 "default": "Database Instance Class"
-            }, 
+            },
             "DBAllocatedStorage": {
                 "default": "Database Storage"
             },
@@ -85,7 +85,7 @@
             }
         }
     }
-  }, 
+  },
   "Parameters": {
     "OperatorEMail": {
         "Description": "EMail address to notify if there are any scaling operations",
@@ -115,14 +115,14 @@
     },
     "HostedZoneID" :{
       "Description": "Name of an existing Amazon Route53 HostedZone ID. Defaults to al-labs.co.uk.",
-      "Type": "AWS::Route53::HostedZone::Id",   
+      "Type": "AWS::Route53::HostedZone::Id",
       "MinLength": "1",
       "MaxLength": "32",
-      "Default" : "Z2KFA2A6JE8TAK"  
-    }, 
+      "Default" : "Z2KFA2A6JE8TAK"
+    },
     "KeyPairName": {
       "Description": "Name of an existing Amazon EC2 key pair to enable SSH or RDP access to the instances.",
-      "Type": "AWS::EC2::KeyPair::KeyName",   
+      "Type": "AWS::EC2::KeyPair::KeyName",
       "MinLength": "1",
       "MaxLength": "255",
       "Default" : "xavierkey",
@@ -160,7 +160,7 @@
         "ConstraintDescription":"Must be a number between 1 and 3.",
         "MinValue":"1",
         "MaxValue":"3"
-    },   
+    },
     "SSHLocation": {
       "Description": "The IP address range that can be used to connect using SSH or RDP to the Amazon EC2 instances.",
       "Type": "String",
@@ -171,57 +171,57 @@
       "ConstraintDescription": "Must be a valid IP CIDR range of the form x.x.x.x/x."
     },
     "DBName": {
-      "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*", 
-      "ConstraintDescription": "must begin with a letter and contain only alphanumeric characters.", 
-      "Default": "todo", 
-      "Description": "The database name", 
-      "MaxLength": "64", 
-      "MinLength": "1", 
+      "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*",
+      "ConstraintDescription": "must begin with a letter and contain only alphanumeric characters.",
+      "Default": "todo",
+      "Description": "The database name",
+      "MaxLength": "64",
+      "MinLength": "1",
       "Type": "String"
-    }, 
+    },
     "DBUsername"    : {
-      "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*", 
-      "ConstraintDescription": "must begin with a letter and contain only alphanumeric characters.", 
-      "Default": "admin", 
-      "Description": "The database admin account username", 
-      "MaxLength": "16", 
-      "MinLength": "1", 
-      "NoEcho": "true", 
+      "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*",
+      "ConstraintDescription": "must begin with a letter and contain only alphanumeric characters.",
+      "Default": "admin",
+      "Description": "The database admin account username",
+      "MaxLength": "16",
+      "MinLength": "1",
+      "NoEcho": "true",
       "Type": "String"
     },
     "DBPassword": {
-      "AllowedPattern": "[a-zA-Z0-9]*", 
-      "ConstraintDescription": "must contain only alphanumeric characters.", 
-      "Default": "password", 
-      "Description": "The database admin account password", 
-      "MaxLength": "41", 
-      "MinLength": "8", 
-      "NoEcho": "true", 
+      "AllowedPattern": "[a-zA-Z0-9]*",
+      "ConstraintDescription": "must contain only alphanumeric characters.",
+      "Default": "password",
+      "Description": "The database admin account password",
+      "MaxLength": "41",
+      "MinLength": "8",
+      "NoEcho": "true",
       "Type": "String"
-    },    
+    },
     "DBInstanceClass"   : {
       "AllowedValues": [
-          "db.m1.small", 
+          "db.m1.small",
           "db.m1.large"
-      ], 
-      "ConstraintDescription": "must select a valid database instance type.", 
-      "Default": "db.m1.small", 
-      "Description": "Database instance class", 
+      ],
+      "ConstraintDescription": "must select a valid database instance type.",
+      "Default": "db.m1.small",
+      "Description": "Database instance class",
       "Type": "String"
     },
     "DBAllocatedStorage"  : {
-      "ConstraintDescription": "must be between 5 and 1024Gb.", 
-      "Default": "5", 
-      "Description": "The size of the database (Gb)", 
-      "MaxValue": "1024", 
-      "MinValue": "5", 
+      "ConstraintDescription": "must be between 5 and 1024Gb.",
+      "Default": "5",
+      "Description": "The size of the database (Gb)",
+      "MaxValue": "1024",
+      "MinValue": "5",
       "Type": "Number"
     }
   },
   "Mappings":{
     "Region2AMI": {
       "us-east-1": {
-        "Ubuntu":"ami-6edd3078"        
+        "Ubuntu":"ami-6edd3078"
         },
       "us-east-2":{
          "Ubuntu":"ami-fcc19b99"
@@ -272,7 +272,7 @@
       "Type": "AWS::CloudFormation::WaitCondition",
       "Metadata": {
         "Comment": "Wait condition to wait for instance to spin up and send signal."
-      },          
+      },
       "Properties": {
         "Count": {
           "Ref": "InstanceCount"
@@ -288,12 +288,12 @@
       "Properties": {
         "Subscription": [ { "Endpoint": { "Ref": "OperatorEMail" }, "Protocol": "email" } ]
       }
-    },       
+    },
     "InstanceRole": {
       "Type": "AWS::IAM::Role",
       "Metadata": {
         "Comment": "IAM Role for the Autoscaling web server group. Also Permits decryption of values encrypted under a KMS key without any restrictions."
-      },        
+      },
       "Properties": {
         "AssumeRolePolicyDocument": {
           "Statement": [
@@ -317,7 +317,7 @@
       "Type": "AWS::IAM::Policy",
       "Metadata": {
         "Comment": "IAM Policy attached to Role for the Autoscaling web server group."
-      }, 
+      },
       "Properties": {
         "PolicyName": "InstanceRole",
         "PolicyDocument": {
@@ -337,19 +337,19 @@
             {
                 "Effect":"Allow",
                 "Action":[
-                    "ssm:GetParameters"                    
+                    "ssm:GetParameters"
                 ],
                 "Resource":[
-                    {"Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}.*"}                     
+                    {"Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}.*"}
                 ]
             },
             {
                 "Effect":"Allow",
-                "Action":[                    
+                "Action":[
                     "ssm:DescribeParameters"
                 ],
                 "Resource":[
-                    {"Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:*"}                     
+                    {"Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:*"}
                 ]
             },
             {
@@ -357,12 +357,12 @@
                 "Action": [
                     "logs:CreateLogStream",
                     "logs:PutLogEvents",
-                    "logs:CreateLogGroup"                        
+                    "logs:CreateLogGroup"
                 ],
                 "Resource":[
-                    {"Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${AWS::StackName}:*"}                                       
+                    {"Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${AWS::StackName}:*"}
                 ]
-            }                          
+            }
           ]
         },
         "Roles": [
@@ -376,7 +376,7 @@
       "Type": "AWS::IAM::InstanceProfile",
       "Metadata": {
         "Comment": "Instance Profile used to attach the IAM Role with the Autoscaling web server group."
-      },       
+      },
       "Properties": {
         "Path": "/",
         "Roles": [
@@ -394,11 +394,11 @@
         "Properties": {
             "AssumeRolePolicyDocument": {
             "Version": "2012-10-17",
-            "Statement": 
+            "Statement":
                 [{
                     "Effect": "Allow",
                     "Principal": { "Service": [ "lambda.amazonaws.com" ] },
-                    "Action": [ "sts:AssumeRole"]                
+                    "Action": [ "sts:AssumeRole"]
                 }]
             }
         }
@@ -407,7 +407,7 @@
       "Type": "AWS::IAM::Policy",
       "Metadata": {
         "Comment": "IAM Policy attached to Role for the Lambda. "
-      }, 
+      },
       "Properties": {
         "PolicyName": "LambdaRole",
         "PolicyDocument": {
@@ -415,7 +415,7 @@
                 {
                     "Effect":"Allow",
                     "Action": [
-                        "logs:*"                        
+                        "logs:*"
                     ],
                     "Resource":"*"
                 },
@@ -426,9 +426,9 @@
                         "ssm:DeleteParameter"
                     ],
                     "Resource":[
-                        {"Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}.*"}                     
+                        {"Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}.*"}
                     ]
-                }                 
+                }
             ]
         },
         "Roles": [
@@ -437,18 +437,18 @@
           }
         ]
       }
-    },        
+    },
     "MyKey" : {
         "Type" : "AWS::KMS::Key",
         "Properties" : {
-            "Description" : "A sample key",            
+            "Description" : "A sample key",
             "KeyPolicy" : {
-                "Version": "2012-10-17",                
+                "Version": "2012-10-17",
                 "Statement": [
                     {
                     "Sid": "Allow administration of the key",
                     "Effect": "Allow",
-                    "Principal":{ "AWS" : {"Fn::Sub": "arn:aws:iam::${AWS::AccountId}:user/${UserName}" }},                              
+                    "Principal":{ "AWS" : {"Fn::Sub": "arn:aws:iam::${AWS::AccountId}:user/${UserName}" }},
                     "Action": [
                         "kms:Create*",
                         "kms:Describe*",
@@ -468,14 +468,14 @@
                     {
                     "Sid": "Allow use of the key",
                     "Effect": "Allow",
-                    "Principal":{ "AWS" : {"Fn::Sub": "arn:aws:iam::${AWS::AccountId}:user/${UserName}" }},                              
+                    "Principal":{ "AWS" : {"Fn::Sub": "arn:aws:iam::${AWS::AccountId}:user/${UserName}" }},
                     "Action": [
                         "kms:Encrypt",
                         "kms:Decrypt",
                         "kms:ReEncrypt*",
                         "kms:GenerateDataKey*",
                         "kms:DescribeKey"
-                    ], 
+                    ],
                     "Resource": "*"
                     },
                     {
@@ -500,34 +500,34 @@
                     {
                     "Sid": "Allow use of the key",
                     "Effect": "Allow",
-                    "Principal":{ "AWS" : {"Fn::Sub": "arn:aws:iam::${AWS::AccountId}:user/devuser" }},                            
+                    "Principal":{ "AWS" : {"Fn::Sub": "arn:aws:iam::${AWS::AccountId}:user/devuser" }},
                     "Action": [
                         "kms:Encrypt",
                         "kms:Decrypt",
-                        "kms:GenerateDataKey"                                                
-                    ], 
+                        "kms:GenerateDataKey"
+                    ],
                     "Resource": "*"
                     },
                     {
                     "Sid": "Allow use of the key",
                     "Effect": "Allow",
-                    "Principal":{ "AWS" : {"Fn::Sub": "arn:aws:iam::${AWS::AccountId}:user/qauser" }},                            
-                    "Action": [                        
-                        "kms:Decrypt"                        
-                    ], 
+                    "Principal":{ "AWS" : {"Fn::Sub": "arn:aws:iam::${AWS::AccountId}:user/qauser" }},
+                    "Action": [
+                        "kms:Decrypt"
+                    ],
                     "Resource": "*"
-                    }                                                                                          
+                    }
                 ]
             }
         }
-    },  
+    },
     "MyKeyAlias" : {
         "Type" : "AWS::KMS::Alias",
         "Properties" : {
             "AliasName" : { "Fn::Sub": "alias/${AWS::StackName}-masterkey" },
             "TargetKeyId" : {"Ref":"MyKey"}
         }
-    },    
+    },
     "ParameterStoreLambda" : {
         "Type": "AWS::Lambda::Function",
         "Properties": {
@@ -542,12 +542,12 @@
                         "var ssm = new AWS.SSM();",
                         "if(event.RequestType == 'Delete') {",
                             "console.log('Delete Called');",
-                            "response.send(event, context, response.SUCCESS); //do nothing and send success by default",     
+                            "response.send(event, context, response.SUCCESS); //do nothing and send success by default",
                         "}",
                         "var params = {",
                             "Name: event.ResourceProperties.Name,",
                             "Type: 'SecureString',",
-                            "Value: event.ResourceProperties.Value,",                            
+                            "Value: event.ResourceProperties.Value,",
                             "KeyId: event.ResourceProperties.KeyId,",
                             "Overwrite: true",
                         "};",
@@ -578,7 +578,7 @@
         "Type":"AWS::EC2::VPC",
         "Metadata": {
             "Comment": "Virtual Private Cloud for the Application."
-        },    
+        },
         "Properties":{
         "CidrBlock":"10.0.0.0/16",
         "EnableDnsSupport":true,
@@ -598,7 +598,7 @@
       "Type":"AWS::EC2::InternetGateway",
       "Metadata": {
         "Comment": "Internet gateway for the VPC."
-      },            
+      },
       "Properties":{
         "Tags":[
             {
@@ -634,7 +634,7 @@
             {
                 "Key":"Name",
                 "Value":{
-                  "Fn::Join":[                                        
+                  "Fn::Join":[
                     "",
                     [
                       { "Ref" : "AWS::StackName" }, "- PublicSubnet01"
@@ -658,7 +658,7 @@
             {
                 "Key":"Name",
                 "Value":{
-                  "Fn::Join":[                                        
+                  "Fn::Join":[
                     "",
                     [
                       { "Ref" : "AWS::StackName" }, "- PublicSubnet02"
@@ -715,7 +715,7 @@
             }
         ]
         }
-    },    
+    },
     "PublicRouteTable":{
         "Type":"AWS::EC2::RouteTable",
         "Properties":{
@@ -747,7 +747,7 @@
     "PublicSubnet01RouteTableAssociation":{
         "Type":"AWS::EC2::SubnetRouteTableAssociation",
         "DependsOn": [
-            "PublicRouteTable", 
+            "PublicRouteTable",
             "PublicSubnet01"
         ],
         "Properties":{
@@ -762,9 +762,9 @@
     "PublicSubnet02RouteTableAssociation":{
         "Type":"AWS::EC2::SubnetRouteTableAssociation",
         "DependsOn": [
-            "PublicRouteTable", 
+            "PublicRouteTable",
             "PublicSubnet02"
-        ],        
+        ],
         "Properties":{
         "RouteTableId":{
             "Ref":"PublicRouteTable"
@@ -777,28 +777,28 @@
     "DBSubnetGroup": {
         "Type": "AWS::RDS::DBSubnetGroup",
         "DependsOn": [
-            "PrivateSubnet01", 
+            "PrivateSubnet01",
             "PrivateSubnet02"
-        ], 
+        ],
         "Properties": {
-            "DBSubnetGroupDescription": "RDS Subnet Group", 
+            "DBSubnetGroupDescription": "RDS Subnet Group",
             "SubnetIds": [
                 {
                     "Ref": "PrivateSubnet01"
                 },
                 {
                     "Ref": "PrivateSubnet02"
-                }                
+                }
             ]
         }
-    },             
+    },
     "SecurityGroup": {
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
         "GroupDescription": "Enable HTTP and HTTPS ports for the Load Balancer",
         "VpcId":{
             "Ref":"VPC"
-        },        
+        },
         "SecurityGroupIngress": [
           {
             "IpProtocol": "tcp",
@@ -821,8 +821,8 @@
         "GroupDescription": "Enable HTTP access via port 3000 and SSH access via port 22 for the EC2 Instances",
         "VpcId":{
             "Ref":"VPC"
-        },        
-        "SecurityGroupIngress": [         
+        },
+        "SecurityGroupIngress": [
           {
             "IpProtocol": "tcp",
             "FromPort": "22",
@@ -850,12 +850,12 @@
                     "DomainName" : "presentation.al-labs.co.uk",
                     "ValidationDomain" : "al-labs.co.uk"
                 }
-            ]            
+            ]
         }
-    },        
+    },
     "ApplicationLoadBalancer":{
       "Type":"AWS::ElasticLoadBalancingV2::LoadBalancer",
-      "Properties":{     
+      "Properties":{
         "Name":{
             "Fn::Sub": "${AWS::StackName}-loadbalancer"
         },
@@ -875,7 +875,7 @@
         ]
       }
     },
-    "ApplicationLoadBalancerTargetGroup": {        
+    "ApplicationLoadBalancerTargetGroup": {
         "Type" : "AWS::ElasticLoadBalancingV2::TargetGroup",
         "Properties" : {
             "Name":{
@@ -889,7 +889,7 @@
             "UnhealthyThresholdCount": 5,
             "Matcher" : {
                 "HttpCode" : "200"
-            },            
+            },
             "Port": 3000,
             "Protocol": "HTTP",
             "TargetGroupAttributes": [{
@@ -898,7 +898,7 @@
             }],
             "VpcId": {"Ref" : "VPC"}
         }
-    },    
+    },
     "ApplicationLoadBalancerHTTPListener" :{
         "Type":"AWS::ElasticLoadBalancingV2::Listener",
         "Properties": {
@@ -912,13 +912,13 @@
         }
     },
     "ApplicationLoadBalancerHTTPSListener" :{
-        "Type":"AWS::ElasticLoadBalancingV2::Listener",        
+        "Type":"AWS::ElasticLoadBalancingV2::Listener",
         "Properties": {
             "Certificates":[
                 {
                     "CertificateArn" : {"Ref":"SSLCertificate"}
                 }
-            ],    
+            ],
             "DefaultActions": [{
                 "Type": "forward",
                 "TargetGroupArn": { "Ref": "ApplicationLoadBalancerTargetGroup" }
@@ -927,7 +927,7 @@
             "Port": "443",
             "Protocol": "HTTPS"
         }
-    },      
+    },
     "DNSRecordSet" : {
         "Type" : "AWS::Route53::RecordSetGroup",
         "Properties" : {
@@ -947,7 +947,7 @@
     },
     "LogGroup":{
         "Type" : "AWS::Logs::LogGroup",
-        "DeletionPolicy" : "Retain", 
+        "DeletionPolicy" : "Retain",
         "Properties" : {
             "LogGroupName" : { "Ref":"AWS::StackName"},
             "RetentionInDays" : 1
@@ -966,9 +966,9 @@
                 }
             ]
         }
-    },        
-    "LaunchConfig":{        
-        "Type":"AWS::AutoScaling::LaunchConfiguration",        
+    },
+    "LaunchConfig":{
+        "Type":"AWS::AutoScaling::LaunchConfiguration",
         "Metadata" : {
             "Comment" : "Install a simple application and decrypt secrets and set as environment variable.",
             "AWS::CloudFormation::Init" : {
@@ -1005,14 +1005,14 @@
                                         "file = /var/log/syslog\n",
                                         "log_group_name = ", {"Ref": "LogGroup"}, "\n",
                                         "log_stream_name = system.linux.syslog-{instance_id}\n",
-                                        "datetime_format = %b %d %H:%M:%S\n"                                                                                                                                                              
+                                        "datetime_format = %b %d %H:%M:%S\n"
                                     ]
                                 ]
                             },
                             "mode": "000400",
                             "owner": "root",
                             "group": "root"
-                        },                      
+                        },
                         "/lib/systemd/system/awslogs.service": {
                             "content": {
                                 "Fn::Join": [
@@ -1022,9 +1022,9 @@
                                         "Description=The CloudWatch Logs agent",
                                         "After=network.target",
                                         "",
-                                        "[Service]",                                        
-                                        "Restart=always",                                        
-                                        "TimeoutSec=infinity",                                        
+                                        "[Service]",
+                                        "Restart=always",
+                                        "TimeoutSec=infinity",
                                         "ExecStart=/var/awslogs/bin/awslogs-agent-launcher.sh",
                                         "",
                                         "[Install]",
@@ -1036,22 +1036,22 @@
                             "owner": "root",
                             "group": "root"
                         }
-                    }                     
+                    }
                 }
             }
         },
-        "Properties":{            
+        "Properties":{
             "IamInstanceProfile":{
                 "Ref":"InstanceRoleInstanceProfile"
             },
-            "SpotPrice":"0.05",            
+            "SpotPrice":"0.05",
             "ImageId": {
             "Fn::FindInMap": [
                 "Region2AMI",
                 {
                 "Ref": "AWS::Region"
                 },
-                "Ubuntu"            
+                "Ubuntu"
             ]
             },
             "InstanceType": {
@@ -1072,11 +1072,11 @@
                         [
                         "#!/bin/bash -ex\n",
                         "# Install CFN Bootstrap\n",
-                        "sudo apt-get -y update\n",                        
+                        "sudo apt-get -y update\n",
                         "sudo apt-get -y install ruby\n",
                         "sudo apt-get -y install wget\n",
-                        "sudo apt-get -y install python-pip\n",                        
-                        "pip install https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz\n",                
+                        "sudo apt-get -y install python-pip\n",
+                        "pip install https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz\n",
                         "# Helper function.\n",
                         "function error_exit\n",
                         "{\n",
@@ -1086,21 +1086,21 @@
                         },
                         "'\n",
                         "  exit 1\n",
-                        "}\n",                                                
+                        "}\n",
                         "# Install the AWS CodeDeploy Agent.\n",
                         "cd /home/ubuntu/\n",
                         "wget https://aws-codedeploy-us-west-1.s3.amazonaws.com/latest/install || error_exit 'Failed to download AWS CodeDeploy Agent.'\n",
                         "chmod +x ./install || error_exit 'Failed to download AWS CodeDeploy Agent.'\n",
-                        "sudo ./install auto || error_exit 'Failed to install AWS CodeDeploy Agent.' \n",                        
+                        "sudo ./install auto || error_exit 'Failed to install AWS CodeDeploy Agent.' \n",
                         "# Install the latest AWS CLI. \n",
                         "sudo pip install --upgrade awscli || error_exit \n",
                         "# Configure the AWS CLI to use the Curent Region by Default \n",
-                        "aws configure set region ",{ "Ref" : "AWS::Region" }, " || error_exit \n",                                                
+                        "aws configure set region ",{ "Ref" : "AWS::Region" }, " || error_exit \n",
                         "#Download and install the latest NodeJs version \n",
                         "# https://nodejs.org/en/download/package-manager/#debian-and-ubuntu-based-linux-distributions \n",
                         "curl -sL https://deb.nodesource.com/setup_7.x | sudo -E bash - || error_exit \n",
-                        "apt-get install -y nodejs || error_exit \n",                     
-                        "# Call CFN-INIT to process the metadata for CloudFormation Init. Since ubuntu does not have the tools installed, we install the CFN Bootstrap in the previous step.\n",                        
+                        "apt-get install -y nodejs || error_exit \n",
+                        "# Call CFN-INIT to process the metadata for CloudFormation Init. Since ubuntu does not have the tools installed, we install the CFN Bootstrap in the previous step.\n",
                         "cfn-init -v ",
                         "         --stack ", { "Ref" : "AWS::StackName" },
                         "         --resource LaunchConfig ",
@@ -1110,7 +1110,7 @@
                         "python awslogs-agent-setup.py -n -r ", { "Ref" : "AWS::Region" }, " -c /tmp/cwlogs/logstreams.conf || error_exit 'Failed to run CloudWatch Logs agent setup'\n",
                         "#Start the Cloudwatch logs agent service using the SYSTEMD Unit file created by cloudformation Init. \n",
                         "systemctl enable awslogs.service \n",
-                        "systemctl start awslogs.service \n",                        
+                        "systemctl start awslogs.service \n",
                         "# All is well, so signal success.\n",
                         "cfn-signal -e 0 -r \"AWS CodeDeploy Agent setup complete.\" '",
                         {
@@ -1125,17 +1125,17 @@
                         ]
                     ]
                 }
-            }            
+            }
         }
     },
     "AutoScalingGroup":{
-        "Type":"AWS::AutoScaling::AutoScalingGroup",        
-        "Properties":{            
+        "Type":"AWS::AutoScaling::AutoScalingGroup",
+        "Properties":{
             "LaunchConfigurationName":{ "Ref":"LaunchConfig" },
             "TargetGroupARNs" : [{"Ref":"ApplicationLoadBalancerTargetGroup"}],
-            "DesiredCapacity":{ "Ref":"InstanceCount" },    
+            "DesiredCapacity":{ "Ref":"InstanceCount" },
             "MaxSize":{ "Ref":"InstanceMaxCount" },
-            "MinSize":{ "Ref":"InstanceMinCount" },                  
+            "MinSize":{ "Ref":"InstanceMinCount" },
             "MetricsCollection" : [
                 {
                     "Granularity":"1Minute"
@@ -1155,7 +1155,7 @@
                 "Value": { "Ref": "TagValue" },
                 "PropagateAtLaunch":"true"
             }
-            ]            
+            ]
           },
           "CreationPolicy" : {
             "ResourceSignal" : {
@@ -1170,7 +1170,7 @@
               "PauseTime" : "PT15M",
               "WaitOnResourceSignals": "true"
             }
-          }  
+          }
     },
     "WebServerScaleUpPolicy" : {
       "Type" : "AWS::AutoScaling::ScalingPolicy",
@@ -1229,11 +1229,11 @@
         ],
         "ComparisonOperator": "LessThanThreshold"
       }
-    },    
+    },
     "DBInstance" : {
       "Type": "AWS::RDS::DBInstance",
       "DependsOn": [
-            "AutoScalingGroup"            
+            "AutoScalingGroup"
         ],
       "Properties": {
         "DBName"            : { "Ref" : "DBName" },
@@ -1250,7 +1250,7 @@
     "EncryptDBUSERNAME": {
       "Type": "AWS::CloudFormation::CustomResource",
       "Version": "1.0",
-      "DependsOn" : [          
+      "DependsOn" : [
           "MyKey",
           "MyKeyAlias",
           "DBInstance"
@@ -1259,21 +1259,21 @@
         "ServiceToken": {"Fn::GetAtt": [ "ParameterStoreLambda","Arn" ] },
         "Name": {
             "Fn::Join":[ ".",
-                [                                       
-                    {"Ref":"AWS::StackName"},                                                          
+                [
+                    {"Ref":"AWS::StackName"},
                     "db",
-                    "username"          
+                    "username"
                 ]
             ]
         },
         "Value": {"Ref":"DBUsername"},
         "KeyId": {"Ref": "MyKey"}
       }
-    }, 
+    },
     "EncryptDBPassword": {
       "Type": "AWS::CloudFormation::CustomResource",
       "Version": "1.0",
-      "DependsOn" : [          
+      "DependsOn" : [
           "MyKey",
           "MyKeyAlias",
           "DBInstance"
@@ -1282,21 +1282,21 @@
         "ServiceToken": {"Fn::GetAtt": [ "ParameterStoreLambda","Arn" ] },
         "Name": {
             "Fn::Join":[ ".",
-                [                                       
-                    {"Ref":"AWS::StackName"},                                                          
+                [
+                    {"Ref":"AWS::StackName"},
                     "db",
-                    "password"                  
+                    "password"
                 ]
             ]
         },
         "Value": {"Ref":"DBPassword"},
         "KeyId": {"Ref": "MyKey"}
       }
-    }, 
+    },
     "EncryptDBName": {
       "Type": "AWS::CloudFormation::CustomResource",
       "Version": "1.0",
-      "DependsOn" : [          
+      "DependsOn" : [
           "MyKey",
           "MyKeyAlias",
           "DBInstance"
@@ -1305,8 +1305,8 @@
         "ServiceToken": {"Fn::GetAtt": [ "ParameterStoreLambda","Arn" ] },
         "Name": {
             "Fn::Join":[ ".",
-                [                                       
-                    {"Ref":"AWS::StackName"},                                                          
+                [
+                    {"Ref":"AWS::StackName"},
                     "db",
                     "name"
                 ]
@@ -1315,11 +1315,11 @@
         "Value": {"Ref":"DBName"},
         "KeyId": {"Ref": "MyKey"}
       }
-    }, 
+    },
     "EncryptDBCONNECTIONSTRING": {
       "Type": "AWS::CloudFormation::CustomResource",
       "Version": "1.0",
-      "DependsOn" : [          
+      "DependsOn" : [
           "MyKey",
           "MyKeyAlias",
           "DBInstance"
@@ -1328,59 +1328,59 @@
         "ServiceToken": {"Fn::GetAtt": [ "ParameterStoreLambda","Arn" ] },
         "Name": {
             "Fn::Join":[ ".",
-                [                                       
-                    {"Ref":"AWS::StackName"},                                                          
+                [
+                    {"Ref":"AWS::StackName"},
                     "db",
-                    "connectionstring"                    
+                    "connectionstring"
                 ]
             ]
         },
         "Value": {"Fn::GetAtt": [ "DBInstance","Endpoint.Address" ] },
         "KeyId": {"Ref": "MyKey"}
       }
-    }, 
+    },
     "DBSecurityGroup": {
       "Type": "AWS::RDS::DBSecurityGroup",
       "DependsOn": [
-          "InstanceSecurityGroup", 
+          "InstanceSecurityGroup",
           "VPC"
-      ],            
+      ],
       "Properties": {
-        "EC2VpcId": { "Ref": "VPC" }, 
+        "EC2VpcId": { "Ref": "VPC" },
         "DBSecurityGroupIngress": [{"EC2SecurityGroupId": {"Ref": "InstanceSecurityGroup"}}],
         "GroupDescription" : "Frontend Access"
       }
     },
     "QAGroup": {
-      "Type": "AWS::IAM::Group", 
+      "Type": "AWS::IAM::Group",
       "Properties": {
           "GroupName": {
               "Fn::Sub": "${AWS::StackName}-QA"
-          }, 
+          },
           "ManagedPolicyArns": [
-              "arn:aws:iam::aws:policy/IAMReadOnlyAccess", 
+              "arn:aws:iam::aws:policy/IAMReadOnlyAccess",
               "arn:aws:iam::aws:policy/IAMUserSSHKeys"
-          ], 
+          ],
           "Policies": [
               {
-                  "PolicyName": {"Fn::Sub": "${AWS::StackName}-QA-Policy"}, 
+                  "PolicyName": {"Fn::Sub": "${AWS::StackName}-QA-Policy"},
                   "PolicyDocument": {
-                      "Version": "2012-10-17", 
+                      "Version": "2012-10-17",
                       "Statement": [
                           {
-                              "Effect": "Allow", 
+                              "Effect": "Allow",
                               "Action": [
-                                  "codecommit:BatchGetRepositories", 
+                                  "codecommit:BatchGetRepositories",
                                   "codecommit:List*"
-                              ], 
+                              ],
                               "Resource": "*"
-                          }, 
+                          },
                           {
-                              "Effect": "Allow", 
+                              "Effect": "Allow",
                               "Action": [
-                                  "codecommit:Get*", 
+                                  "codecommit:Get*",
                                   "codecommit:GitPull"
-                              ], 
+                              ],
                               "Resource": [
                                   {
                                       "Fn::Sub": "arn:aws:codecommit:eu-west-1:${AWS::AccountId}:${AWS::StackName}-application"
@@ -1390,58 +1390,58 @@
                           {
                               "Effect":"Allow",
                               "Action":[
-                                  "ssm:GetParameters"                    
+                                  "ssm:GetParameters"
                               ],
                               "Resource":[
-                                  {"Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}.*"}                     
+                                  {"Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}.*"}
                               ]
                           },
                           {
                               "Effect":"Allow",
-                              "Action":[                    
+                              "Action":[
                                   "ssm:DescribeParameters"
                               ],
                               "Resource":[
-                                  {"Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:*"}                     
+                                  {"Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:*"}
                               ]
-                          } 
+                          }
                       ]
                   }
               }
           ]
       }
-    }, 
+    },
     "DevGroup": {
-        "Type": "AWS::IAM::Group", 
+        "Type": "AWS::IAM::Group",
         "Properties": {
             "GroupName": {
                 "Fn::Sub": "${AWS::StackName}-Dev"
-            }, 
+            },
             "ManagedPolicyArns": [
-                "arn:aws:iam::aws:policy/IAMReadOnlyAccess", 
+                "arn:aws:iam::aws:policy/IAMReadOnlyAccess",
                 "arn:aws:iam::aws:policy/IAMUserSSHKeys"
-            ], 
+            ],
             "Policies": [
                 {
-                    "PolicyName": {"Fn::Sub": "${AWS::StackName}_dev_policy"}, 
+                    "PolicyName": {"Fn::Sub": "${AWS::StackName}_dev_policy"},
                     "PolicyDocument": {
-                        "Version": "2012-10-17", 
+                        "Version": "2012-10-17",
                         "Statement": [
                             {
-                                "Effect": "Allow", 
+                                "Effect": "Allow",
                                 "Action": [
-                                    "codecommit:BatchGetRepositories", 
+                                    "codecommit:BatchGetRepositories",
                                     "codecommit:List*"
-                                ], 
+                                ],
                                 "Resource": "*"
-                            }, 
+                            },
                             {
-                                "Effect": "Allow", 
+                                "Effect": "Allow",
                                 "Action": [
-                                    "codecommit:Get*", 
-                                    "codecommit:GitPull", 
+                                    "codecommit:Get*",
+                                    "codecommit:GitPull",
                                     "codecommit:GitPush"
-                                ], 
+                                ],
                                 "Resource": [
                                     {
                                         "Fn::Sub": "arn:aws:codecommit:eu-west-1:${AWS::AccountId}:${AWS::StackName}-application"
@@ -1451,30 +1451,30 @@
                             {
                                 "Effect":"Allow",
                                 "Action":[
-                                    "ssm:PutParameter"                    
+                                    "ssm:PutParameter"
                                 ],
                                 "Resource":[
-                                    {"Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}.*"}                     
+                                    {"Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}.*"}
                                 ]
                             },
                             {
                                 "Effect":"Allow",
                                 "Action":[
-                                    "ssm:GetParameters"                    
+                                    "ssm:GetParameters"
                                 ],
                                 "Resource":[
-                                    {"Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}.*"}                     
+                                    {"Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}.*"}
                                 ]
                             },
                             {
                                 "Effect":"Allow",
-                                "Action":[                    
+                                "Action":[
                                     "ssm:DescribeParameters"
                                 ],
                                 "Resource":[
-                                    {"Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:*"}                     
+                                    {"Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:*"}
                                 ]
-                            }                             
+                            }
                         ]
                     }
                 }
@@ -1482,36 +1482,36 @@
         }
     },
     "SecGroup": {
-        "Type": "AWS::IAM::Group", 
+        "Type": "AWS::IAM::Group",
         "Properties": {
             "GroupName": {
                 "Fn::Sub": "${AWS::StackName}-Sec"
-            }, 
+            },
             "ManagedPolicyArns": [
-                "arn:aws:iam::aws:policy/IAMReadOnlyAccess", 
+                "arn:aws:iam::aws:policy/IAMReadOnlyAccess",
                 "arn:aws:iam::aws:policy/IAMUserSSHKeys"
-            ], 
+            ],
             "Policies": [
                 {
-                    "PolicyName": {"Fn::Sub": "${AWS::StackName}_sec_policy"}, 
+                    "PolicyName": {"Fn::Sub": "${AWS::StackName}_sec_policy"},
                     "PolicyDocument": {
-                        "Version": "2012-10-17", 
+                        "Version": "2012-10-17",
                         "Statement": [
                             {
-                                "Effect": "Allow", 
+                                "Effect": "Allow",
                                 "Action": [
-                                    "codecommit:BatchGetRepositories", 
+                                    "codecommit:BatchGetRepositories",
                                     "codecommit:List*"
-                                ], 
+                                ],
                                 "Resource": "*"
-                            }, 
+                            },
                             {
-                                "Effect": "Allow", 
+                                "Effect": "Allow",
                                 "Action": [
-                                    "codecommit:Get*", 
-                                    "codecommit:GitPull", 
+                                    "codecommit:Get*",
+                                    "codecommit:GitPull",
                                     "codecommit:GitPush"
-                                ], 
+                                ],
                                 "Resource": [
                                     {
                                         "Fn::Sub": "arn:aws:codecommit:eu-west-1:${AWS::AccountId}:${AWS::StackName}-application"
@@ -1521,36 +1521,36 @@
                             {
                                 "Effect":"Allow",
                                 "Action":[
-                                    "ssm:PutParameter"                    
+                                    "ssm:PutParameter"
                                 ],
                                 "Resource":[
-                                    {"Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}.*"}                     
+                                    {"Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}.*"}
                                 ]
                             },
                             {
                                 "Effect":"Allow",
                                 "Action":[
-                                    "ssm:GetParameters"                    
+                                    "ssm:GetParameters"
                                 ],
                                 "Resource":[
-                                    {"Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}.*"}                     
+                                    {"Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}.*"}
                                 ]
                             },
                             {
                                 "Effect":"Allow",
-                                "Action":[                    
+                                "Action":[
                                     "ssm:DescribeParameters"
                                 ],
                                 "Resource":[
-                                    {"Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:*"}                     
+                                    {"Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:*"}
                                 ]
-                            }                             
+                            }
                         ]
                     }
                 }
             ]
         }
-    },    
+    },
     "AddUsersToDevGroup" : {
         "Type": "AWS::IAM::UserToGroupAddition",
         "Properties": {
@@ -1566,91 +1566,91 @@
         }
     },
     "CodeRepo": {
-        "Type": "AWS::CodeCommit::Repository", 
+        "Type": "AWS::CodeCommit::Repository",
         "Properties": {
             "RepositoryName": {
                 "Fn::Sub": "${AWS::StackName}-application"
-            }, 
+            },
             "RepositoryDescription": "A code repository for the application"
         }
-    }, 
+    },
     "CodeBuildRole": {
-        "Type": "AWS::IAM::Role", 
+        "Type": "AWS::IAM::Role",
         "Properties": {
             "RoleName": {
                 "Fn::Sub": "${AWS::StackName}-CodeBuild"
-            }, 
+            },
             "AssumeRolePolicyDocument": {
-                "Version": "2012-10-17", 
+                "Version": "2012-10-17",
                 "Statement": [
                     {
-                        "Effect": "Allow", 
+                        "Effect": "Allow",
                         "Principal": {
                             "Service": [
                                 "codebuild.amazonaws.com"
                             ]
-                        }, 
+                        },
                         "Action": [
                             "sts:AssumeRole"
                         ]
                     }
                 ]
-            }, 
+            },
             "Policies": [
                 {
-                    "PolicyName": "codebuild", 
+                    "PolicyName": "codebuild",
                     "PolicyDocument": {
                         "Statement": [
                             {
-                                "Effect": "Allow", 
+                                "Effect": "Allow",
                                 "Action": [
                                     "ecr:GetAuthorizationToken"
-                                ], 
+                                ],
                                 "Resource": "*"
-                            }, 
+                            },
                             {
-                                "Effect": "Allow", 
+                                "Effect": "Allow",
                                 "Action": [
-                                    "ecr:BatchCheckLayerAvailability", 
-                                    "ecr:CompleteLayerUpload", 
-                                    "ecr:InitiateLayerUpload", 
-                                    "ecr:PutImage", 
+                                    "ecr:BatchCheckLayerAvailability",
+                                    "ecr:CompleteLayerUpload",
+                                    "ecr:InitiateLayerUpload",
+                                    "ecr:PutImage",
                                     "ecr:UploadLayerPart"
-                                ], 
+                                ],
                                 "Resource": [
                                     {
                                         "Fn::Sub": "arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/${AWS::StackName}-application"
                                     }
                                 ]
-                            }, 
+                            },
                             {
-                                "Effect": "Allow", 
+                                "Effect": "Allow",
                                 "Action": [
                                     "codecommit:GitPull"
-                                ], 
+                                ],
                                 "Resource": [
                                     {
                                         "Fn::Sub": "arn:aws:codecommit:${AWS::Region}:${AWS::AccountId}:${AWS::StackName}-application"
                                     }
                                 ]
-                            }, 
+                            },
                             {
-                                "Effect": "Allow", 
+                                "Effect": "Allow",
                                 "Action": [
-                                    "logs:CreateLogGroup", 
-                                    "logs:CreateLogStream", 
+                                    "logs:CreateLogGroup",
+                                    "logs:CreateLogStream",
                                     "logs:PutLogEvents"
-                                ], 
+                                ],
                                 "Resource": [
                                     {
                                         "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-application:log-stream"
-                                    }, 
+                                    },
                                     {
                                         "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-application:log-stream:*"
-                                    }, 
+                                    },
                                     {
                                         "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-application-image:log-stream"
-                                    }, 
+                                    },
                                     {
                                         "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-application-image:log-stream:*"
                                     }
@@ -1661,38 +1661,38 @@
                 }
             ]
         }
-    }, 
+    },
     "CodeBuild": {
-        "Type": "AWS::CodeBuild::Project", 
+        "Type": "AWS::CodeBuild::Project",
         "DependsOn": [
-            "CodeRepo", 
+            "CodeRepo",
             "CodeBuildRole"
-        ], 
+        ],
         "Properties": {
             "Name": {
                 "Fn::Sub": "${AWS::StackName}-application"
-            }, 
-            "Description": "A description about my project", 
+            },
+            "Description": "A description about my project",
             "ServiceRole": {
                 "Fn::GetAtt": "CodeBuildRole.Arn"
-            }, 
+            },
             "Artifacts": {
                 "Type": "CODEPIPELINE"
-            }, 
+            },
             "Environment": {
-                "Type": "LINUX_CONTAINER", 
-                "ComputeType": "BUILD_GENERAL1_SMALL", 
+                "Type": "LINUX_CONTAINER",
+                "ComputeType": "BUILD_GENERAL1_SMALL",
                 "Image": "aws/codebuild/nodejs:7.0.0"
-            }, 
+            },
             "Source": {
                 "Location": {
                     "Fn::GetAtt": "CodeRepo.CloneUrlHttp"
-                }, 
-                "Type": "CODEPIPELINE", 
+                },
+                "Type": "CODEPIPELINE",
                 "BuildSpec": {
                     "Fn::Sub": "version: 0.1\nphases:\n  build:\n    commands:\n      - echo Install NodeJS dependencies...\n      - npm install\nartifacts:\n  files:\n  - \"**/*\" # All files recursively\n"
                 }
-            }, 
+            },
             "TimeoutInMinutes": 300
         }
     },
@@ -1701,7 +1701,7 @@
       "Properties": {
         "AssumeRolePolicyDocument": {
 
-            "Version":"2012-10-17",            
+            "Version":"2012-10-17",
             "Statement": [
                 {
                     "Sid": "1",
@@ -1776,97 +1776,97 @@
             }
         ]
         }
-    },     
+    },
     "CodeDeployApplication": {
         "Type": "AWS::CodeDeploy::Application"
-    }, 
+    },
     "CodeDeployDeploymentGroup": {
-        "Type": "AWS::CodeDeploy::DeploymentGroup", 
+        "Type": "AWS::CodeDeploy::DeploymentGroup",
         "DependsOn": [
-            "CodeDeployApplication", 
+            "CodeDeployApplication",
             "CodeDeployTrustRole",
             "AutoScalingGroup"
-        ], 
+        ],
         "Properties": {
             "ApplicationName": {
                 "Ref": "CodeDeployApplication"
-            }, 
-            "DeploymentConfigName": "CodeDeployDefault.HalfAtATime", 
-            "AutoScalingGroups": [{"Ref" :"AutoScalingGroup"}], 
+            },
+            "DeploymentConfigName": "CodeDeployDefault.HalfAtATime",
+            "AutoScalingGroups": [{"Ref" :"AutoScalingGroup"}],
             "ServiceRoleArn": {
                 "Fn::GetAtt": "CodeDeployTrustRole.Arn"
             }
         }
-    }, 
+    },
     "CodePipelineServiceRole": {
-        "Type": "AWS::IAM::Role", 
+        "Type": "AWS::IAM::Role",
         "Properties": {
             "RoleName": {
                 "Fn::Sub": "${AWS::StackName}-CodePipelineServiceRole"
-            }, 
+            },
             "AssumeRolePolicyDocument": {
-                "Version": "2012-10-17", 
+                "Version": "2012-10-17",
                 "Statement": [
                     {
-                        "Effect": "Allow", 
+                        "Effect": "Allow",
                         "Principal": {
                             "Service": [
                                 "codepipeline.amazonaws.com"
                             ]
-                        }, 
+                        },
                         "Action": [
                             "sts:AssumeRole"
                         ]
                     }
                 ]
-            }, 
+            },
             "Policies": [
                 {
-                    "PolicyName": "root", 
+                    "PolicyName": "root",
                     "PolicyDocument": {
-                        "Version": "2012-10-17", 
+                        "Version": "2012-10-17",
                         "Statement": [
                             {
-                                "Effect": "Allow", 
+                                "Effect": "Allow",
                                 "Action": [
-                                    "codecommit:BatchGetRepositories", 
-                                    "codecommit:Get*", 
-                                    "codecommit:GitPull", 
-                                    "codecommit:List*", 
+                                    "codecommit:BatchGetRepositories",
+                                    "codecommit:Get*",
+                                    "codecommit:GitPull",
+                                    "codecommit:List*",
                                     "codecommit:UploadArchive"
-                                ], 
+                                ],
                                 "Resource": [
                                     {
                                         "Fn::Sub": "arn:aws:codecommit:${AWS::Region}:${AWS::AccountId}:${AWS::StackName}-application"
                                     }
                                 ]
-                            }, 
+                            },
                             {
-                                "Effect": "Allow", 
+                                "Effect": "Allow",
                                 "Action": [
                                     "ecr:BatchGetImage"
-                                ], 
+                                ],
                                 "Resource": [
                                     {
                                         "Fn::Sub": "arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/${AWS::StackName}-application"
                                     }
                                 ]
-                            }, 
+                            },
                             {
-                                "Effect": "Allow", 
+                                "Effect": "Allow",
                                 "Action": [
-                                    "codebuild:StartBuild", 
-                                    "codebuild:BatchGetBuilds", 
-                                    "cloudformation:*", 
+                                    "codebuild:StartBuild",
+                                    "codebuild:BatchGetBuilds",
+                                    "cloudformation:*",
                                     "iam:PassRole"
-                                ], 
+                                ],
                                 "Resource": "*"
-                            }, 
+                            },
                             {
-                                "Effect": "Allow", 
+                                "Effect": "Allow",
                                 "Action": [
                                     "codedeploy:*"
-                                ], 
+                                ],
                                 "Resource": "*"
                             }
                         ]
@@ -1874,84 +1874,84 @@
                 }
             ]
         }
-    }, 
+    },
     "ArtifactStoreS3Location": {
         "Type": "AWS::S3::Bucket",
-        "DeletionPolicy" : "Retain", 
+        "DeletionPolicy" : "Retain",
         "Properties": {
             "BucketName": {
                 "Fn::Sub": "${AWS::StackName}-artifacts"
             }
         }
-    }, 
+    },
     "ArtifactStoreS3LocationPolicy": {
-        "Type": "AWS::S3::BucketPolicy", 
+        "Type": "AWS::S3::BucketPolicy",
         "Properties": {
             "Bucket": {
                 "Ref": "ArtifactStoreS3Location"
-            }, 
+            },
             "PolicyDocument": {
                 "Statement": [
                     {
-                        "Effect": "Allow", 
+                        "Effect": "Allow",
                         "Action": [
                             "s3:*"
-                        ], 
+                        ],
                         "Resource": [
                             {
                                 "Fn::Sub": "arn:aws:s3:::${AWS::StackName}-artifacts"
-                            }, 
+                            },
                             {
                                 "Fn::Sub": "arn:aws:s3:::${AWS::StackName}-artifacts/*"
                             }
-                        ], 
+                        ],
                         "Principal": "*"
                     }
                 ]
             }
         }
-    }, 
+    },
     "CodePipeline": {
         "Type": "AWS::CodePipeline::Pipeline",
         "DependsOn": [
             "AutoScalingGroup",
             "DBInstance"
-        ], 
+        ],
         "Properties": {
             "Name": {
                 "Fn::Sub": "${AWS::StackName}-application"
-            }, 
+            },
             "RoleArn": {
                 "Fn::GetAtt": "CodePipelineServiceRole.Arn"
-            }, 
+            },
             "Stages": [
                 {
-                    "Name": "Source", 
+                    "Name": "Source",
                     "Actions": [
                         {
                             "Name": {"Fn::Sub": "${AWS::StackName}-Source"},
                             "ActionTypeId": {
-                                "Category": "Source", 
-                                "Owner": "AWS", 
-                                "Version": 1, 
+                                "Category": "Source",
+                                "Owner": "AWS",
+                                "Version": 1,
                                 "Provider": "CodeCommit"
-                            }, 
+                            },
                             "OutputArtifacts": [
                                 {
                                     "Name": {"Fn::Sub": "${AWS::StackName}-SourceOutput"}
                                 }
-                            ], 
+                            ],
                             "Configuration": {
                                 "RepositoryName": {
                                     "Fn::GetAtt": "CodeRepo.Name"
-                                }, 
+                                },
                                 "BranchName": "master"
                             }
                         }
                     ]
-                }, 
+                },
                 {
-                    "Name": "Build", 
+                    "Name": "Build",
                     "Actions": [
                         {
                             "Name": {"Fn::Sub": "${AWS::StackName}-Build"},
@@ -1959,18 +1959,18 @@
                                 {
                                     "Name": {"Fn::Sub": "${AWS::StackName}-SourceOutput"}
                                 }
-                            ], 
+                            ],
                             "ActionTypeId": {
-                                "Category": "Build", 
-                                "Owner": "AWS", 
-                                "Version": 1, 
+                                "Category": "Build",
+                                "Owner": "AWS",
+                                "Version": 1,
                                 "Provider": "CodeBuild"
-                            }, 
+                            },
                             "OutputArtifacts": [
                                 {
                                     "Name": {"Fn::Sub": "${AWS::StackName}-Build"}
                                 }
-                            ], 
+                            ],
                             "Configuration": {
                                 "ProjectName": {
                                     "Ref":"CodeBuild"
@@ -1978,27 +1978,27 @@
                             }
                         }
                     ]
-                }, 
+                },
                 {
-                    "Name": "Deploy", 
+                    "Name": "Deploy",
                     "Actions": [
                         {
-                            "Name": "BetaAction", 
+                            "Name": "BetaAction",
                             "InputArtifacts": [
                                 {
                                     "Name": {"Fn::Sub": "${AWS::StackName}-Build"}
                                 }
-                            ], 
+                            ],
                             "ActionTypeId": {
-                                "Category": "Deploy", 
-                                "Owner": "AWS", 
-                                "Version": 1, 
+                                "Category": "Deploy",
+                                "Owner": "AWS",
+                                "Version": 1,
                                 "Provider": "CodeDeploy"
-                            }, 
+                            },
                             "Configuration": {
                                 "ApplicationName": {
                                     "Ref": "CodeDeployApplication"
-                                }, 
+                                },
                                 "DeploymentGroupName": {
                                     "Ref": "CodeDeployDeploymentGroup"
                                 }
@@ -2006,15 +2006,15 @@
                         }
                     ]
                 }
-            ], 
+            ],
             "ArtifactStore": {
-                "Type": "S3", 
+                "Type": "S3",
                 "Location": {
                     "Ref": "ArtifactStoreS3Location"
                 }
             }
         }
-    }           
+    }
   },
   "Outputs":{
     "ServiceRoleName":{
@@ -2040,11 +2040,11 @@
       "Value" :  { "Fn::Join" : [ "", [ "http://", { "Fn::GetAtt" : [ "ApplicationLoadBalancer", "DNSName" ]}]]}
     },
     "RepoURL": {
-        "Description": "Git Repository URL", 
+        "Description": "Git Repository URL",
         "Value": {
             "Fn::GetAtt": "CodeRepo.CloneUrlSsh"
         }
-    },     
+    },
     "LoadBalancerName":{
         "Value":{
           "Ref":"ApplicationLoadBalancer"
