@@ -456,14 +456,14 @@
     "MyKey" : {
         "Type" : "AWS::KMS::Key",
         "Properties" : {
-            "Description" : "A sample key",
+            "Description" : "A sample key",            
             "KeyPolicy" : {
-                "Version": "2012-10-17",
+                "Version": "2012-10-17",                
                 "Statement": [
                     {
                     "Sid": "Allow administration of the key",
                     "Effect": "Allow",
-                    "Principal":{ "AWS" : {"Fn::Sub": "arn:aws:iam::${AWS::AccountId}:user/${UserName}" }},
+                    "Principal":{ "AWS" : {"Fn::Sub": "arn:aws:iam::${AWS::AccountId}:user/${UserName}" }},                              
                     "Action": [
                         "kms:Create*",
                         "kms:Describe*",
@@ -483,14 +483,14 @@
                     {
                     "Sid": "Allow use of the key",
                     "Effect": "Allow",
-                    "Principal":{ "AWS" : {"Fn::Sub": "arn:aws:iam::${AWS::AccountId}:user/${UserName}" }},
+                    "Principal":{ "AWS" : {"Fn::Sub": "arn:aws:iam::${AWS::AccountId}:user/${UserName}" }},                              
                     "Action": [
                         "kms:Encrypt",
                         "kms:Decrypt",
                         "kms:ReEncrypt*",
                         "kms:GenerateDataKey*",
                         "kms:DescribeKey"
-                    ],
+                    ], 
                     "Resource": "*"
                     },
                     {
@@ -515,27 +515,27 @@
                     {
                     "Sid": "Allow use of the key",
                     "Effect": "Allow",
-                    "Principal":{ "AWS" : {"Fn::Sub": "arn:aws:iam::${AWS::AccountId}:user/devuser" }},
+                    "Principal":{ "AWS" : {"Fn::Sub": "arn:aws:iam::${AWS::AccountId}:user/devuser" }},                            
                     "Action": [
                         "kms:Encrypt",
                         "kms:Decrypt",
-                        "kms:GenerateDataKey"
-                    ],
+                        "kms:GenerateDataKey"                                                
+                    ], 
                     "Resource": "*"
                     },
                     {
                     "Sid": "Allow use of the key",
                     "Effect": "Allow",
-                    "Principal":{ "AWS" : {"Fn::Sub": "arn:aws:iam::${AWS::AccountId}:user/qauser" }},
-                    "Action": [
-                        "kms:Decrypt"
-                    ],
+                    "Principal":{ "AWS" : {"Fn::Sub": "arn:aws:iam::${AWS::AccountId}:user/qauser" }},                            
+                    "Action": [                        
+                        "kms:Decrypt"                        
+                    ], 
                     "Resource": "*"
-                    }
+                    }                                                                                          
                 ]
             }
         }
-    },
+    },  
     "MyKeyAlias" : {
         "Type" : "AWS::KMS::Alias",
         "Properties" : {
@@ -977,12 +977,204 @@
             "FilterPattern": "{ ($.eventName = RunInstances) || ($.eventName = RebootInstances) || ($.eventName = StartInstances) || ($.eventName = StopInstances) || ($.eventName = TerminateInstances) }",
             "MetricTransformations": [
                 {
-                    "MetricNamespace": "CloudTrailMetrics",
+                    "MetricNamespace": {
+                        "Fn::Sub" : "${AWS::StackName}/CloudTrail/"
+                    },
                     "MetricName": "EC2InstanceEventCount",
                     "MetricValue": "1"
                 }
             ]
         }
+    },
+    "AppRestartMetricFilter": {
+        "Type": "AWS::Logs::MetricFilter",
+        "Properties": {
+            "LogGroupName": { "Ref" : "LogGroup" },
+            "FilterPattern": "App listening on port",
+            "MetricTransformations": [
+                {
+                    "MetricNamespace": {
+                        "Fn::Sub" : "${AWS::StackName}"
+                    },
+                    "MetricName": "App Restarts",
+                    "MetricValue": "1"
+                }
+            ]
+        }
+    },
+    "AppGETsMetricFilter": {
+        "Type": "AWS::Logs::MetricFilter",
+        "Properties": {
+            "LogGroupName": { "Ref" : "LogGroup" },            
+            "FilterPattern": "[ip, timestamp, method=GET, url, status_code,bytes,responsetime,ms,useragent]",
+            "MetricTransformations": [
+                {
+                    "MetricNamespace": {
+                        "Fn::Sub" : "${AWS::StackName}"
+                    },
+                    "MetricName": "GETs",
+                    "MetricValue": "1"
+                }
+            ]
+        }
+    },
+    "AppPOSTsMetricFilter": {
+        "Type": "AWS::Logs::MetricFilter",
+        "Properties": {
+            "LogGroupName": { "Ref" : "LogGroup" },
+            "FilterPattern": "[ip, timestamp, method=POST, url, status_code,bytes,responsetime,ms,useragent]",
+            "MetricTransformations": [
+                {
+                    "MetricNamespace": {
+                        "Fn::Sub" : "${AWS::StackName}"
+                    },
+                    "MetricName": "POSTs",
+                    "MetricValue": "1"
+                }
+            ]
+        }
+    },               
+    "AppDELETEsMetricFilter": {
+        "Type": "AWS::Logs::MetricFilter",
+        "Properties": {
+            "LogGroupName": { "Ref" : "LogGroup" },
+            "FilterPattern": "[ip, timestamp, method=DELETE, url, status_code,bytes,responsetime,ms,useragent]",
+            "MetricTransformations": [
+                {
+                    "MetricNamespace": {
+                        "Fn::Sub" : "${AWS::StackName}"
+                    },
+                    "MetricName": "DELETEs",
+                    "MetricValue": "1"
+                }
+            ]
+        }
+    },
+    "AppBytesOutMetricFilter": {
+        "Type": "AWS::Logs::MetricFilter",
+        "Properties": {
+            "LogGroupName": { "Ref" : "LogGroup" },
+            "FilterPattern": "[ip, timestamp, method, url, status_code,bytes,responsetime,ms,useragent]",
+            "MetricTransformations": [
+                {
+                    "MetricNamespace": {
+                        "Fn::Sub" : "${AWS::StackName}"
+                    },
+                    "MetricName": "Bytes_Out",
+                    "MetricValue": "$bytes"
+                }
+            ]
+        }
+    },
+    "App4xxsMetricFilter": {
+        "Type": "AWS::Logs::MetricFilter",
+        "Properties": {
+            "LogGroupName": { "Ref" : "LogGroup" },
+            "FilterPattern": "[ip, timestamp, method, url, status_code=4*,bytes,responsetime,ms,useragent]",
+            "MetricTransformations": [
+                {
+                    "MetricNamespace": {
+                        "Fn::Sub" : "${AWS::StackName}"
+                    },
+                    "MetricName": "4xx_error_count",
+                    "MetricValue": "1"
+                }
+            ]
+        }
+    },
+    "App200sMetricFilter": {
+        "Type": "AWS::Logs::MetricFilter",
+        "Properties": {
+            "LogGroupName": { "Ref" : "LogGroup" },
+            "FilterPattern": "[ip, timestamp, method, url, status_code=200,bytes,responsetime,ms,useragent]",
+            "MetricTransformations": [
+                {
+                    "MetricNamespace": {
+                        "Fn::Sub" : "${AWS::StackName}"
+                    },
+                    "MetricName": "HTTP OK",
+                    "MetricValue": "1"
+                }
+            ]
+        }
+    },
+    "AppChromeUsersMetricFilter": {
+        "Type": "AWS::Logs::MetricFilter",
+        "Properties": {
+            "LogGroupName": { "Ref" : "LogGroup" },
+            "FilterPattern": "[ip, timestamp, method, url, status_code,bytes,responsetime,ms,useragent=*Chrome*]",
+            "MetricTransformations": [
+                {
+                    "MetricNamespace": {
+                        "Fn::Sub" : "${AWS::StackName}"
+                    },
+                    "MetricName": "Chrome Users",
+                    "MetricValue": "1"
+                }
+            ]
+        }
+    },
+    "AppFirefoxUsersMetricFilter": {
+        "Type": "AWS::Logs::MetricFilter",
+        "Properties": {
+            "LogGroupName": { "Ref" : "LogGroup" },
+            "FilterPattern": "[ip, timestamp, method, url, status_code,bytes,responsetime,ms,useragent=*Firefox*]",
+            "MetricTransformations": [
+                {
+                    "MetricNamespace": {
+                        "Fn::Sub" : "${AWS::StackName}"
+                    },
+                    "MetricName": "Firefox Users",
+                    "MetricValue": "1"
+                }
+            ]
+        }
+    },
+    "App4xxRateAlarm": {
+     "Type": "AWS::CloudWatch::Alarm",
+     "Properties": {
+        "AlarmDescription": "Notify the Operator Email if the 4xx Error Rate is higher than 5 every hour",
+        "AlarmName":"4xx_Error_count_alarm",
+        "MetricName": "4xx_error_count",
+        "Namespace": {
+            "Fn::Sub" : "${AWS::StackName}"
+        },
+        "Statistic": "Sum",
+        "Period": "1800",
+        "EvaluationPeriods": "2",
+        "Threshold": "5",
+        "AlarmActions": [ { "Ref": "NotificationTopic" } ],
+        "Dimensions": [
+            {
+                "Name":"FilterName",
+                "Value": {"Ref":"App4xxsMetricFilter"}
+            }
+        ],        
+        "ComparisonOperator": "GreaterThanThreshold"
+      }
+    },
+    "AppBytesOutAlarm": {
+     "Type": "AWS::CloudWatch::Alarm",
+     "Properties": {
+        "AlarmDescription": "Sample Alarm to demonstrate CloudWatch Alarms. Triggers when Average Bytes out is greater than 1000 every 10 minutes",
+        "MetricName": "Bytes_Out",
+        "AlarmName":"Bytes_Out_Alarm",
+        "Namespace": {
+            "Fn::Sub" : "${AWS::StackName}"
+        },
+        "Statistic": "Average",
+        "Period": "300",
+        "EvaluationPeriods": "2",
+        "Threshold": "1000",
+        "AlarmActions": [ { "Ref": "NotificationTopic" } ],
+        "Dimensions": [
+            {
+                "Name":"FilterName",
+                "Value": {"Ref":"AppBytesOutMetricFilter"}
+            }
+        ],         
+        "ComparisonOperator": "GreaterThanThreshold"
+      }
     },
     "LaunchConfig":{
         "Type":"AWS::AutoScaling::LaunchConfiguration",
