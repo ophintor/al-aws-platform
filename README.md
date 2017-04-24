@@ -6,10 +6,6 @@ Check their documentation how to configure your AWS [CLI](https://aws.amazon.com
 
 This repo contains a simple _todo application_ written in NodeJS and all the AWS configurations.
 
-**Notes**:
-
- * The templates are only configured to use one region to keep them simple small.
-
 ## How to run
 
 The repo have a working demo that  creates several AWS resources, creates a CD (Continuous Deployment) pipeline and
