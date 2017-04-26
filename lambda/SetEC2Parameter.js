@@ -3,8 +3,9 @@ var response = require('cfn-response');
 exports.lambda_handler = function (event, context) {
     try {         
         var ssm = new AWS.SSM();        
-        if(event.RequestType == 'Delete') {                                    
-            response.send(event, context, response.SUCCESS);
+        if(event.RequestType == 'Delete') {
+            console.log('Delete Called');
+            response.send(event, context, response.SUCCESS);     //do nothing and send success by default
         }
         var params = {
             Name: event.ResourceProperties.Name,
