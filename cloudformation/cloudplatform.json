@@ -92,19 +92,14 @@
     "OperatorEMail": {
       "Description": "EMail address to notify if there are any scaling operations",
       "Type": "String",
-      "Default": "george.kostaras@automationlogic.com",
+      "Default": "xavier.thomas@automationlogic.com",
       "AllowedPattern": "([a-zA-Z0-9_\\-\\.]+)@((\\[[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.)|(([a-zA-Z0-9\\-]+\\.)+))([a-zA-Z]{2,4}|[0-9]{1,3})(\\]?)",
       "ConstraintDescription": "must be a valid email address."
     },
     "UserName": {
       "Description": "The EC2 tag key that identifies this as a target for deployments.",
       "Type": "String",
-      "Default": "ksrgeorge"
-    },
-    "LogUser": {
-      "Description": "The user that can view the logs.",
-      "Type": "String",
-      "Default": "ksrgeorge"
+      "Default": "xavier.thomas"
     },
     "TagKey": {
       "Description": "The EC2 tag key that identifies this as a target for deployments.",
@@ -132,7 +127,7 @@
       "Type": "AWS::EC2::KeyPair::KeyName",
       "MinLength": "1",
       "MaxLength": "255",
-      "Default": "GKtestKeypair",
+      "Default": "xavierkey",
       "AllowedPattern": "[\\x20-\\x7E]*",
       "ConstraintDescription": "KeyPairName is a required Field and can contain only ASCII characters."
     },
@@ -2210,19 +2205,6 @@
         },
         "Users": [
           "qauser"
-        ]
-      }
-    },
-    "AddUsersToLogGroup": {
-      "Type": "AWS::IAM::UserToGroupAddition",
-      "Properties": {
-        "GroupName": {
-          "Ref": "DevGroup"
-        },
-        "Users": [
-          {
-            "Ref": "LogUser"
-          }
         ]
       }
     },
