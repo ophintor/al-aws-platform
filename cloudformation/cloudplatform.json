@@ -297,7 +297,7 @@
         {
           "Ref": "UseHTTPS"
         },
-        "Disable"
+        "Enable"
       ]
     }
   },
