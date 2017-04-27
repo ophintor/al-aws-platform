@@ -1098,18 +1098,21 @@
             {
               "Effect": "Allow",
               "Action": [
-                "logs:CreateLogGroup",
                 "logs:CreateLogStream",
                 "logs:PutLogEvents"
               ],
-              "Resource": "*"
+              "Resource": {
+                "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${AWS::StackName}:log-stream:ELB"
+              }
             },
             {
               "Effect": "Allow",
               "Action": [
-                "s3:PutObject"
+                "s3:GetObject"
               ],
-              "Resource": "*"
+              "Resource": {
+                "Fn::Sub": "arn:aws:s3:::${AWS::StackName}-elb-logs/*"
+              }
             }
           ]
         },
