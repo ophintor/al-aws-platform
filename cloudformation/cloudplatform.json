@@ -1000,8 +1000,8 @@
     },
     "ELBLogsS3StoreLocation": {
       "Type": "AWS::S3::Bucket",
-      "DeletionPolicy" : "Retain",
       "DependsOn": ["ELBLogsToCWLambda", "LambdaInvokePermission"],
+      "DeletionPolicy" : "Retain",
       "Properties": {
         "BucketName": {
           "Fn::Sub": "${AWS::StackName}-elb-logs"
@@ -1034,6 +1034,7 @@
     },
     "ApplicationLoadBalancer": {
       "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+      "DependsOn": "ELBLogsS3StoreLocation",
       "Properties": {
         "Name": {
           "Fn::Sub": "${AWS::StackName}-loadbalancer"
@@ -1056,8 +1057,7 @@
           { "Key": "access_logs.s3.enabled", "Value": "true" },
           { "Key": "access_logs.s3.bucket", "Value": { "Fn::Sub": "${AWS::StackName}-elb-logs"} }
         ]
-      },
-      "DependsOn": "ELBLogsS3StoreLocation"
+      }
     },
     "LambdaInvokePermission": {
       "Type": "AWS::Lambda::Permission",
@@ -1070,6 +1070,7 @@
     },
     "ELBLogsToCWLambda": {
       "Type": "AWS::Lambda::Function",
+      "DependsOn": "LambdaRolePolicies",
       "Properties": {
         "Handler": "index.handler",
         "Role": { "Fn::GetAtt" : ["LambdaRole", "Arn"] },
@@ -1080,8 +1081,7 @@
           }
         },
         "Runtime": "nodejs4.3"
-      },
-      "DependsOn": "LambdaRolePolicies"
+      }
     },
     "ApplicationLoadBalancerTargetGroup": {
       "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
