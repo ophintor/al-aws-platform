@@ -480,10 +480,13 @@
               "Effect": "Allow",
               "Action": [
                 "ssm:PutParameter",
-                "ssm:DeleteParameter",
-                "s3:*"
+                "ssm:DeleteParameter"
               ],
-              "Resource": "*"
+              "Resource": [
+                {
+                  "Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}.*"
+                }
+              ]
             }
           ]
         },
@@ -1059,6 +1062,64 @@
         ]
       }
     },
+    "ELBLogLambdaRole": {
+      "Type": "AWS::IAM::Role",
+      "Metadata": {
+        "Comment": "ELBLogLambdaRole allows Lambda to read from S3 and write to CloudWatch."
+      },
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": [
+                  "lambda.amazonaws.com"
+                ]
+              },
+              "Action": [
+                "sts:AssumeRole"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "ELBLogLambdaRolePolicies": {
+      "Type": "AWS::IAM::Policy",
+      "Metadata": {
+        "Comment": "IAM Policy attached to the ELBLogLambdaRole."
+      },
+      "Properties": {
+        "PolicyName": "ELBLogLambdaRole",
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": [
+                "logs:CreateLogGroup",
+                "logs:CreateLogStream",
+                "logs:PutLogEvents"
+              ],
+              "Resource": "*"
+            },
+            {
+              "Effect": "Allow",
+              "Action": [
+                "s3:PutObject"
+              ],
+              "Resource": "*"
+            }
+          ]
+        },
+        "Roles": [
+          {
+            "Ref": "ELBLogLambdaRole"
+          }
+        ]
+      }
+    },
     "LambdaInvokePermission": {
       "Type": "AWS::Lambda::Permission",
       "Properties": {
@@ -1070,7 +1131,7 @@
     },
     "ELBLogsToCWLambda": {
       "Type": "AWS::Lambda::Function",
-      "DependsOn": "LambdaRolePolicies",
+      "DependsOn": "ELBLogLambdaRolePolicies",
       "Properties": {
         "Handler": "index.handler",
         "Role": { "Fn::GetAtt" : ["LambdaRole", "Arn"] },
