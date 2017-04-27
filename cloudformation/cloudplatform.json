@@ -480,19 +480,10 @@
               "Effect": "Allow",
               "Action": [
                 "ssm:PutParameter",
-                "ssm:DeleteParameter"
+                "ssm:DeleteParameter",
+                "s3:*"
               ],
-              "Resource": [
-                {
-                  "Effect": "Allow",
-                  "Action": [
-                    "ssm:PutParameter",
-                    "ssm:DeleteParameter",
-                    "s3:*"
-                  ],
-                  "Resource": "*"
-                }
-              ]
+              "Resource": "*"
             }
           ]
         },
@@ -678,2340 +669,2129 @@
               ]
             ]
           }
-======="MyKey": {
-            "Type": "AWS::KMS::Key",
-            "Properties": {
-              "Description": "A sample key",
-              "KeyPolicy": {
-                "Version": "2012-10-17",
-                "Statement": [
-                  {
-                    "Sid": "Allow administration of the key",
-                    "Effect": "Allow",
-                    "Principal": {
-                      "AWS": {
-                        "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:user/${UserName}"
-                      }
-                    },
-                    "Action": [
-                      "kms:Create*",
-                      "kms:Describe*",
-                      "kms:Enable*",
-                      "kms:List*",
-                      "kms:Put*",
-                      "kms:Update*",
-                      "kms:Revoke*",
-                      "kms:Disable*",
-                      "kms:Get*",
-                      "kms:Delete*",
-                      "kms:ScheduleKeyDeletion",
-                      "kms:CancelKeyDeletion"
-                    ],
-                    "Resource": "*"
->>>>>>> master
-                  },
-                  {
-                    "Sid": "Allow use of the key",
-                    "Effect": "Allow",
-                    "Principal": {
-                      "AWS": {
-                        "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:user/${UserName}"
-                      }
-                    },
-                    "Action": [
-                      "kms:Encrypt",
-                      "kms:Decrypt",
-                      "kms:ReEncrypt*",
-                      "kms:GenerateDataKey*",
-                      "kms:DescribeKey"
-                    ],
-                    "Resource": "*"
-                  },
-                  {
-                    "Sid": "Allow encrypting under this key.",
-                    "Effect": "Allow",
-                    "Principal": {
-                      "AWS": {
-                        "Fn::GetAtt": [
-                          "LambdaRole",
-                          "Arn"
-                        ]
-                      }
-                    },
-                    "Action": [
-                      "kms:Encrypt",
-                      "kms:GenerateDataKey"
-                    ],
-                    "Resource": "*"
-                  },
-                  {
-                    "Sid": "Allow decrypting of any value encrypted under this key.",
-                    "Effect": "Allow",
-                    "Principal": {
-                      "AWS": {
-                        "Fn::GetAtt": [
-                          "InstanceRole",
-                          "Arn"
-                        ]
-                      }
-                    },
-                    "Action": [
-                      "kms:Decrypt"
-                    ],
-                    "Resource": "*"
-                  },
-                  {
-                    "Sid": "Allow use of the key",
-                    "Effect": "Allow",
-                    "Principal": {
-                      "AWS": {
-                        "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:user/devuser"
-                      }
-                    },
-                    "Action": [
-                      "kms:Encrypt",
-                      "kms:Decrypt",
-                      "kms:GenerateDataKey"
-                    ],
-                    "Resource": "*"
-                  },
-                  {
-                    "Sid": "Allow use of the key",
-                    "Effect": "Allow",
-                    "Principal": {
-                      "AWS": {
-                        "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:user/qauser"
-                      }
-                    },
-                    "Action": [
-                      "kms:Decrypt"
-                    ],
-                    "Resource": "*"
-                  }
-                ]
-              }
-            }
-          },
-          "MyKeyAlias": {
-            "Type": "AWS::KMS::Alias",
-            "Properties": {
-              "AliasName": {
-                "Fn::Sub": "alias/${AWS::StackName}-masterkey"
-              },
-              "TargetKeyId": {
-                "Ref": "MyKey"
-              }
-            }
-          },
-          "ParameterStoreLambda": {
-            "Type": "AWS::Lambda::Function",
-            "Properties": {
-              "Handler": "index.lambda_handler",
-              "Role": {
-                "Fn::GetAtt": [
-                  "LambdaRole",
-                  "Arn"
-                ]
-              },
-              "Code": {
-                "ZipFile": {
-                  "Fn::Join": [
-                    "\n",
-                    [
-                      "var AWS = require('aws-sdk');",
-                      "var response = require('cfn-response');",
-                      "exports.lambda_handler = function (event, context) {",
-                      "try {",
-                      "var ssm = new AWS.SSM();",
-                      "if(event.RequestType == 'Delete') {",
-                      "console.log('Delete Called');",
-                      "response.send(event, context, response.SUCCESS); //do nothing and send success by default",
-                      "}",
-                      "var params = {",
-                      "Name: event.ResourceProperties.Name,",
-                      "Type: 'SecureString',",
-                      "Value: event.ResourceProperties.Value,",
-                      "KeyId: event.ResourceProperties.KeyId,",
-                      "Overwrite: true",
-                      "};",
-                      "ssm.putParameter(params, function(err, data) {",
-                      "if (err){",
-                      "console.log(err, err.stack); // an error occurred",
-                      "response.send(event, context, response.FAILED);",
-                      "}",
-                      "else{",
-                      "console.log(data);           // successful response",
-                      "response.send(event, context, response.SUCCESS);",
-                      "}",
-                      "});",
-                      "}",
-                      "catch (err) {",
-                      "console.log('General Error.');",
-                      "console.log(err);",
-                      "response.send(event, context, response.FAILED);",
-                      "}",
-                      "};"
-                    ]
-                  ]
-                }
-              },
-              "Runtime": "nodejs4.3",
-              "Timeout": "25"
-            }
-          },
-          "VPC": {
-            "Type": "AWS::EC2::VPC",
-            "Metadata": {
-              "Comment": "Virtual Private Cloud for the Application."
-            },
-            "Properties": {
-              "CidrBlock": "10.0.0.0/16",
-              "EnableDnsSupport": true,
-              "EnableDnsHostnames": true,
-              "InstanceTenancy": "default",
-              "Tags": [
-                {
-                  "Key": "Name",
-                  "Value": {
-                    "Ref": "AWS::StackName"
-                  }
-                }
-              ]
-            }
-          },
-          "InternetGateway": {
-            "Type": "AWS::EC2::InternetGateway",
-            "Metadata": {
-              "Comment": "Internet gateway for the VPC."
-            },
-            "Properties": {
-              "Tags": [
-                {
-                  "Key": "Name",
-                  "Value": {
-                    "Ref": "AWS::StackName"
-                  }
-                }
-              ]
-            }
-          },
-          "AttachGateway": {
-            "Type": "AWS::EC2::VPCGatewayAttachment",
-            "Properties": {
-              "VpcId": {
-                "Ref": "VPC"
-              },
-              "InternetGatewayId": {
-                "Ref": "InternetGateway"
-              }
-            }
-          },
-          "PublicSubnet01": {
-            "Type": "AWS::EC2::Subnet",
-            "Properties": {
-              "VpcId": {
-                "Ref": "VPC"
-              },
-              "CidrBlock": "10.0.1.0/24",
-              "AvailabilityZone": {
-                "Fn::Select": [
-                  "0",
-                  {
-                    "Fn::GetAZs": ""
-                  }
-                ]
-              },
-              "MapPublicIpOnLaunch": "true",
-              "Tags": [
-                {
-                  "Key": "Name",
-                  "Value": {
-                    "Fn::Join": [
-                      "",
-                      [
-                        {
-                          "Ref": "AWS::StackName"
-                        },
-                        "- PublicSubnet01"
-                      ]
-                    ]
-                  }
-                }
-              ]
-            }
-          },
-          "PublicSubnet02": {
-            "Type": "AWS::EC2::Subnet",
-            "Properties": {
-              "VpcId": {
-                "Ref": "VPC"
-              },
-              "CidrBlock": "10.0.2.0/24",
-              "AvailabilityZone": {
-                "Fn::Select": [
-                  "1",
-                  {
-                    "Fn::GetAZs": ""
-                  }
-                ]
-              },
-              "MapPublicIpOnLaunch": "true",
-              "Tags": [
-                {
-                  "Key": "Name",
-                  "Value": {
-                    "Fn::Join": [
-                      "",
-                      [
-                        {
-                          "Ref": "AWS::StackName"
-                        },
-                        "- PublicSubnet02"
-                      ]
-                    ]
-                  }
-                }
-              ]
-            }
-          },
-          "PrivateSubnet01": {
-            "Type": "AWS::EC2::Subnet",
-            "Properties": {
-              "VpcId": {
-                "Ref": "VPC"
-              },
-              "CidrBlock": "10.0.3.0/24",
-              "AvailabilityZone": {
-                "Fn::Select": [
-                  "0",
-                  {
-                    "Fn::GetAZs": ""
-                  }
-                ]
-              },
-              "MapPublicIpOnLaunch": "true",
-              "Tags": [
-                {
-                  "Key": "Name",
-                  "Value": {
-                    "Fn::Join": [
-                      "",
-                      [
-                        {
-                          "Ref": "AWS::StackName"
-                        },
-                        "- PrivateSubnet01"
-                      ]
-                    ]
-                  }
-                }
-              ]
-            }
-          },
-          "PrivateSubnet02": {
-            "Type": "AWS::EC2::Subnet",
-            "Properties": {
-              "VpcId": {
-                "Ref": "VPC"
-              },
-              "CidrBlock": "10.0.4.0/24",
-              "AvailabilityZone": {
-                "Fn::Select": [
-                  "1",
-                  {
-                    "Fn::GetAZs": ""
-                  }
-                ]
-              },
-              "Tags": [
-                {
-                  "Key": "Name",
-                  "Value": {
-                    "Fn::Join": [
-                      "",
-                      [
-                        {
-                          "Ref": "AWS::StackName"
-                        },
-                        "- PrivateSubnet02"
-                      ]
-                    ]
-                  }
-                }
-              ]
-            }
-          },
-          "PublicRouteTable": {
-            "Type": "AWS::EC2::RouteTable",
-            "Properties": {
-              "VpcId": {
-                "Ref": "VPC"
-              },
-              "Tags": [
-                {
-                  "Key": "Name",
-                  "Value": {
-                    "Ref": "AWS::StackName"
-                  }
-                }
-              ]
-            }
-          },
-          "PublicRoute": {
-            "Type": "AWS::EC2::Route",
-            "Properties": {
-              "RouteTableId": {
-                "Ref": "PublicRouteTable"
-              },
-              "DestinationCidrBlock": "0.0.0.0/0",
-              "GatewayId": {
-                "Ref": "InternetGateway"
-              }
-            }
-          },
-          "PublicSubnet01RouteTableAssociation": {
-            "Type": "AWS::EC2::SubnetRouteTableAssociation",
-            "DependsOn": [
-              "PublicRouteTable",
-              "PublicSubnet01"
-            ],
-            "Properties": {
-              "RouteTableId": {
-                "Ref": "PublicRouteTable"
-              },
-              "SubnetId": {
-                "Ref": "PublicSubnet01"
-              }
-            }
-          },
-          "PublicSubnet02RouteTableAssociation": {
-            "Type": "AWS::EC2::SubnetRouteTableAssociation",
-            "DependsOn": [
-              "PublicRouteTable",
-              "PublicSubnet02"
-            ],
-            "Properties": {
-              "RouteTableId": {
-                "Ref": "PublicRouteTable"
-              },
-              "SubnetId": {
-                "Ref": "PublicSubnet02"
-              }
-            }
-          },
-          "DBSubnetGroup": {
-            "Type": "AWS::RDS::DBSubnetGroup",
-            "DependsOn": [
-              "PrivateSubnet01",
-              "PrivateSubnet02"
-            ],
-            "Properties": {
-              "DBSubnetGroupDescription": "RDS Subnet Group",
-              "SubnetIds": [
-                {
-                  "Ref": "PrivateSubnet01"
-                },
-                {
-                  "Ref": "PrivateSubnet02"
-                }
-              ]
-            }
-          },
-          "SecurityGroup": {
-            "Type": "AWS::EC2::SecurityGroup",
-            "Properties": {
-              "GroupDescription": "Enable HTTP and HTTPS ports for the Load Balancer",
-              "VpcId": {
-                "Ref": "VPC"
-              },
-              "SecurityGroupIngress": [
-                {
-                  "IpProtocol": "tcp",
-                  "FromPort": "80",
-                  "ToPort": "80",
-                  "CidrIp": "0.0.0.0/0"
-                },
-                {
-                  "IpProtocol": "tcp",
-                  "FromPort": "443",
-                  "ToPort": "443",
-                  "CidrIp": "0.0.0.0/0"
-                }
-              ]
-            }
-          },
-          "InstanceSecurityGroup": {
-            "Type": "AWS::EC2::SecurityGroup",
-            "Properties": {
-              "GroupDescription": "Enable HTTP access via port 3000 and SSH access via port 22 for the EC2 Instances",
-              "VpcId": {
-                "Ref": "VPC"
-              },
-              "SecurityGroupIngress": [
-                {
-                  "IpProtocol": "tcp",
-                  "FromPort": "22",
-                  "ToPort": "22",
-                  "CidrIp": {
-                    "Ref": "SSHLocation"
-                  }
-                },
-                {
-                  "IpProtocol": "tcp",
-                  "FromPort": "3000",
-                  "ToPort": "3000",
-                  "CidrIp": "0.0.0.0/0"
-                }
-              ]
-            }
-          },
-          "SSLCertificate": {
-            "Type": "AWS::CertificateManager::Certificate",
-            "DeletionPolicy": "Retain",
-            "Properties": {
-              "DomainName": {
-                "Fn::Sub": "${AWS::StackName}.al-labs.co.uk"
-              },
-              "DomainValidationOptions": [
-                {
-                  "DomainName": {
-                    "Fn::Sub": "${AWS::StackName}.al-labs.co.uk"
-                  },
-                  "ValidationDomain": "al-labs.co.uk"
-                }
-              ]
-            },
-            "Condition": "cEnableHTTPS"
-          },
-          "ELBLogsS3StoreLocation": {
-            "Type": "AWS::S3::Bucket",
-            "DeletionPolicy": "Retain",
-            "DependsOn": [
-              "ELBLogsToCWLambda",
-              "LambdaInvokePermission"
-            ],
-            "Properties": {
-              "BucketName": {
-                "Fn::Sub": "${AWS::StackName}-elb-logs"
-              },
-              "NotificationConfiguration": {
-                "LambdaConfigurations": [
-                  {
-                    "Function": {
-                      "Fn::GetAtt": [
-                        "ELBLogsToCWLambda",
-                        "Arn"
-                      ]
-                    },
-                    "Event": "s3:ObjectCreated:*"
-                  }
-                ]
-              }
-            }
-          },
-          "ELBLogsS3StoreLocationPolicy": {
-            "Type": "AWS::S3::BucketPolicy",
-            "Properties": {
-              "Bucket": {
-                "Ref": "ELBLogsS3StoreLocation"
-              },
-              "PolicyDocument": {
-                "Statement": [
-                  {
-                    "Effect": "Allow",
-                    "Action": [
-                      "s3:*"
-                    ],
-                    "Resource": [
-                      {
-                        "Fn::Sub": "arn:aws:s3:::${AWS::StackName}-elb-logs/*"
-                      }
-                    ],
-                    "Principal": "*"
-                  }
-                ]
-              }
-            }
-          },
-          "ApplicationLoadBalancer": {
-            "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
-            "Properties": {
-              "Name": {
-                "Fn::Sub": "${AWS::StackName}-loadbalancer"
-              },
-              "Scheme": "internet-facing",
-              "Subnets": [
-                {
-                  "Ref": "PublicSubnet01"
-                },
-                {
-                  "Ref": "PublicSubnet02"
-                }
-              ],
-              "SecurityGroups": [
-                {
-                  "Ref": "SecurityGroup"
-                }
-              ],
-              "LoadBalancerAttributes": [
-                {
-                  "Key": "access_logs.s3.enabled",
-                  "Value": "true"
-                },
-                {
-                  "Key": "access_logs.s3.bucket",
-                  "Value": {
-                    "Fn::Sub": "${AWS::StackName}-elb-logs"
-                  }
-                }
-              ]
-            },
-            "DependsOn": "ELBLogsS3StoreLocation"
-          },
-          "LambdaInvokePermission": {
-            "Type": "AWS::Lambda::Permission",
-            "Properties": {
-              "FunctionName": {
-                "Fn::GetAtt": [
-                  "ELBLogsToCWLambda",
-                  "Arn"
-                ]
-              },
-              "Action": "lambda:InvokeFunction",
-              "Principal": "s3.amazonaws.com",
-              "SourceAccount": {
-                "Ref": "AWS::AccountId"
-              }
-            }
-          },
-          "ELBLogsToCWLambda": {
-            "Type": "AWS::Lambda::Function",
-            "Properties": {
-              "Handler": "index.handler",
-              "Role": {
-                "Fn::GetAtt": [
-                  "LambdaRole",
-                  "Arn"
-                ]
-              },
-              "Description": "This code will move your ELB logs from S3 to CloudWatch. It is compressed, so quite hard to read. Original: github.com/awslabs/cloudwatch-logs-centralize-logs",
-              "Code": {
-                "ZipFile": {
-                  "Fn::Sub": "'use strict';const aws=require('aws-sdk');var zlib=require('zlib');const s3=new aws.S3({apiVersion:'2006-03-01'});const cloudWatchLogs=new aws.CloudWatchLogs({apiVersion:'2014-03-28'});const readline=require('readline');const stream=require('stream');const logGroupName='${AWS::StackName}';const logStreamName='ELB';exports.handler=(event,context,callback)=>{console.log('S3 object is:',event.Records[0].s3);const bucket=event.Records[0].s3.bucket.name;console.log('Name of S3 bucket is:',bucket);const key=decodeURIComponent(event.Records[0].s3.object.key.replace(/\\+/g,' '));const params={Bucket:bucket,Key:key,};s3.getObject(params,(err,data)=>{if(err){console.log(err);const message=`Error getting object ${!key}from bucket ${!bucket}.Make sure they exist and your bucket is in the same region as this function.`;console.log(message);callback(message)}else{zlib.gunzip(data.Body,function(a,b){if(a){console.log('Error uncompressing data',a);return}var c=b.toString('ascii');manageLogGroups(c)});callback(null,data.ContentType)}});function manageLogGroups(c){var d={logGroupNamePrefix:logGroupName};cloudWatchLogs.describeLogGroups(d,function(a,b){if(a){console.log('Error while describing log group:',a);createLogGroup(c)}else{if(!b.logGroups[0]){console.log('Need to  create log group:',b);createLogGroup(c)}else{console.log('Success while describing log group:',b);manageLogStreams(c)}}})}function createLogGroup(c){var d={logGroupName:logGroupName};cloudWatchLogs.createLogGroup(d,function(a,b){if(a){console.log('error while creating log group: ',a,a.stack);return}else{console.log('Success in creating log group: ',logGroupName);manageLogStreams(c)}})}function manageLogStreams(c){var d={logGroupName:logGroupName,logStreamNamePrefix:logStreamName};cloudWatchLogs.describeLogStreams(d,function(a,b){if(a){console.log('Error during describe log streams:',a);createLogStream(c)}else{if(!b.logStreams[0]){console.log('Need to  create log stream:',b);createLogStream(c)}else{console.log('Log Stream already defined:',logStreamName);putLogEvents(b.logStreams[0].uploadSequenceToken,c)}}})}function createLogStream(c){var d={logGroupName:logGroupName,logStreamName:logStreamName};cloudWatchLogs.createLogStream(d,function(a,b){if(a){console.log('error while creating log stream: ',a,a.stack);return}else{console.log('Success in creating log stream: ',logStreamName);putLogEvents(null,c)}})}function putLogEvents(a,b){const MAX_BATCH_SIZE=1048576;const MAX_BATCH_COUNT=10000;const LOG_EVENT_OVERHEAD=26;var c=[];var d=[];var e=0;var f=new stream.PassThrough();f.end(b);var g=readline.createInterface({input:f});var h=0;g.on('line',(line)=>{++h;var i=line.split(' ',2)[1];var j=Date.parse(i);var k=line.length+LOG_EVENT_OVERHEAD;e+=k;if(e>=MAX_BATCH_SIZE||d.length>=MAX_BATCH_COUNT){c.push(d);d=[];e=k}d.push({message:line,timestamp:j})});g.on('close',()=>{c.push(d);sendBatches(a,c)})}function sendBatches(e,f){var g=0;var h=0;function sendNextBatch(a,b){if(a){console.log('Error sending batch: ',a,a.stack);return}else{var c=f.shift();if(c){++h;g+=c.length;sendBatch(b,c,sendNextBatch)}else{var d=`Successfully put ${!g}events in ${!h}f`;console.log(d);callback(null,d)}}}sendNextBatch(null,e)}function sendBatch(c,d,e){var f={logEvents:d,logGroupName:logGroupName,logStreamName:logStreamName};if(c){f['sequenceToken']=c}f.logEvents.sort(function(a,b){if(a.timestamp>b.timestamp){return 1}if(a.timestamp<b.timestamp){return-1}return 0});cloudWatchLogs.putLogEvents(f,function(a,b){if(a){console.log('Error during put log events: ',a,a.stack);e(a,null)}else{console.log(`Success in putting ${!f.logEvents.length}events`);e(null,b.nextSequenceToken)}})}};"
-                }
-              },
-              "Runtime": "nodejs4.3"
-            },
-            "DependsOn": "LambdaRolePolicies"
-          },
-          "ApplicationLoadBalancerTargetGroup": {
-            "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
-            "Properties": {
-              "Name": {
-                "Fn::Sub": "${AWS::StackName}-targetgroup"
-              },
-              "HealthCheckPath": "/",
-              "HealthCheckIntervalSeconds": 30,
-              "HealthCheckProtocol": "HTTP",
-              "HealthCheckTimeoutSeconds": 10,
-              "HealthyThresholdCount": 2,
-              "UnhealthyThresholdCount": 5,
-              "Matcher": {
-                "HttpCode": "200"
-              },
-              "Port": 3000,
-              "Protocol": "HTTP",
-              "TargetGroupAttributes": [
-                {
-                  "Key": "deregistration_delay.timeout_seconds",
-                  "Value": "300"
-                }
-              ],
-              "VpcId": {
-                "Ref": "VPC"
-              }
-            }
-          },
-          "ApplicationLoadBalancerHTTPListener": {
-            "Type": "AWS::ElasticLoadBalancingV2::Listener",
-            "Properties": {
-              "DefaultActions": [
-                {
-                  "Type": "forward",
-                  "TargetGroupArn": {
-                    "Ref": "ApplicationLoadBalancerTargetGroup"
-                  }
-                }
-              ],
-              "LoadBalancerArn": {
-                "Ref": "ApplicationLoadBalancer"
-              },
-              "Port": "80",
-              "Protocol": "HTTP"
-            }
-          },
-          "ApplicationLoadBalancerHTTPSListener": {
-            "Type": "AWS::ElasticLoadBalancingV2::Listener",
-            "Properties": {
-              "Certificates": [
-                {
-                  "CertificateArn": {
-                    "Ref": "SSLCertificate"
-                  }
-                }
-              ],
-              "DefaultActions": [
-                {
-                  "Type": "forward",
-                  "TargetGroupArn": {
-                    "Ref": "ApplicationLoadBalancerTargetGroup"
-                  }
-                }
-              ],
-              "LoadBalancerArn": {
-                "Ref": "ApplicationLoadBalancer"
-              },
-              "Port": "443",
-              "Protocol": "HTTPS"
-            },
-            "Condition": "cEnableHTTPS"
-          },
-          "DNSRecordSet": {
-            "Type": "AWS::Route53::RecordSetGroup",
-            "Properties": {
-              "HostedZoneName": "al-labs.co.uk.",
-              "Comment": "Zone apex alias targeted to  LoadBalancer.",
-              "RecordSets": [
-                {
-                  "Name": {
-                    "Fn::Sub": "${AWS::StackName}.al-labs.co.uk."
-                  },
-                  "Type": "A",
-                  "AliasTarget": {
-                    "HostedZoneId": {
-                      "Fn::GetAtt": [
-                        "ApplicationLoadBalancer",
-                        "CanonicalHostedZoneID"
-                      ]
-                    },
-                    "DNSName": {
-                      "Fn::GetAtt": [
-                        "ApplicationLoadBalancer",
-                        "DNSName"
-                      ]
-                    }
-                  }
-                }
-              ]
-            }
-          },
-          "LogGroup": {
-            "Type": "AWS::Logs::LogGroup",
-            "DeletionPolicy": "Retain",
-            "Properties": {
-              "LogGroupName": {
-                "Ref": "AWS::StackName"
-              },
-              "RetentionInDays": 1
-            }
-          },
-          "EC2InstanceChangesMetricFilter": {
-            "Type": "AWS::Logs::MetricFilter",
-            "Properties": {
-              "LogGroupName": {
-                "Ref": "LogGroup"
-              },
-              "FilterPattern": "{ ($.eventName = RunInstances) || ($.eventName = RebootInstances) || ($.eventName = StartInstances) || ($.eventName = StopInstances) || ($.eventName = TerminateInstances) }",
-              "MetricTransformations": [
-                {
-                  "MetricNamespace": {
-                    "Fn::Sub": "${AWS::StackName}/CloudTrail/"
-                  },
-                  "MetricName": "EC2InstanceEventCount",
-                  "MetricValue": "1"
-                }
-              ]
-            }
-          },
-          "AppRestartMetricFilter": {
-            "Type": "AWS::Logs::MetricFilter",
-            "Properties": {
-              "LogGroupName": {
-                "Ref": "LogGroup"
-              },
-              "FilterPattern": "App listening on port",
-              "MetricTransformations": [
-                {
-                  "MetricNamespace": {
-                    "Fn::Sub": "${AWS::StackName}"
-                  },
-                  "MetricName": "App Restarts",
-                  "MetricValue": "1"
-                }
-              ]
-            }
-          },
-          "AppGETsMetricFilter": {
-            "Type": "AWS::Logs::MetricFilter",
-            "Properties": {
-              "LogGroupName": {
-                "Ref": "LogGroup"
-              },
-              "FilterPattern": "[ip, timestamp, method=GET, url, status_code,bytes,responsetime,ms,useragent]",
-              "MetricTransformations": [
-                {
-                  "MetricNamespace": {
-                    "Fn::Sub": "${AWS::StackName}"
-                  },
-                  "MetricName": "GETs",
-                  "MetricValue": "1"
-                }
-              ]
-            }
-          },
-          "AppPOSTsMetricFilter": {
-            "Type": "AWS::Logs::MetricFilter",
-            "Properties": {
-              "LogGroupName": {
-                "Ref": "LogGroup"
-              },
-              "FilterPattern": "[ip, timestamp, method=POST, url, status_code,bytes,responsetime,ms,useragent]",
-              "MetricTransformations": [
-                {
-                  "MetricNamespace": {
-                    "Fn::Sub": "${AWS::StackName}"
-                  },
-                  "MetricName": "POSTs",
-                  "MetricValue": "1"
-                }
-              ]
-            }
-          },
-          "AppDELETEsMetricFilter": {
-            "Type": "AWS::Logs::MetricFilter",
-            "Properties": {
-              "LogGroupName": {
-                "Ref": "LogGroup"
-              },
-              "FilterPattern": "[ip, timestamp, method=DELETE, url, status_code,bytes,responsetime,ms,useragent]",
-              "MetricTransformations": [
-                {
-                  "MetricNamespace": {
-                    "Fn::Sub": "${AWS::StackName}"
-                  },
-                  "MetricName": "DELETEs",
-                  "MetricValue": "1"
-                }
-              ]
-            }
-          },
-          "AppBytesOutMetricFilter": {
-            "Type": "AWS::Logs::MetricFilter",
-            "Properties": {
-              "LogGroupName": {
-                "Ref": "LogGroup"
-              },
-              "FilterPattern": "[ip, timestamp, method, url, status_code,bytes,responsetime,ms,useragent]",
-              "MetricTransformations": [
-                {
-                  "MetricNamespace": {
-                    "Fn::Sub": "${AWS::StackName}"
-                  },
-                  "MetricName": "Bytes_Out",
-                  "MetricValue": "$bytes"
-                }
-              ]
-            }
-          },
-          "App4xxsMetricFilter": {
-            "Type": "AWS::Logs::MetricFilter",
-            "Properties": {
-              "LogGroupName": {
-                "Ref": "LogGroup"
-              },
-              "FilterPattern": "[ip, timestamp, method, url, status_code=4*,bytes,responsetime,ms,useragent]",
-              "MetricTransformations": [
-                {
-                  "MetricNamespace": {
-                    "Fn::Sub": "${AWS::StackName}"
-                  },
-                  "MetricName": "4xx_error_count",
-                  "MetricValue": "1"
-                }
-              ]
-            }
-          },
-          "App200sMetricFilter": {
-            "Type": "AWS::Logs::MetricFilter",
-            "Properties": {
-              "LogGroupName": {
-                "Ref": "LogGroup"
-              },
-              "FilterPattern": "[ip, timestamp, method, url, status_code=200,bytes,responsetime,ms,useragent]",
-              "MetricTransformations": [
-                {
-                  "MetricNamespace": {
-                    "Fn::Sub": "${AWS::StackName}"
-                  },
-                  "MetricName": "HTTP OK",
-                  "MetricValue": "1"
-                }
-              ]
-            }
-          },
-          "AppChromeUsersMetricFilter": {
-            "Type": "AWS::Logs::MetricFilter",
-            "Properties": {
-              "LogGroupName": {
-                "Ref": "LogGroup"
-              },
-              "FilterPattern": "[ip, timestamp, method, url, status_code,bytes,responsetime,ms,useragent=*Chrome*]",
-              "MetricTransformations": [
-                {
-                  "MetricNamespace": {
-                    "Fn::Sub": "${AWS::StackName}"
-                  },
-                  "MetricName": "Chrome Users",
-                  "MetricValue": "1"
-                }
-              ]
-            }
-          },
-          "AppFirefoxUsersMetricFilter": {
-            "Type": "AWS::Logs::MetricFilter",
-            "Properties": {
-              "LogGroupName": {
-                "Ref": "LogGroup"
-              },
-              "FilterPattern": "[ip, timestamp, method, url, status_code,bytes,responsetime,ms,useragent=*Firefox*]",
-              "MetricTransformations": [
-                {
-                  "MetricNamespace": {
-                    "Fn::Sub": "${AWS::StackName}"
-                  },
-                  "MetricName": "Firefox Users",
-                  "MetricValue": "1"
-                }
-              ]
-            }
-          },
-          "App4xxRateAlarm": {
-            "Type": "AWS::CloudWatch::Alarm",
-            "Properties": {
-              "AlarmDescription": "Notify the Operator Email if the 4xx Error Rate is higher than 5 every hour",
-              "AlarmName": {
-                "Fn::Sub": "${AWS::StackName}-4xx_Error_count_alarm"
-              },
-              "MetricName": "4xx_error_count",
-              "Namespace": {
-                "Fn::Sub": "${AWS::StackName}"
-              },
-              "Statistic": "Sum",
-              "Period": "1800",
-              "EvaluationPeriods": "2",
-              "Threshold": "5",
-              "AlarmActions": [
-                {
-                  "Ref": "NotificationTopic"
-                }
-              ],
-              "Dimensions": [
-                {
-                  "Name": "FilterName",
-                  "Value": {
-                    "Ref": "App4xxsMetricFilter"
-                  }
-                }
-              ],
-              "ComparisonOperator": "GreaterThanThreshold"
-            }
-          },
-          "AppBytesOutAlarm": {
-            "Type": "AWS::CloudWatch::Alarm",
-            "Properties": {
-              "AlarmDescription": "Sample Alarm to demonstrate CloudWatch Alarms. Triggers when Average Bytes out is greater than 1000 every 10 minutes",
-              "MetricName": "Bytes_Out",
-              "AlarmName": {
-                "Fn::Sub": "${AWS::StackName}-Bytes_Out_Alarm"
-              },
-              "Namespace": {
-                "Fn::Sub": "${AWS::StackName}"
-              },
-              "Statistic": "Average",
-              "Period": "300",
-              "EvaluationPeriods": "2",
-              "Threshold": "1000",
-              "AlarmActions": [
-                {
-                  "Ref": "NotificationTopic"
-                }
-              ],
-              "Dimensions": [
-                {
-                  "Name": "FilterName",
-                  "Value": {
-                    "Ref": "AppBytesOutMetricFilter"
-                  }
-                }
-              ],
-              "ComparisonOperator": "GreaterThanThreshold"
-            }
-          },
-          "LaunchConfig": {
-            "Type": "AWS::AutoScaling::LaunchConfiguration",
-            "Metadata": {
-              "Comment": "Install a simple application and decrypt secrets and set as environment variable.",
-              "AWS::CloudFormation::Init": {
-                "config": {
-                  "packages": {
-                    "apt": {
-                      "mysql-client": []
-                    }
-                  },
-                  "files": {
-                    "/tmp/cwlogs/logstreams.conf": {
-                      "content": {
-                        "Fn::Join": [
-                          "",
-                          [
-                            "[general]\n",
-                            "state_file= /var/awslogs/agent-state\n",
-                            "[nodejs-serverlog]\n",
-                            "file = /tmp/server.log\n",
-                            "log_group_name = ",
-                            {
-                              "Ref": "LogGroup"
-                            },
-                            "\n",
-                            "log_stream_name = app.nodejs.serverlog-{instance_id}\n",
-                            "datetime_format = %d/%b/%Y:%H:%M:%S\n",
-                            "[nodejs-errorlog]\n",
-                            "file = /tmp/server.err\n",
-                            "log_group_name = ",
-                            {
-                              "Ref": "LogGroup"
-                            },
-                            "\n",
-                            "log_stream_name = app.nodejs.errorlog-{instance_id}\n",
-                            "datetime_format = %d/%b/%Y:%H:%M:%S\n",
-                            "[cloud-init-outputlog]\n",
-                            "file = /var/log/cloud-init-output.log\n",
-                            "log_group_name = ",
-                            {
-                              "Ref": "LogGroup"
-                            },
-                            "\n",
-                            "log_stream_name = system.cloudinit.outputlog-{instance_id}\n",
-                            "datetime_format = %d/%b/%Y:%H:%M:%S\n",
-                            "[system-log]\n",
-                            "file = /var/log/syslog\n",
-                            "log_group_name = ",
-                            {
-                              "Ref": "LogGroup"
-                            },
-                            "\n",
-                            "log_stream_name = system.linux.syslog-{instance_id}\n",
-                            "datetime_format = %b %d %H:%M:%S\n"
-                          ]
-                        ]
-                      },
-                      "mode": "000400",
-                      "owner": "root",
-                      "group": "root"
-                    },
-                    "/lib/systemd/system/awslogs.service": {
-                      "content": {
-                        "Fn::Join": [
-                          "\n",
-                          [
-                            "[Unit]",
-                            "Description=The CloudWatch Logs agent",
-                            "After=network.target",
-                            "",
-                            "[Service]",
-                            "Restart=always",
-                            "TimeoutSec=infinity",
-                            "ExecStart=/var/awslogs/bin/awslogs-agent-launcher.sh",
-                            "",
-                            "[Install]",
-                            "WantedBy=multi-user.target"
-                          ]
-                        ]
-                      },
-                      "mode": "000400",
-                      "owner": "root",
-                      "group": "root"
-                    }
-                  }
-                }
-              }
-            },
-            "Properties": {
-              "IamInstanceProfile": {
-                "Ref": "InstanceRoleInstanceProfile"
-              },
-              "SpotPrice": "0.05",
-              "ImageId": {
-                "Fn::FindInMap": [
-                  "Region2AMI",
-                  {
-                    "Ref": "AWS::Region"
-                  },
-                  "Ubuntu"
-                ]
-              },
-              "InstanceType": {
-                "Ref": "InstanceType"
-              },
-              "KeyName": {
-                "Ref": "KeyPairName"
-              },
-              "SecurityGroups": [
-                {
-                  "Ref": "InstanceSecurityGroup"
-                }
-              ],
-              "UserData": {
-                "Fn::Base64": {
-                  "Fn::Join": [
-                    "",
-                    [
-                      "#!/bin/bash -ex\n",
-                      "# Install CFN Bootstrap\n",
-                      "sudo apt-get -y update\n",
-                      "sudo apt-get -y install ruby\n",
-                      "sudo apt-get -y install wget\n",
-                      "sudo apt-get -y install python-pip\n",
-                      "pip install https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz\n",
-                      "# Helper function.\n",
-                      "function error_exit\n",
-                      "{\n",
-                      "  cfn-signal -e 1 -r \"$1\" '",
-                      {
-                        "Ref": "WaitHandle"
-                      },
-                      "'\n",
-                      "  exit 1\n",
-                      "}\n",
-                      "# Install the AWS CodeDeploy Agent.\n",
-                      "cd /home/ubuntu/\n",
-                      "wget https://aws-codedeploy-us-west-1.s3.amazonaws.com/latest/install || error_exit 'Failed to download AWS CodeDeploy Agent.'\n",
-                      "chmod +x ./install || error_exit 'Failed to download AWS CodeDeploy Agent.'\n",
-                      "sudo ./install auto || error_exit 'Failed to install AWS CodeDeploy Agent.' \n",
-                      "# Install the latest AWS CLI. \n",
-                      "sudo pip install --upgrade awscli || error_exit \n",
-                      "# Configure the AWS CLI to use the Curent Region by Default \n",
-                      "aws configure set region ",
-                      {
-                        "Ref": "AWS::Region"
-                      },
-                      " || error_exit \n",
-                      "#Download and install the latest NodeJs version \n",
-                      "# https://nodejs.org/en/download/package-manager/#debian-and-ubuntu-based-linux-distributions \n",
-                      "curl -sL https://deb.nodesource.com/setup_7.x | sudo -E bash - || error_exit \n",
-                      "apt-get install -y nodejs || error_exit \n",
-                      "# Call CFN-INIT to process the metadata for CloudFormation Init. Since ubuntu does not have the tools installed, we install the CFN Bootstrap in the previous step.\n",
-                      "cfn-init -v ",
-                      "         --stack ",
-                      {
-                        "Ref": "AWS::StackName"
-                      },
-                      "         --resource LaunchConfig ",
-                      "         --region ",
-                      {
-                        "Ref": "AWS::Region"
-                      },
-                      "\n",
-                      "#Download and Install the Cloudwatch Logs agent. \n",
-                      "curl https://s3.amazonaws.com/aws-cloudwatch/downloads/latest/awslogs-agent-setup.py -O || error_exit \n",
-                      "python awslogs-agent-setup.py -n -r ",
-                      {
-                        "Ref": "AWS::Region"
-                      },
-                      " -c /tmp/cwlogs/logstreams.conf || error_exit 'Failed to run CloudWatch Logs agent setup'\n",
-                      "#Start the Cloudwatch logs agent service using the SYSTEMD Unit file created by cloudformation Init. \n",
-                      "systemctl enable awslogs.service \n",
-                      "systemctl start awslogs.service \n",
-                      "# All is well, so signal success.\n",
-                      "cfn-signal -e 0 -r \"AWS CodeDeploy Agent setup complete.\" '",
-                      {
-                        "Ref": "WaitHandle"
-                      },
-                      "'\n",
-                      "# Send a Signal for creation policy to work.\n",
-                      "cfn-signal -e $? ",
-                      "         --stack ",
-                      {
-                        "Ref": "AWS::StackName"
-                      },
-                      "         --resource AutoScalingGroup ",
-                      "         --region ",
-                      {
-                        "Ref": "AWS::Region"
-                      },
-                      "\n"
-                    ]
-                  ]
-                }
-              }
-            }
-          },
-          "AutoScalingGroup": {
-            "Type": "AWS::AutoScaling::AutoScalingGroup",
-            "Properties": {
-              "LaunchConfigurationName": {
-                "Ref": "LaunchConfig"
-              },
-              "TargetGroupARNs": [
-                {
-                  "Ref": "ApplicationLoadBalancerTargetGroup"
-                }
-              ],
-              "DesiredCapacity": {
-                "Ref": "InstanceCount"
-              },
-              "MaxSize": {
-                "Ref": "InstanceMaxCount"
-              },
-              "MinSize": {
-                "Ref": "InstanceMinCount"
-              },
-              "MetricsCollection": [
-                {
-                  "Granularity": "1Minute"
-                }
-              ],
-              "VPCZoneIdentifier": [
-                {
-                  "Ref": "PublicSubnet01"
-                },
-                {
-                  "Ref": "PublicSubnet02"
-                }
-              ],
-              "NotificationConfiguration": {
-                "TopicARN": {
-                  "Ref": "NotificationTopic"
-                },
-                "NotificationTypes": [
-                  "autoscaling:EC2_INSTANCE_LAUNCH",
-                  "autoscaling:EC2_INSTANCE_LAUNCH_ERROR",
-                  "autoscaling:EC2_INSTANCE_TERMINATE",
-                  "autoscaling:EC2_INSTANCE_TERMINATE_ERROR"
-                ]
-              },
-              "Tags": [
-                {
-                  "Key": {
-                    "Ref": "TagKey"
-                  },
-                  "Value": {
-                    "Ref": "TagValue"
-                  },
-                  "PropagateAtLaunch": "true"
-                }
-              ]
-            },
-            "CreationPolicy": {
-              "ResourceSignal": {
-                "Timeout": "PT15M",
-                "Count": "1"
-              }
-            },
-            "UpdatePolicy": {
-              "AutoScalingRollingUpdate": {
-                "MinInstancesInService": "1",
-                "MaxBatchSize": "1",
-                "PauseTime": "PT15M",
-                "WaitOnResourceSignals": "true"
-              }
-            }
-          },
-          "WebServerScaleUpPolicy": {
-            "Type": "AWS::AutoScaling::ScalingPolicy",
-            "Properties": {
-              "AdjustmentType": "ChangeInCapacity",
-              "AutoScalingGroupName": {
-                "Ref": "AutoScalingGroup"
-              },
-              "Cooldown": "900",
-              "ScalingAdjustment": "1"
-            }
-          },
-          "WebServerScaleDownPolicy": {
-            "Type": "AWS::AutoScaling::ScalingPolicy",
-            "Properties": {
-              "AdjustmentType": "ChangeInCapacity",
-              "AutoScalingGroupName": {
-                "Ref": "AutoScalingGroup"
-              },
-              "Cooldown": "900",
-              "ScalingAdjustment": "-1"
-            }
-          },
-          "CPUAlarmHigh": {
-            "Type": "AWS::CloudWatch::Alarm",
-            "Properties": {
-              "AlarmDescription": "Scale-up if CPU > 90% for 10 minutes",
-              "MetricName": "CPUUtilization",
-              "Namespace": "AWS/EC2",
-              "Statistic": "Average",
-              "Period": "300",
-              "EvaluationPeriods": "2",
-              "Threshold": "90",
-              "AlarmActions": [
-                {
-                  "Ref": "WebServerScaleUpPolicy"
-                }
-              ],
-              "Dimensions": [
-                {
-                  "Name": "AutoScalingGroupName",
-                  "Value": {
-                    "Ref": "AutoScalingGroup"
-                  }
-                }
-              ],
-              "ComparisonOperator": "GreaterThanThreshold"
-            }
-          },
-          "CPUAlarmLow": {
-            "Type": "AWS::CloudWatch::Alarm",
-            "Properties": {
-              "AlarmDescription": "Scale-down if CPU < 70% for 10 minutes",
-              "MetricName": "CPUUtilization",
-              "Namespace": "AWS/EC2",
-              "Statistic": "Average",
-              "Period": "300",
-              "EvaluationPeriods": "2",
-              "Threshold": "70",
-              "AlarmActions": [
-                {
-                  "Ref": "WebServerScaleDownPolicy"
-                }
-              ],
-              "Dimensions": [
-                {
-                  "Name": "AutoScalingGroupName",
-                  "Value": {
-                    "Ref": "AutoScalingGroup"
-                  }
-                }
-              ],
-              "ComparisonOperator": "LessThanThreshold"
-            }
-          },
-          "DBInstance": {
-            "Type": "AWS::RDS::DBInstance",
-            "DependsOn": [
-              "AutoScalingGroup"
-            ],
-            "Properties": {
-              "DBName": {
-                "Ref": "DBName"
-              },
-              "Engine": "MySQL",
-              "MasterUsername": {
-                "Ref": "DBUsername"
-              },
-              "DBInstanceClass": {
-                "Ref": "DBInstanceClass"
-              },
-              "DBSecurityGroups": [
-                {
-                  "Ref": "DBSecurityGroup"
-                }
-              ],
-              "AllocatedStorage": {
-                "Ref": "DBAllocatedStorage"
-              },
-              "MasterUserPassword": {
-                "Ref": "DBPassword"
-              },
-              "DBSubnetGroupName": {
-                "Ref": "DBSubnetGroup"
-              },
-              "BackupRetentionPeriod": "0"
-            }
-          },
-          "EncryptDBUSERNAME": {
-            "Type": "AWS::CloudFormation::CustomResource",
-            "Version": "1.0",
-            "DependsOn": [
-              "MyKey",
-              "MyKeyAlias",
-              "DBInstance"
-            ],
-            "Properties": {
-              "ServiceToken": {
-                "Fn::GetAtt": [
-                  "ParameterStoreLambda",
-                  "Arn"
-                ]
-              },
-              "Name": {
-                "Fn::Join": [
-                  ".",
-                  [
-                    {
-                      "Ref": "AWS::StackName"
-                    },
-                    "db",
-                    "username"
-                  ]
-                ]
-              },
-              "Value": {
-                "Ref": "DBUsername"
-              },
-              "KeyId": {
-                "Ref": "MyKey"
-              }
-            }
-          },
-          "EncryptDBPassword": {
-            "Type": "AWS::CloudFormation::CustomResource",
-            "Version": "1.0",
-            "DependsOn": [
-              "MyKey",
-              "MyKeyAlias",
-              "DBInstance"
-            ],
-            "Properties": {
-              "ServiceToken": {
-                "Fn::GetAtt": [
-                  "ParameterStoreLambda",
-                  "Arn"
-                ]
-              },
-              "Name": {
-                "Fn::Join": [
-                  ".",
-                  [
-                    {
-                      "Ref": "AWS::StackName"
-                    },
-                    "db",
-                    "password"
-                  ]
-                ]
-              },
-              "Value": {
-                "Ref": "DBPassword"
-              },
-              "KeyId": {
-                "Ref": "MyKey"
-              }
-            }
-          },
-          "EncryptDBName": {
-            "Type": "AWS::CloudFormation::CustomResource",
-            "Version": "1.0",
-            "DependsOn": [
-              "MyKey",
-              "MyKeyAlias",
-              "DBInstance"
-            ],
-            "Properties": {
-              "ServiceToken": {
-                "Fn::GetAtt": [
-                  "ParameterStoreLambda",
-                  "Arn"
-                ]
-              },
-              "Name": {
-                "Fn::Join": [
-                  ".",
-                  [
-                    {
-                      "Ref": "AWS::StackName"
-                    },
-                    "db",
-                    "name"
-                  ]
-                ]
-              },
-              "Value": {
-                "Ref": "DBName"
-              },
-              "KeyId": {
-                "Ref": "MyKey"
-              }
-            }
-          },
-          "EncryptDBCONNECTIONSTRING": {
-            "Type": "AWS::CloudFormation::CustomResource",
-            "Version": "1.0",
-            "DependsOn": [
-              "MyKey",
-              "MyKeyAlias",
-              "DBInstance"
-            ],
-            "Properties": {
-              "ServiceToken": {
-                "Fn::GetAtt": [
-                  "ParameterStoreLambda",
-                  "Arn"
-                ]
-              },
-              "Name": {
-                "Fn::Join": [
-                  ".",
-                  [
-                    {
-                      "Ref": "AWS::StackName"
-                    },
-                    "db",
-                    "connectionstring"
-                  ]
-                ]
-              },
-              "Value": {
-                "Fn::GetAtt": [
-                  "DBInstance",
-                  "Endpoint.Address"
-                ]
-              },
-              "KeyId": {
-                "Ref": "MyKey"
-              }
-            }
-          },
-          "DBSecurityGroup": {
-            "Type": "AWS::RDS::DBSecurityGroup",
-            "DependsOn": [
-              "InstanceSecurityGroup",
-              "VPC"
-            ],
-            "Properties": {
-              "EC2VpcId": {
-                "Ref": "VPC"
-              },
-              "DBSecurityGroupIngress": [
-                {
-                  "EC2SecurityGroupId": {
-                    "Ref": "InstanceSecurityGroup"
-                  }
-                }
-              ],
-              "GroupDescription": "Frontend Access"
-            }
-          },
-          "QAGroup": {
-            "Type": "AWS::IAM::Group",
-            "Properties": {
-              "GroupName": {
-                "Fn::Sub": "${AWS::StackName}-QA"
-              },
-              "ManagedPolicyArns": [
-                "arn:aws:iam::aws:policy/IAMReadOnlyAccess",
-                "arn:aws:iam::aws:policy/IAMUserSSHKeys"
-              ],
-              "Policies": [
-                {
-                  "PolicyName": {
-                    "Fn::Sub": "${AWS::StackName}-QA-Policy"
-                  },
-                  "PolicyDocument": {
-                    "Version": "2012-10-17",
-                    "Statement": [
-                      {
-                        "Effect": "Allow",
-                        "Action": [
-                          "codecommit:BatchGetRepositories",
-                          "codecommit:List*"
-                        ],
-                        "Resource": "*"
-                      },
-                      {
-                        "Effect": "Allow",
-                        "Action": [
-                          "codecommit:Get*",
-                          "codecommit:GitPull"
-                        ],
-                        "Resource": [
-                          {
-                            "Fn::Sub": "arn:aws:codecommit:eu-west-1:${AWS::AccountId}:${AWS::StackName}-application"
-                          }
-                        ]
-                      },
-                      {
-                        "Effect": "Allow",
-                        "Action": [
-                          "ssm:GetParameters"
-                        ],
-                        "Resource": [
-                          {
-                            "Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}.*"
-                          }
-                        ]
-                      },
-                      {
-                        "Effect": "Allow",
-                        "Action": [
-                          "ssm:DescribeParameters"
-                        ],
-                        "Resource": [
-                          {
-                            "Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:*"
-                          }
-                        ]
-                      }
-                    ]
-                  }
-                }
-              ]
-            }
-          },
-          "DevGroup": {
-            "Type": "AWS::IAM::Group",
-            "Properties": {
-              "GroupName": {
-                "Fn::Sub": "${AWS::StackName}-Dev"
-              },
-              "ManagedPolicyArns": [
-                "arn:aws:iam::aws:policy/IAMReadOnlyAccess",
-                "arn:aws:iam::aws:policy/IAMUserSSHKeys"
-              ],
-              "Policies": [
-                {
-                  "PolicyName": {
-                    "Fn::Sub": "${AWS::StackName}_dev_policy"
-                  },
-                  "PolicyDocument": {
-                    "Version": "2012-10-17",
-                    "Statement": [
-                      {
-                        "Effect": "Allow",
-                        "Action": [
-                          "codecommit:BatchGetRepositories",
-                          "codecommit:List*"
-                        ],
-                        "Resource": "*"
-                      },
-                      {
-                        "Effect": "Allow",
-                        "Action": [
-                          "codecommit:Get*",
-                          "codecommit:GitPull",
-                          "codecommit:GitPush"
-                        ],
-                        "Resource": [
-                          {
-                            "Fn::Sub": "arn:aws:codecommit:eu-west-1:${AWS::AccountId}:${AWS::StackName}-application"
-                          }
-                        ]
-                      },
-                      {
-                        "Effect": "Allow",
-                        "Action": [
-                          "ssm:PutParameter"
-                        ],
-                        "Resource": [
-                          {
-                            "Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}.*"
-                          }
-                        ]
-                      },
-                      {
-                        "Effect": "Allow",
-                        "Action": [
-                          "ssm:GetParameters"
-                        ],
-                        "Resource": [
-                          {
-                            "Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}.*"
-                          }
-                        ]
-                      },
-                      {
-                        "Effect": "Allow",
-                        "Action": [
-                          "ssm:DescribeParameters"
-                        ],
-                        "Resource": [
-                          {
-                            "Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:*"
-                          }
-                        ]
-                      },
-                      {
-                        "Action": [
-                          "logs:GetLogEvents",
-                          "logs:DescribeMetricFilters",
-                          "logs:DescribeLogStreams"
-                        ],
-                        "Resource": [
-                          {
-                            "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${AWS::StackName}:*"
-                          }
-                        ],
-                        "Effect": "Allow"
-                      },
-                      {
-                        "Action": [
-                          "logs:DescribeLogGroups"
-                        ],
-                        "Resource": [
-                          {
-                            "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:*"
-                          }
-                        ],
-                        "Effect": "Allow"
-                      }
-                    ]
-                  }
-                }
-              ]
-            }
-          },
-          "SecGroup": {
-            "Type": "AWS::IAM::Group",
-            "Properties": {
-              "GroupName": {
-                "Fn::Sub": "${AWS::StackName}-Sec"
-              },
-              "ManagedPolicyArns": [
-                "arn:aws:iam::aws:policy/IAMReadOnlyAccess",
-                "arn:aws:iam::aws:policy/IAMUserSSHKeys"
-              ],
-              "Policies": [
-                {
-                  "PolicyName": {
-                    "Fn::Sub": "${AWS::StackName}_sec_policy"
-                  },
-                  "PolicyDocument": {
-                    "Version": "2012-10-17",
-                    "Statement": [
-                      {
-                        "Effect": "Allow",
-                        "Action": [
-                          "codecommit:BatchGetRepositories",
-                          "codecommit:List*"
-                        ],
-                        "Resource": "*"
-                      },
-                      {
-                        "Effect": "Allow",
-                        "Action": [
-                          "codecommit:Get*",
-                          "codecommit:GitPull",
-                          "codecommit:GitPush"
-                        ],
-                        "Resource": [
-                          {
-                            "Fn::Sub": "arn:aws:codecommit:eu-west-1:${AWS::AccountId}:${AWS::StackName}-application"
-                          }
-                        ]
-                      },
-                      {
-                        "Effect": "Allow",
-                        "Action": [
-                          "ssm:PutParameter"
-                        ],
-                        "Resource": [
-                          {
-                            "Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}.*"
-                          }
-                        ]
-                      },
-                      {
-                        "Effect": "Allow",
-                        "Action": [
-                          "ssm:GetParameters"
-                        ],
-                        "Resource": [
-                          {
-                            "Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}.*"
-                          }
-                        ]
-                      },
-                      {
-                        "Effect": "Allow",
-                        "Action": [
-                          "ssm:DescribeParameters"
-                        ],
-                        "Resource": [
-                          {
-                            "Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:*"
-                          }
-                        ]
-                      },
-                      {
-                        "Action": [
-                          "logs:GetLogEvents",
-                          "logs:DescribeMetricFilters",
-                          "logs:DescribeLogStreams"
-                        ],
-                        "Resource": [
-                          {
-                            "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${AWS::StackName}:*"
-                          }
-                        ],
-                        "Effect": "Allow"
-                      },
-                      {
-                        "Action": [
-                          "logs:DescribeLogGroups"
-                        ],
-                        "Resource": [
-                          {
-                            "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:*"
-                          }
-                        ],
-                        "Effect": "Allow"
-                      }
-                    ]
-                  }
-                }
-              ]
-            }
-          },
-          "AddUsersToDevGroup": {
-            "Type": "AWS::IAM::UserToGroupAddition",
-            "Properties": {
-              "GroupName": {
-                "Ref": "DevGroup"
-              },
-              "Users": [
-                "devuser"
-              ]
-            }
-          },
-          "AddUsersToQAGroup": {
-            "Type": "AWS::IAM::UserToGroupAddition",
-            "Properties": {
-              "GroupName": {
-                "Ref": "QAGroup"
-              },
-              "Users": [
-                "qauser"
-              ]
-            }
-          },
-          "AddUsersToSecGroup": {
-            "Type": "AWS::IAM::UserToGroupAddition",
-            "Properties": {
-              "GroupName": {
-                "Ref": "SecGroup"
-              },
-              "Users": [
-                "secureuser"
-              ]
-            }
-          },
-          "CodeRepo": {
-            "Type": "AWS::CodeCommit::Repository",
-            "Properties": {
-              "RepositoryName": {
-                "Fn::Sub": "${AWS::StackName}-application"
-              },
-              "RepositoryDescription": "A code repository for the application"
-            }
-          },
-          "CodeBuildRole": {
-            "Type": "AWS::IAM::Role",
-            "Properties": {
-              "RoleName": {
-                "Fn::Sub": "${AWS::StackName}-CodeBuild"
-              },
-              "AssumeRolePolicyDocument": {
-                "Version": "2012-10-17",
-                "Statement": [
-                  {
-                    "Effect": "Allow",
-                    "Principal": {
-                      "Service": [
-                        "codebuild.amazonaws.com"
-                      ]
-                    },
-                    "Action": [
-                      "sts:AssumeRole"
-                    ]
-                  }
-                ]
-              },
-              "Policies": [
-                {
-                  "PolicyName": "codebuild",
-                  "PolicyDocument": {
-                    "Statement": [
-                      {
-                        "Effect": "Allow",
-                        "Action": [
-                          "ecr:GetAuthorizationToken"
-                        ],
-                        "Resource": "*"
-                      },
-                      {
-                        "Effect": "Allow",
-                        "Action": [
-                          "ecr:BatchCheckLayerAvailability",
-                          "ecr:CompleteLayerUpload",
-                          "ecr:InitiateLayerUpload",
-                          "ecr:PutImage",
-                          "ecr:UploadLayerPart"
-                        ],
-                        "Resource": [
-                          {
-                            "Fn::Sub": "arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/${AWS::StackName}-application"
-                          }
-                        ]
-                      },
-                      {
-                        "Effect": "Allow",
-                        "Action": [
-                          "codecommit:GitPull"
-                        ],
-                        "Resource": [
-                          {
-                            "Fn::Sub": "arn:aws:codecommit:${AWS::Region}:${AWS::AccountId}:${AWS::StackName}-application"
-                          }
-                        ]
-                      },
-                      {
-                        "Effect": "Allow",
-                        "Action": [
-                          "logs:CreateLogGroup",
-                          "logs:CreateLogStream",
-                          "logs:PutLogEvents"
-                        ],
-                        "Resource": [
-                          {
-                            "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-application:log-stream"
-                          },
-                          {
-                            "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-application:log-stream:*"
-                          },
-                          {
-                            "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-application-image:log-stream"
-                          },
-                          {
-                            "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-application-image:log-stream:*"
-                          }
-                        ]
-                      }
-                    ]
-                  }
-                }
-              ]
-            }
-          },
-          "CodeBuild": {
-            "Type": "AWS::CodeBuild::Project",
-            "DependsOn": [
-              "CodeRepo",
-              "CodeBuildRole"
-            ],
-            "Properties": {
-              "Name": {
-                "Fn::Sub": "${AWS::StackName}-application"
-              },
-              "Description": "A description about my project",
-              "ServiceRole": {
-                "Fn::GetAtt": "CodeBuildRole.Arn"
-              },
-              "Artifacts": {
-                "Type": "CODEPIPELINE"
-              },
-              "Environment": {
-                "Type": "LINUX_CONTAINER",
-                "ComputeType": "BUILD_GENERAL1_SMALL",
-                "Image": "aws/codebuild/nodejs:7.0.0"
-              },
-              "Source": {
-                "Location": {
-                  "Fn::GetAtt": "CodeRepo.CloneUrlHttp"
-                },
-                "Type": "CODEPIPELINE",
-                "BuildSpec": {
-                  "Fn::Sub": "version: 0.1\nphases:\n  build:\n    commands:\n      - echo Install NodeJS dependencies...\n      - npm install\nartifacts:\n  files:\n  - \"**/*\" # All files recursively\n"
-                }
-              },
-              "TimeoutInMinutes": 300
-            }
-          },
-          "CodeDeployTrustRole": {
-            "Type": "AWS::IAM::Role",
-            "Properties": {
-              "AssumeRolePolicyDocument": {
-                "Version": "2012-10-17",
-                "Statement": [
-                  {
-                    "Sid": "1",
-                    "Effect": "Allow",
-                    "Principal": {
-                      "Service": "codedeploy.amazonaws.com"
-                    },
-                    "Action": "sts:AssumeRole"
-                  }
-                ]
-              },
-              "Path": "/",
-              "RoleName": {
-                "Fn::Sub": "${AWS::StackName}-CodeDeployRole"
-              }
-            }
-          },
-          "CodeDeployRolePolicies": {
-            "Type": "AWS::IAM::Policy",
-            "Properties": {
-              "PolicyName": "CodeDeployPolicy",
-              "PolicyDocument": {
-                "Statement": [
-                  {
-                    "Effect": "Allow",
-                    "Resource": [
-                      "*"
-                    ],
-                    "Action": [
-                      "ec2:Describe*",
-                      "ec2:TerminateInstances"
-                    ]
-                  },
-                  {
-                    "Effect": "Allow",
-                    "Resource": [
-                      "*"
-                    ],
-                    "Action": [
-                      "autoscaling:*"
-                    ]
-                  },
-                  {
-                    "Effect": "Allow",
-                    "Resource": [
-                      "*"
-                    ],
-                    "Action": [
-                      "elasticloadbalancing:DescribeLoadBalancers",
-                      "elasticloadbalancing:DescribeInstanceHealth",
-                      "elasticloadbalancing:RegisterInstancesWithLoadBalancer",
-                      "elasticloadbalancing:DeregisterInstancesFromLoadBalancer"
-                    ]
-                  },
-                  {
-                    "Effect": "Allow",
-                    "Resource": [
-                      "*"
-                    ],
-                    "Action": [
-                      "Tag:getResources",
-                      "Tag:getTags",
-                      "Tag:getTagsForResource",
-                      "Tag:getTagsForResourceList"
-                    ]
-                  }
-                ]
-              },
-              "Roles": [
-                {
-                  "Ref": "CodeDeployTrustRole"
-                }
-              ]
-            }
-          },
-          "CodeDeployApplication": {
-            "Type": "AWS::CodeDeploy::Application"
-          },
-          "CodeDeployDeploymentGroup": {
-            "Type": "AWS::CodeDeploy::DeploymentGroup",
-            "DependsOn": [
-              "CodeDeployApplication",
-              "CodeDeployTrustRole",
-              "AutoScalingGroup"
-            ],
-            "Properties": {
-              "ApplicationName": {
-                "Ref": "CodeDeployApplication"
-              },
-              "DeploymentConfigName": "CodeDeployDefault.HalfAtATime",
-              "AutoScalingGroups": [
-                {
-                  "Ref": "AutoScalingGroup"
-                }
-              ],
-              "ServiceRoleArn": {
-                "Fn::GetAtt": "CodeDeployTrustRole.Arn"
-              }
-            }
-          },
-          "CodePipelineServiceRole": {
-            "Type": "AWS::IAM::Role",
-            "Properties": {
-              "RoleName": {
-                "Fn::Sub": "${AWS::StackName}-CodePipelineServiceRole"
-              },
-              "AssumeRolePolicyDocument": {
-                "Version": "2012-10-17",
-                "Statement": [
-                  {
-                    "Effect": "Allow",
-                    "Principal": {
-                      "Service": [
-                        "codepipeline.amazonaws.com"
-                      ]
-                    },
-                    "Action": [
-                      "sts:AssumeRole"
-                    ]
-                  }
-                ]
-              },
-              "Policies": [
-                {
-                  "PolicyName": "root",
-                  "PolicyDocument": {
-                    "Version": "2012-10-17",
-                    "Statement": [
-                      {
-                        "Effect": "Allow",
-                        "Action": [
-                          "codecommit:BatchGetRepositories",
-                          "codecommit:Get*",
-                          "codecommit:GitPull",
-                          "codecommit:List*",
-                          "codecommit:UploadArchive"
-                        ],
-                        "Resource": [
-                          {
-                            "Fn::Sub": "arn:aws:codecommit:${AWS::Region}:${AWS::AccountId}:${AWS::StackName}-application"
-                          }
-                        ]
-                      },
-                      {
-                        "Effect": "Allow",
-                        "Action": [
-                          "ecr:BatchGetImage"
-                        ],
-                        "Resource": [
-                          {
-                            "Fn::Sub": "arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/${AWS::StackName}-application"
-                          }
-                        ]
-                      },
-                      {
-                        "Effect": "Allow",
-                        "Action": [
-                          "codebuild:StartBuild",
-                          "codebuild:BatchGetBuilds",
-                          "cloudformation:*",
-                          "iam:PassRole"
-                        ],
-                        "Resource": "*"
-                      },
-                      {
-                        "Effect": "Allow",
-                        "Action": [
-                          "codedeploy:*"
-                        ],
-                        "Resource": "*"
-                      }
-                    ]
-                  }
-                }
-              ]
-            }
-          },
-          "ArtifactStoreS3Location": {
-            "Type": "AWS::S3::Bucket",
-            "DeletionPolicy": "Retain",
-            "Properties": {
-              "BucketName": {
-                "Fn::Sub": "${AWS::StackName}-artifacts"
-              }
-            }
-          },
-          "ArtifactStoreS3LocationPolicy": {
-            "Type": "AWS::S3::BucketPolicy",
-            "Properties": {
-              "Bucket": {
-                "Ref": "ArtifactStoreS3Location"
-              },
-              "PolicyDocument": {
-                "Statement": [
-                  {
-                    "Effect": "Allow",
-                    "Action": [
-                      "s3:*"
-                    ],
-                    "Resource": [
-                      {
-                        "Fn::Sub": "arn:aws:s3:::${AWS::StackName}-artifacts"
-                      },
-                      {
-                        "Fn::Sub": "arn:aws:s3:::${AWS::StackName}-artifacts/*"
-                      }
-                    ],
-                    "Principal": "*"
-                  }
-                ]
-              }
-            }
-          },
-          "CodePipeline": {
-            "Type": "AWS::CodePipeline::Pipeline",
-            "DependsOn": [
-              "AutoScalingGroup",
-              "DBInstance"
-            ],
-            "Properties": {
-              "Name": {
-                "Fn::Sub": "${AWS::StackName}-application"
-              },
-              "RoleArn": {
-                "Fn::GetAtt": "CodePipelineServiceRole.Arn"
-              },
-              "Stages": [
-                {
-                  "Name": "Source",
-                  "Actions": [
-                    {
-                      "Name": {
-                        "Fn::Sub": "${AWS::StackName}-Source"
-                      },
-                      "ActionTypeId": {
-                        "Category": "Source",
-                        "Owner": "AWS",
-                        "Version": 1,
-                        "Provider": "CodeCommit"
-                      },
-                      "OutputArtifacts": [
-                        {
-                          "Name": {
-                            "Fn::Sub": "${AWS::StackName}-SourceOutput"
-                          }
-                        }
-                      ],
-                      "Configuration": {
-                        "RepositoryName": {
-                          "Fn::GetAtt": "CodeRepo.Name"
-                        },
-                        "BranchName": "master"
-                      }
-                    }
-                  ]
-                },
-                {
-                  "Name": "Build",
-                  "Actions": [
-                    {
-                      "Name": {
-                        "Fn::Sub": "${AWS::StackName}-Build"
-                      },
-                      "InputArtifacts": [
-                        {
-                          "Name": {
-                            "Fn::Sub": "${AWS::StackName}-SourceOutput"
-                          }
-                        }
-                      ],
-                      "ActionTypeId": {
-                        "Category": "Build",
-                        "Owner": "AWS",
-                        "Version": 1,
-                        "Provider": "CodeBuild"
-                      },
-                      "OutputArtifacts": [
-                        {
-                          "Name": {
-                            "Fn::Sub": "${AWS::StackName}-Build"
-                          }
-                        }
-                      ],
-                      "Configuration": {
-                        "ProjectName": {
-                          "Ref": "CodeBuild"
-                        }
-                      }
-                    }
-                  ]
-                },
-                {
-                  "Name": "Deploy",
-                  "Actions": [
-                    {
-                      "Name": "BetaAction",
-                      "InputArtifacts": [
-                        {
-                          "Name": {
-                            "Fn::Sub": "${AWS::StackName}-Build"
-                          }
-                        }
-                      ],
-                      "ActionTypeId": {
-                        "Category": "Deploy",
-                        "Owner": "AWS",
-                        "Version": 1,
-                        "Provider": "CodeDeploy"
-                      },
-                      "Configuration": {
-                        "ApplicationName": {
-                          "Ref": "CodeDeployApplication"
-                        },
-                        "DeploymentGroupName": {
-                          "Ref": "CodeDeployDeploymentGroup"
-                        }
-                      }
-                    }
-                  ]
-                }
-              ],
-              "ArtifactStore": {
-                "Type": "S3",
-                "Location": {
-                  "Ref": "ArtifactStoreS3Location"
-                }
-              }
+        },
+        "Runtime": "nodejs4.3",
+        "Timeout": "25"
+      }
+    },
+    "VPC": {
+      "Type": "AWS::EC2::VPC",
+      "Metadata": {
+        "Comment": "Virtual Private Cloud for the Application."
+      },
+      "Properties": {
+        "CidrBlock": "10.0.0.0/16",
+        "EnableDnsSupport": true,
+        "EnableDnsHostnames": true,
+        "InstanceTenancy": "default",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Ref": "AWS::StackName"
             }
           }
+        ]
+      }
+    },
+    "InternetGateway": {
+      "Type": "AWS::EC2::InternetGateway",
+      "Metadata": {
+        "Comment": "Internet gateway for the VPC."
+      },
+      "Properties": {
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Ref": "AWS::StackName"
+            }
+          }
+        ]
+      }
+    },
+    "AttachGateway": {
+      "Type": "AWS::EC2::VPCGatewayAttachment",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
         },
-        "Outputs": {
-          "ServiceRoleName": {
-            "Value": {
-              "Ref": "CodeDeployTrustRole"
+        "InternetGatewayId": {
+          "Ref": "InternetGateway"
+        }
+      }
+    },
+    "PublicSubnet01": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": "10.0.1.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            "0",
+            {
+              "Fn::GetAZs": ""
             }
-          },
-          "ServiceRoleARN": {
-            "Value": {
-              "Fn::GetAtt": [
-                "CodeDeployTrustRole",
-                "Arn"
-              ]
-            }
-          },
-          "AutoScalingGroupName": {
-            "Value": {
-              "Ref": "AutoScalingGroup"
-            }
-          },
-          "URL": {
-            "Description": "The URL of the website",
+          ]
+        },
+        "MapPublicIpOnLaunch": "true",
+        "Tags": [
+          {
+            "Key": "Name",
             "Value": {
               "Fn::Join": [
                 "",
                 [
-                  "http://",
                   {
-                    "Fn::GetAtt": [
-                      "ApplicationLoadBalancer",
-                      "DNSName"
-                    ]
-                  }
+                    "Ref": "AWS::StackName"
+                  },
+                  "- PublicSubnet01"
                 ]
               ]
             }
-          },
-          "RepoURL": {
-            "Description": "Git Repository URL",
+          }
+        ]
+      }
+    },
+    "PublicSubnet02": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": "10.0.2.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            "1",
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "MapPublicIpOnLaunch": "true",
+        "Tags": [
+          {
+            "Key": "Name",
             "Value": {
-              "Fn::GetAtt": "CodeRepo.CloneUrlSsh"
+              "Fn::Join": [
+                "",
+                [
+                  {
+                    "Ref": "AWS::StackName"
+                  },
+                  "- PublicSubnet02"
+                ]
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "PrivateSubnet01": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": "10.0.3.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            "0",
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "MapPublicIpOnLaunch": "true",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Join": [
+                "",
+                [
+                  {
+                    "Ref": "AWS::StackName"
+                  },
+                  "- PrivateSubnet01"
+                ]
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "PrivateSubnet02": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": "10.0.4.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            "1",
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Join": [
+                "",
+                [
+                  {
+                    "Ref": "AWS::StackName"
+                  },
+                  "- PrivateSubnet02"
+                ]
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "PublicRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Ref": "AWS::StackName"
+            }
+          }
+        ]
+      }
+    },
+    "PublicRoute": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "GatewayId": {
+          "Ref": "InternetGateway"
+        }
+      }
+    },
+    "PublicSubnet01RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "DependsOn": [
+        "PublicRouteTable",
+        "PublicSubnet01"
+      ],
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        },
+        "SubnetId": {
+          "Ref": "PublicSubnet01"
+        }
+      }
+    },
+    "PublicSubnet02RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "DependsOn": [
+        "PublicRouteTable",
+        "PublicSubnet02"
+      ],
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        },
+        "SubnetId": {
+          "Ref": "PublicSubnet02"
+        }
+      }
+    },
+    "DBSubnetGroup": {
+      "Type": "AWS::RDS::DBSubnetGroup",
+      "DependsOn": [
+        "PrivateSubnet01",
+        "PrivateSubnet02"
+      ],
+      "Properties": {
+        "DBSubnetGroupDescription": "RDS Subnet Group",
+        "SubnetIds": [
+          {
+            "Ref": "PrivateSubnet01"
+          },
+          {
+            "Ref": "PrivateSubnet02"
+          }
+        ]
+      }
+    },
+    "SecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Enable HTTP and HTTPS ports for the Load Balancer",
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": "80",
+            "ToPort": "80",
+            "CidrIp": "0.0.0.0/0"
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": "443",
+            "ToPort": "443",
+            "CidrIp": "0.0.0.0/0"
+          }
+        ]
+      }
+    },
+    "InstanceSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Enable HTTP access via port 3000 and SSH access via port 22 for the EC2 Instances",
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": "22",
+            "ToPort": "22",
+            "CidrIp": {
+              "Ref": "SSHLocation"
             }
           },
-          "LoadBalancerName": {
+          {
+            "IpProtocol": "tcp",
+            "FromPort": "3000",
+            "ToPort": "3000",
+            "CidrIp": "0.0.0.0/0"
+          }
+        ]
+      }
+    },
+    "SSLCertificate": {
+      "Type": "AWS::CertificateManager::Certificate",
+      "DeletionPolicy": "Retain",
+      "Properties": {
+        "DomainName": {
+          "Fn::Sub": "${AWS::StackName}.al-labs.co.uk"
+        },
+        "DomainValidationOptions": [
+          {
+            "DomainName": {
+              "Fn::Sub": "${AWS::StackName}.al-labs.co.uk"
+            },
+            "ValidationDomain": "al-labs.co.uk"
+          }
+        ]
+      },
+      "Condition": "cEnableHTTPS"
+    },
+    "ELBLogsS3StoreLocation": {
+      "Type": "AWS::S3::Bucket",
+      "DeletionPolicy" : "Retain",
+      "DependsOn": ["ELBLogsToCWLambda", "LambdaInvokePermission"],
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "${AWS::StackName}-elb-logs"
+        },
+        "NotificationConfiguration": {
+          "LambdaConfigurations": [ {
+            "Function": { "Fn::GetAtt" : ["ELBLogsToCWLambda", "Arn"] },
+            "Event": "s3:ObjectCreated:*"
+          } ]
+        }
+      }
+    },
+    "ELBLogsS3StoreLocationPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Properties": {
+        "Bucket": {
+          "Ref": "ELBLogsS3StoreLocation"
+        },
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": [ "s3:*" ],
+              "Resource": [ { "Fn::Sub": "arn:aws:s3:::${AWS::StackName}-elb-logs/*" } ],
+              "Principal": "*"
+            }
+          ]
+        }
+      }
+    },
+    "ApplicationLoadBalancer": {
+      "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-loadbalancer"
+        },
+        "Scheme": "internet-facing",
+        "Subnets": [
+          {
+            "Ref": "PublicSubnet01"
+          },
+          {
+            "Ref": "PublicSubnet02"
+          }
+        ],
+        "SecurityGroups": [
+          {
+            "Ref": "SecurityGroup"
+          }
+        ],
+        "LoadBalancerAttributes": [
+          { "Key": "access_logs.s3.enabled", "Value": "true" },
+          { "Key": "access_logs.s3.bucket", "Value": { "Fn::Sub": "${AWS::StackName}-elb-logs"} }
+        ]
+        }
+      },
+      "DependsOn": "ELBLogsS3StoreLocation"
+    },
+    "LambdaInvokePermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName" : { "Fn::GetAtt" : ["ELBLogsToCWLambda", "Arn"] },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "s3.amazonaws.com",
+        "SourceAccount": { "Ref" : "AWS::AccountId" }
+      }
+    },
+    "ELBLogsToCWLambda": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "Handler": "index.handler",
+        "Role": { "Fn::GetAtt" : ["LambdaRole", "Arn"] },
+        "Description": "This code will move your ELB logs from S3 to CloudWatch. It is compressed, so quite hard to read. Original: github.com/awslabs/cloudwatch-logs-centralize-logs",
+        "Code": {
+          "ZipFile": {
+            "Fn::Sub": "'use strict';const aws=require('aws-sdk');var zlib=require('zlib');const s3=new aws.S3({apiVersion:'2006-03-01'});const cloudWatchLogs=new aws.CloudWatchLogs({apiVersion:'2014-03-28'});const readline=require('readline');const stream=require('stream');const logGroupName='${AWS::StackName}';const logStreamName='ELB';exports.handler=(event,context,callback)=>{console.log('S3 object is:',event.Records[0].s3);const bucket=event.Records[0].s3.bucket.name;console.log('Name of S3 bucket is:',bucket);const key=decodeURIComponent(event.Records[0].s3.object.key.replace(/\\+/g,' '));const params={Bucket:bucket,Key:key,};s3.getObject(params,(err,data)=>{if(err){console.log(err);const message=`Error getting object ${!key}from bucket ${!bucket}.Make sure they exist and your bucket is in the same region as this function.`;console.log(message);callback(message)}else{zlib.gunzip(data.Body,function(a,b){if(a){console.log('Error uncompressing data',a);return}var c=b.toString('ascii');manageLogGroups(c)});callback(null,data.ContentType)}});function manageLogGroups(c){var d={logGroupNamePrefix:logGroupName};cloudWatchLogs.describeLogGroups(d,function(a,b){if(a){console.log('Error while describing log group:',a);createLogGroup(c)}else{if(!b.logGroups[0]){console.log('Need to  create log group:',b);createLogGroup(c)}else{console.log('Success while describing log group:',b);manageLogStreams(c)}}})}function createLogGroup(c){var d={logGroupName:logGroupName};cloudWatchLogs.createLogGroup(d,function(a,b){if(a){console.log('error while creating log group: ',a,a.stack);return}else{console.log('Success in creating log group: ',logGroupName);manageLogStreams(c)}})}function manageLogStreams(c){var d={logGroupName:logGroupName,logStreamNamePrefix:logStreamName};cloudWatchLogs.describeLogStreams(d,function(a,b){if(a){console.log('Error during describe log streams:',a);createLogStream(c)}else{if(!b.logStreams[0]){console.log('Need to  create log stream:',b);createLogStream(c)}else{console.log('Log Stream already defined:',logStreamName);putLogEvents(b.logStreams[0].uploadSequenceToken,c)}}})}function createLogStream(c){var d={logGroupName:logGroupName,logStreamName:logStreamName};cloudWatchLogs.createLogStream(d,function(a,b){if(a){console.log('error while creating log stream: ',a,a.stack);return}else{console.log('Success in creating log stream: ',logStreamName);putLogEvents(null,c)}})}function putLogEvents(a,b){const MAX_BATCH_SIZE=1048576;const MAX_BATCH_COUNT=10000;const LOG_EVENT_OVERHEAD=26;var c=[];var d=[];var e=0;var f=new stream.PassThrough();f.end(b);var g=readline.createInterface({input:f});var h=0;g.on('line',(line)=>{++h;var i=line.split(' ',2)[1];var j=Date.parse(i);var k=line.length+LOG_EVENT_OVERHEAD;e+=k;if(e>=MAX_BATCH_SIZE||d.length>=MAX_BATCH_COUNT){c.push(d);d=[];e=k}d.push({message:line,timestamp:j})});g.on('close',()=>{c.push(d);sendBatches(a,c)})}function sendBatches(e,f){var g=0;var h=0;function sendNextBatch(a,b){if(a){console.log('Error sending batch: ',a,a.stack);return}else{var c=f.shift();if(c){++h;g+=c.length;sendBatch(b,c,sendNextBatch)}else{var d=`Successfully put ${!g}events in ${!h}f`;console.log(d);callback(null,d)}}}sendNextBatch(null,e)}function sendBatch(c,d,e){var f={logEvents:d,logGroupName:logGroupName,logStreamName:logStreamName};if(c){f['sequenceToken']=c}f.logEvents.sort(function(a,b){if(a.timestamp>b.timestamp){return 1}if(a.timestamp<b.timestamp){return-1}return 0});cloudWatchLogs.putLogEvents(f,function(a,b){if(a){console.log('Error during put log events: ',a,a.stack);e(a,null)}else{console.log(`Success in putting ${!f.logEvents.length}events`);e(null,b.nextSequenceToken)}})}};"
+          }
+        },
+        "Runtime": "nodejs4.3"
+      },
+      "DependsOn": "LambdaRolePolicies"
+    },
+    "ApplicationLoadBalancerTargetGroup": {
+      "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-targetgroup"
+        },
+        "HealthCheckPath": "/",
+        "HealthCheckIntervalSeconds": 30,
+        "HealthCheckProtocol": "HTTP",
+        "HealthCheckTimeoutSeconds": 10,
+        "HealthyThresholdCount": 2,
+        "UnhealthyThresholdCount": 5,
+        "Matcher": {
+          "HttpCode": "200"
+        },
+        "Port": 3000,
+        "Protocol": "HTTP",
+        "TargetGroupAttributes": [
+          {
+            "Key": "deregistration_delay.timeout_seconds",
+            "Value": "300"
+          }
+        ],
+        "VpcId": {
+          "Ref": "VPC"
+        }
+      }
+    },
+    "ApplicationLoadBalancerHTTPListener": {
+      "Type": "AWS::ElasticLoadBalancingV2::Listener",
+      "Properties": {
+        "DefaultActions": [
+          {
+            "Type": "forward",
+            "TargetGroupArn": {
+              "Ref": "ApplicationLoadBalancerTargetGroup"
+            }
+          }
+        ],
+        "LoadBalancerArn": {
+          "Ref": "ApplicationLoadBalancer"
+        },
+        "Port": "80",
+        "Protocol": "HTTP"
+      }
+    },
+    "ApplicationLoadBalancerHTTPSListener": {
+      "Type": "AWS::ElasticLoadBalancingV2::Listener",
+      "Properties": {
+        "Certificates": [
+          {
+            "CertificateArn": {
+              "Ref": "SSLCertificate"
+            }
+          }
+        ],
+        "DefaultActions": [
+          {
+            "Type": "forward",
+            "TargetGroupArn": {
+              "Ref": "ApplicationLoadBalancerTargetGroup"
+            }
+          }
+        ],
+        "LoadBalancerArn": {
+          "Ref": "ApplicationLoadBalancer"
+        },
+        "Port": "443",
+        "Protocol": "HTTPS"
+      },
+      "Condition": "cEnableHTTPS"
+    },
+    "DNSRecordSet": {
+      "Type": "AWS::Route53::RecordSetGroup",
+      "Properties": {
+        "HostedZoneName": "al-labs.co.uk.",
+        "Comment": "Zone apex alias targeted to  LoadBalancer.",
+        "RecordSets": [
+          {
+            "Name": {
+              "Fn::Sub": "${AWS::StackName}.al-labs.co.uk."
+            },
+            "Type": "A",
+            "AliasTarget": {
+              "HostedZoneId": {
+                "Fn::GetAtt": [
+                  "ApplicationLoadBalancer",
+                  "CanonicalHostedZoneID"
+                ]
+              },
+              "DNSName": {
+                "Fn::GetAtt": [
+                  "ApplicationLoadBalancer",
+                  "DNSName"
+                ]
+              }
+            }
+          }
+        ]
+      }
+    },
+    "LogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "DeletionPolicy": "Retain",
+      "Properties": {
+        "LogGroupName": {
+          "Ref": "AWS::StackName"
+        },
+        "RetentionInDays": 1
+      }
+    },
+    "EC2InstanceChangesMetricFilter": {
+      "Type": "AWS::Logs::MetricFilter",
+      "Properties": {
+        "LogGroupName": {
+          "Ref": "LogGroup"
+        },
+        "FilterPattern": "{ ($.eventName = RunInstances) || ($.eventName = RebootInstances) || ($.eventName = StartInstances) || ($.eventName = StopInstances) || ($.eventName = TerminateInstances) }",
+        "MetricTransformations": [
+          {
+            "MetricNamespace": {
+              "Fn::Sub": "${AWS::StackName}/CloudTrail/"
+            },
+            "MetricName": "EC2InstanceEventCount",
+            "MetricValue": "1"
+          }
+        ]
+      }
+    },
+    "AppRestartMetricFilter": {
+      "Type": "AWS::Logs::MetricFilter",
+      "Properties": {
+        "LogGroupName": {
+          "Ref": "LogGroup"
+        },
+        "FilterPattern": "App listening on port",
+        "MetricTransformations": [
+          {
+            "MetricNamespace": {
+              "Fn::Sub": "${AWS::StackName}"
+            },
+            "MetricName": "App Restarts",
+            "MetricValue": "1"
+          }
+        ]
+      }
+    },
+    "AppGETsMetricFilter": {
+      "Type": "AWS::Logs::MetricFilter",
+      "Properties": {
+        "LogGroupName": {
+          "Ref": "LogGroup"
+        },
+        "FilterPattern": "[ip, timestamp, method=GET, url, status_code,bytes,responsetime,ms,useragent]",
+        "MetricTransformations": [
+          {
+            "MetricNamespace": {
+              "Fn::Sub": "${AWS::StackName}"
+            },
+            "MetricName": "GETs",
+            "MetricValue": "1"
+          }
+        ]
+      }
+    },
+    "AppPOSTsMetricFilter": {
+      "Type": "AWS::Logs::MetricFilter",
+      "Properties": {
+        "LogGroupName": {
+          "Ref": "LogGroup"
+        },
+        "FilterPattern": "[ip, timestamp, method=POST, url, status_code,bytes,responsetime,ms,useragent]",
+        "MetricTransformations": [
+          {
+            "MetricNamespace": {
+              "Fn::Sub": "${AWS::StackName}"
+            },
+            "MetricName": "POSTs",
+            "MetricValue": "1"
+          }
+        ]
+      }
+    },
+    "AppDELETEsMetricFilter": {
+      "Type": "AWS::Logs::MetricFilter",
+      "Properties": {
+        "LogGroupName": {
+          "Ref": "LogGroup"
+        },
+        "FilterPattern": "[ip, timestamp, method=DELETE, url, status_code,bytes,responsetime,ms,useragent]",
+        "MetricTransformations": [
+          {
+            "MetricNamespace": {
+              "Fn::Sub": "${AWS::StackName}"
+            },
+            "MetricName": "DELETEs",
+            "MetricValue": "1"
+          }
+        ]
+      }
+    },
+    "AppBytesOutMetricFilter": {
+      "Type": "AWS::Logs::MetricFilter",
+      "Properties": {
+        "LogGroupName": {
+          "Ref": "LogGroup"
+        },
+        "FilterPattern": "[ip, timestamp, method, url, status_code,bytes,responsetime,ms,useragent]",
+        "MetricTransformations": [
+          {
+            "MetricNamespace": {
+              "Fn::Sub": "${AWS::StackName}"
+            },
+            "MetricName": "Bytes_Out",
+            "MetricValue": "$bytes"
+          }
+        ]
+      }
+    },
+    "App4xxsMetricFilter": {
+      "Type": "AWS::Logs::MetricFilter",
+      "Properties": {
+        "LogGroupName": {
+          "Ref": "LogGroup"
+        },
+        "FilterPattern": "[ip, timestamp, method, url, status_code=4*,bytes,responsetime,ms,useragent]",
+        "MetricTransformations": [
+          {
+            "MetricNamespace": {
+              "Fn::Sub": "${AWS::StackName}"
+            },
+            "MetricName": "4xx_error_count",
+            "MetricValue": "1"
+          }
+        ]
+      }
+    },
+    "App200sMetricFilter": {
+      "Type": "AWS::Logs::MetricFilter",
+      "Properties": {
+        "LogGroupName": {
+          "Ref": "LogGroup"
+        },
+        "FilterPattern": "[ip, timestamp, method, url, status_code=200,bytes,responsetime,ms,useragent]",
+        "MetricTransformations": [
+          {
+            "MetricNamespace": {
+              "Fn::Sub": "${AWS::StackName}"
+            },
+            "MetricName": "HTTP OK",
+            "MetricValue": "1"
+          }
+        ]
+      }
+    },
+    "AppChromeUsersMetricFilter": {
+      "Type": "AWS::Logs::MetricFilter",
+      "Properties": {
+        "LogGroupName": {
+          "Ref": "LogGroup"
+        },
+        "FilterPattern": "[ip, timestamp, method, url, status_code,bytes,responsetime,ms,useragent=*Chrome*]",
+        "MetricTransformations": [
+          {
+            "MetricNamespace": {
+              "Fn::Sub": "${AWS::StackName}"
+            },
+            "MetricName": "Chrome Users",
+            "MetricValue": "1"
+          }
+        ]
+      }
+    },
+    "AppFirefoxUsersMetricFilter": {
+      "Type": "AWS::Logs::MetricFilter",
+      "Properties": {
+        "LogGroupName": {
+          "Ref": "LogGroup"
+        },
+        "FilterPattern": "[ip, timestamp, method, url, status_code,bytes,responsetime,ms,useragent=*Firefox*]",
+        "MetricTransformations": [
+          {
+            "MetricNamespace": {
+              "Fn::Sub": "${AWS::StackName}"
+            },
+            "MetricName": "Firefox Users",
+            "MetricValue": "1"
+          }
+        ]
+      }
+    },
+    "App4xxRateAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmDescription": "Notify the Operator Email if the 4xx Error Rate is higher than 5 every hour",
+        "AlarmName": {
+          "Fn::Sub": "${AWS::StackName}-4xx_Error_count_alarm"
+        },
+        "MetricName": "4xx_error_count",
+        "Namespace": {
+          "Fn::Sub": "${AWS::StackName}"
+        },
+        "Statistic": "Sum",
+        "Period": "1800",
+        "EvaluationPeriods": "2",
+        "Threshold": "5",
+        "AlarmActions": [
+          {
+            "Ref": "NotificationTopic"
+          }
+        ],
+        "Dimensions": [
+          {
+            "Name": "FilterName",
             "Value": {
-              "Ref": "ApplicationLoadBalancer"
+              "Ref": "App4xxsMetricFilter"
+            }
+          }
+        ],
+        "ComparisonOperator": "GreaterThanThreshold"
+      }
+    },
+    "AppBytesOutAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmDescription": "Sample Alarm to demonstrate CloudWatch Alarms. Triggers when Average Bytes out is greater than 1000 every 10 minutes",
+        "MetricName": "Bytes_Out",
+        "AlarmName": {
+          "Fn::Sub": "${AWS::StackName}-Bytes_Out_Alarm"
+        },
+        "Namespace": {
+          "Fn::Sub": "${AWS::StackName}"
+        },
+        "Statistic": "Average",
+        "Period": "300",
+        "EvaluationPeriods": "2",
+        "Threshold": "1000",
+        "AlarmActions": [
+          {
+            "Ref": "NotificationTopic"
+          }
+        ],
+        "Dimensions": [
+          {
+            "Name": "FilterName",
+            "Value": {
+              "Ref": "AppBytesOutMetricFilter"
+            }
+          }
+        ],
+        "ComparisonOperator": "GreaterThanThreshold"
+      }
+    },
+    "LaunchConfig": {
+      "Type": "AWS::AutoScaling::LaunchConfiguration",
+      "Metadata": {
+        "Comment": "Install a simple application and decrypt secrets and set as environment variable.",
+        "AWS::CloudFormation::Init": {
+          "config": {
+            "packages": {
+              "apt": {
+                "mysql-client": []
+              }
+            },
+            "files": {
+              "/tmp/cwlogs/logstreams.conf": {
+                "content": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "[general]\n",
+                      "state_file= /var/awslogs/agent-state\n",
+                      "[nodejs-serverlog]\n",
+                      "file = /tmp/server.log\n",
+                      "log_group_name = ",
+                      {
+                        "Ref": "LogGroup"
+                      },
+                      "\n",
+                      "log_stream_name = app.nodejs.serverlog-{instance_id}\n",
+                      "datetime_format = %d/%b/%Y:%H:%M:%S\n",
+                      "[nodejs-errorlog]\n",
+                      "file = /tmp/server.err\n",
+                      "log_group_name = ",
+                      {
+                        "Ref": "LogGroup"
+                      },
+                      "\n",
+                      "log_stream_name = app.nodejs.errorlog-{instance_id}\n",
+                      "datetime_format = %d/%b/%Y:%H:%M:%S\n",
+                      "[cloud-init-outputlog]\n",
+                      "file = /var/log/cloud-init-output.log\n",
+                      "log_group_name = ",
+                      {
+                        "Ref": "LogGroup"
+                      },
+                      "\n",
+                      "log_stream_name = system.cloudinit.outputlog-{instance_id}\n",
+                      "datetime_format = %d/%b/%Y:%H:%M:%S\n",
+                      "[system-log]\n",
+                      "file = /var/log/syslog\n",
+                      "log_group_name = ",
+                      {
+                        "Ref": "LogGroup"
+                      },
+                      "\n",
+                      "log_stream_name = system.linux.syslog-{instance_id}\n",
+                      "datetime_format = %b %d %H:%M:%S\n"
+                    ]
+                  ]
+                },
+                "mode": "000400",
+                "owner": "root",
+                "group": "root"
+              },
+              "/lib/systemd/system/awslogs.service": {
+                "content": {
+                  "Fn::Join": [
+                    "\n",
+                    [
+                      "[Unit]",
+                      "Description=The CloudWatch Logs agent",
+                      "After=network.target",
+                      "",
+                      "[Service]",
+                      "Restart=always",
+                      "TimeoutSec=infinity",
+                      "ExecStart=/var/awslogs/bin/awslogs-agent-launcher.sh",
+                      "",
+                      "[Install]",
+                      "WantedBy=multi-user.target"
+                    ]
+                  ]
+                },
+                "mode": "000400",
+                "owner": "root",
+                "group": "root"
+              }
             }
           }
         }
+      },
+      "Properties": {
+        "IamInstanceProfile": {
+          "Ref": "InstanceRoleInstanceProfile"
+        },
+        "SpotPrice": "0.05",
+        "ImageId": {
+          "Fn::FindInMap": [
+            "Region2AMI",
+            {
+              "Ref": "AWS::Region"
+            },
+            "Ubuntu"
+          ]
+        },
+        "InstanceType": {
+          "Ref": "InstanceType"
+        },
+        "KeyName": {
+          "Ref": "KeyPairName"
+        },
+        "SecurityGroups": [
+          {
+            "Ref": "InstanceSecurityGroup"
+          }
+        ],
+        "UserData": {
+          "Fn::Base64": {
+            "Fn::Join": [
+              "",
+              [
+                "#!/bin/bash -ex\n",
+                "# Install CFN Bootstrap\n",
+                "sudo apt-get -y update\n",
+                "sudo apt-get -y install ruby\n",
+                "sudo apt-get -y install wget\n",
+                "sudo apt-get -y install python-pip\n",
+                "pip install https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz\n",
+                "# Helper function.\n",
+                "function error_exit\n",
+                "{\n",
+                "  cfn-signal -e 1 -r \"$1\" '",
+                {
+                  "Ref": "WaitHandle"
+                },
+                "'\n",
+                "  exit 1\n",
+                "}\n",
+                "# Install the AWS CodeDeploy Agent.\n",
+                "cd /home/ubuntu/\n",
+                "wget https://aws-codedeploy-us-west-1.s3.amazonaws.com/latest/install || error_exit 'Failed to download AWS CodeDeploy Agent.'\n",
+                "chmod +x ./install || error_exit 'Failed to download AWS CodeDeploy Agent.'\n",
+                "sudo ./install auto || error_exit 'Failed to install AWS CodeDeploy Agent.' \n",
+                "# Install the latest AWS CLI. \n",
+                "sudo pip install --upgrade awscli || error_exit \n",
+                "# Configure the AWS CLI to use the Curent Region by Default \n",
+                "aws configure set region ",
+                {
+                  "Ref": "AWS::Region"
+                },
+                " || error_exit \n",
+                "#Download and install the latest NodeJs version \n",
+                "# https://nodejs.org/en/download/package-manager/#debian-and-ubuntu-based-linux-distributions \n",
+                "curl -sL https://deb.nodesource.com/setup_7.x | sudo -E bash - || error_exit \n",
+                "apt-get install -y nodejs || error_exit \n",
+                "# Call CFN-INIT to process the metadata for CloudFormation Init. Since ubuntu does not have the tools installed, we install the CFN Bootstrap in the previous step.\n",
+                "cfn-init -v ",
+                "         --stack ",
+                {
+                  "Ref": "AWS::StackName"
+                },
+                "         --resource LaunchConfig ",
+                "         --region ",
+                {
+                  "Ref": "AWS::Region"
+                },
+                "\n",
+                "#Download and Install the Cloudwatch Logs agent. \n",
+                "curl https://s3.amazonaws.com/aws-cloudwatch/downloads/latest/awslogs-agent-setup.py -O || error_exit \n",
+                "python awslogs-agent-setup.py -n -r ",
+                {
+                  "Ref": "AWS::Region"
+                },
+                " -c /tmp/cwlogs/logstreams.conf || error_exit 'Failed to run CloudWatch Logs agent setup'\n",
+                "#Start the Cloudwatch logs agent service using the SYSTEMD Unit file created by cloudformation Init. \n",
+                "systemctl enable awslogs.service \n",
+                "systemctl start awslogs.service \n",
+                "# All is well, so signal success.\n",
+                "cfn-signal -e 0 -r \"AWS CodeDeploy Agent setup complete.\" '",
+                {
+                  "Ref": "WaitHandle"
+                },
+                "'\n",
+                "# Send a Signal for creation policy to work.\n",
+                "cfn-signal -e $? ",
+                "         --stack ",
+                {
+                  "Ref": "AWS::StackName"
+                },
+                "         --resource AutoScalingGroup ",
+                "         --region ",
+                {
+                  "Ref": "AWS::Region"
+                },
+                "\n"
+              ]
+            ]
+          }
+        }
       }
+    },
+    "AutoScalingGroup": {
+      "Type": "AWS::AutoScaling::AutoScalingGroup",
+      "Properties": {
+        "LaunchConfigurationName": {
+          "Ref": "LaunchConfig"
+        },
+        "TargetGroupARNs": [
+          {
+            "Ref": "ApplicationLoadBalancerTargetGroup"
+          }
+        ],
+        "DesiredCapacity": {
+          "Ref": "InstanceCount"
+        },
+        "MaxSize": {
+          "Ref": "InstanceMaxCount"
+        },
+        "MinSize": {
+          "Ref": "InstanceMinCount"
+        },
+        "MetricsCollection": [
+          {
+            "Granularity": "1Minute"
+          }
+        ],
+        "VPCZoneIdentifier": [
+          {
+            "Ref": "PublicSubnet01"
+          },
+          {
+            "Ref": "PublicSubnet02"
+          }
+        ],
+        "NotificationConfiguration": {
+          "TopicARN": {
+            "Ref": "NotificationTopic"
+          },
+          "NotificationTypes": [
+            "autoscaling:EC2_INSTANCE_LAUNCH",
+            "autoscaling:EC2_INSTANCE_LAUNCH_ERROR",
+            "autoscaling:EC2_INSTANCE_TERMINATE",
+            "autoscaling:EC2_INSTANCE_TERMINATE_ERROR"
+          ]
+        },
+        "Tags": [
+          {
+            "Key": {
+              "Ref": "TagKey"
+            },
+            "Value": {
+              "Ref": "TagValue"
+            },
+            "PropagateAtLaunch": "true"
+          }
+        ]
+      },
+      "CreationPolicy": {
+        "ResourceSignal": {
+          "Timeout": "PT15M",
+          "Count": "1"
+        }
+      },
+      "UpdatePolicy": {
+        "AutoScalingRollingUpdate": {
+          "MinInstancesInService": "1",
+          "MaxBatchSize": "1",
+          "PauseTime": "PT15M",
+          "WaitOnResourceSignals": "true"
+        }
+      }
+    },
+    "WebServerScaleUpPolicy": {
+      "Type": "AWS::AutoScaling::ScalingPolicy",
+      "Properties": {
+        "AdjustmentType": "ChangeInCapacity",
+        "AutoScalingGroupName": {
+          "Ref": "AutoScalingGroup"
+        },
+        "Cooldown": "900",
+        "ScalingAdjustment": "1"
+      }
+    },
+    "WebServerScaleDownPolicy": {
+      "Type": "AWS::AutoScaling::ScalingPolicy",
+      "Properties": {
+        "AdjustmentType": "ChangeInCapacity",
+        "AutoScalingGroupName": {
+          "Ref": "AutoScalingGroup"
+        },
+        "Cooldown": "900",
+        "ScalingAdjustment": "-1"
+      }
+    },
+    "CPUAlarmHigh": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmDescription": "Scale-up if CPU > 90% for 10 minutes",
+        "MetricName": "CPUUtilization",
+        "Namespace": "AWS/EC2",
+        "Statistic": "Average",
+        "Period": "300",
+        "EvaluationPeriods": "2",
+        "Threshold": "90",
+        "AlarmActions": [
+          {
+            "Ref": "WebServerScaleUpPolicy"
+          }
+        ],
+        "Dimensions": [
+          {
+            "Name": "AutoScalingGroupName",
+            "Value": {
+              "Ref": "AutoScalingGroup"
+            }
+          }
+        ],
+        "ComparisonOperator": "GreaterThanThreshold"
+      }
+    },
+    "CPUAlarmLow": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmDescription": "Scale-down if CPU < 70% for 10 minutes",
+        "MetricName": "CPUUtilization",
+        "Namespace": "AWS/EC2",
+        "Statistic": "Average",
+        "Period": "300",
+        "EvaluationPeriods": "2",
+        "Threshold": "70",
+        "AlarmActions": [
+          {
+            "Ref": "WebServerScaleDownPolicy"
+          }
+        ],
+        "Dimensions": [
+          {
+            "Name": "AutoScalingGroupName",
+            "Value": {
+              "Ref": "AutoScalingGroup"
+            }
+          }
+        ],
+        "ComparisonOperator": "LessThanThreshold"
+      }
+    },
+    "DBInstance": {
+      "Type": "AWS::RDS::DBInstance",
+      "DependsOn": [
+        "AutoScalingGroup"
+      ],
+      "Properties": {
+        "DBName": {
+          "Ref": "DBName"
+        },
+        "Engine": "MySQL",
+        "MasterUsername": {
+          "Ref": "DBUsername"
+        },
+        "DBInstanceClass": {
+          "Ref": "DBInstanceClass"
+        },
+        "DBSecurityGroups": [
+          {
+            "Ref": "DBSecurityGroup"
+          }
+        ],
+        "AllocatedStorage": {
+          "Ref": "DBAllocatedStorage"
+        },
+        "MasterUserPassword": {
+          "Ref": "DBPassword"
+        },
+        "DBSubnetGroupName": {
+          "Ref": "DBSubnetGroup"
+        },
+        "BackupRetentionPeriod": "0"
+      }
+    },
+    "EncryptDBUSERNAME": {
+      "Type": "AWS::CloudFormation::CustomResource",
+      "Version": "1.0",
+      "DependsOn": [
+        "MyKey",
+        "MyKeyAlias",
+        "DBInstance"
+      ],
+      "Properties": {
+        "ServiceToken": {
+          "Fn::GetAtt": [
+            "ParameterStoreLambda",
+            "Arn"
+          ]
+        },
+        "Name": {
+          "Fn::Join": [
+            ".",
+            [
+              {
+                "Ref": "AWS::StackName"
+              },
+              "db",
+              "username"
+            ]
+          ]
+        },
+        "Value": {
+          "Ref": "DBUsername"
+        },
+        "KeyId": {
+          "Ref": "MyKey"
+        }
+      }
+    },
+    "EncryptDBPassword": {
+      "Type": "AWS::CloudFormation::CustomResource",
+      "Version": "1.0",
+      "DependsOn": [
+        "MyKey",
+        "MyKeyAlias",
+        "DBInstance"
+      ],
+      "Properties": {
+        "ServiceToken": {
+          "Fn::GetAtt": [
+            "ParameterStoreLambda",
+            "Arn"
+          ]
+        },
+        "Name": {
+          "Fn::Join": [
+            ".",
+            [
+              {
+                "Ref": "AWS::StackName"
+              },
+              "db",
+              "password"
+            ]
+          ]
+        },
+        "Value": {
+          "Ref": "DBPassword"
+        },
+        "KeyId": {
+          "Ref": "MyKey"
+        }
+      }
+    },
+    "EncryptDBName": {
+      "Type": "AWS::CloudFormation::CustomResource",
+      "Version": "1.0",
+      "DependsOn": [
+        "MyKey",
+        "MyKeyAlias",
+        "DBInstance"
+      ],
+      "Properties": {
+        "ServiceToken": {
+          "Fn::GetAtt": [
+            "ParameterStoreLambda",
+            "Arn"
+          ]
+        },
+        "Name": {
+          "Fn::Join": [
+            ".",
+            [
+              {
+                "Ref": "AWS::StackName"
+              },
+              "db",
+              "name"
+            ]
+          ]
+        },
+        "Value": {
+          "Ref": "DBName"
+        },
+        "KeyId": {
+          "Ref": "MyKey"
+        }
+      }
+    },
+    "EncryptDBCONNECTIONSTRING": {
+      "Type": "AWS::CloudFormation::CustomResource",
+      "Version": "1.0",
+      "DependsOn": [
+        "MyKey",
+        "MyKeyAlias",
+        "DBInstance"
+      ],
+      "Properties": {
+        "ServiceToken": {
+          "Fn::GetAtt": [
+            "ParameterStoreLambda",
+            "Arn"
+          ]
+        },
+        "Name": {
+          "Fn::Join": [
+            ".",
+            [
+              {
+                "Ref": "AWS::StackName"
+              },
+              "db",
+              "connectionstring"
+            ]
+          ]
+        },
+        "Value": {
+          "Fn::GetAtt": [
+            "DBInstance",
+            "Endpoint.Address"
+          ]
+        },
+        "KeyId": {
+          "Ref": "MyKey"
+        }
+      }
+    },
+    "DBSecurityGroup": {
+      "Type": "AWS::RDS::DBSecurityGroup",
+      "DependsOn": [
+        "InstanceSecurityGroup",
+        "VPC"
+      ],
+      "Properties": {
+        "EC2VpcId": {
+          "Ref": "VPC"
+        },
+        "DBSecurityGroupIngress": [
+          {
+            "EC2SecurityGroupId": {
+              "Ref": "InstanceSecurityGroup"
+            }
+          }
+        ],
+        "GroupDescription": "Frontend Access"
+      }
+    },
+    "QAGroup": {
+      "Type": "AWS::IAM::Group",
+      "Properties": {
+        "GroupName": {
+          "Fn::Sub": "${AWS::StackName}-QA"
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/IAMReadOnlyAccess",
+          "arn:aws:iam::aws:policy/IAMUserSSHKeys"
+        ],
+        "Policies": [
+          {
+            "PolicyName": {
+              "Fn::Sub": "${AWS::StackName}-QA-Policy"
+            },
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "codecommit:BatchGetRepositories",
+                    "codecommit:List*"
+                  ],
+                  "Resource": "*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "codecommit:Get*",
+                    "codecommit:GitPull"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "arn:aws:codecommit:eu-west-1:${AWS::AccountId}:${AWS::StackName}-application"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ssm:GetParameters"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}.*"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ssm:DescribeParameters"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:*"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "DevGroup": {
+      "Type": "AWS::IAM::Group",
+      "Properties": {
+        "GroupName": {
+          "Fn::Sub": "${AWS::StackName}-Dev"
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/IAMReadOnlyAccess",
+          "arn:aws:iam::aws:policy/IAMUserSSHKeys"
+        ],
+        "Policies": [
+          {
+            "PolicyName": {
+              "Fn::Sub": "${AWS::StackName}_dev_policy"
+            },
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "codecommit:BatchGetRepositories",
+                    "codecommit:List*"
+                  ],
+                  "Resource": "*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "codecommit:Get*",
+                    "codecommit:GitPull",
+                    "codecommit:GitPush"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "arn:aws:codecommit:eu-west-1:${AWS::AccountId}:${AWS::StackName}-application"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ssm:PutParameter"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}.*"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ssm:GetParameters"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}.*"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ssm:DescribeParameters"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:*"
+                    }
+                  ]
+                },
+                {
+                  "Action": [
+                    "logs:GetLogEvents",
+                    "logs:DescribeMetricFilters",
+                    "logs:DescribeLogStreams"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${AWS::StackName}:*"
+                    }
+                  ],
+                  "Effect": "Allow"
+                },
+                {
+                  "Action": [
+                    "logs:DescribeLogGroups"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:*"
+                    }
+                  ],
+                  "Effect": "Allow"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "SecGroup": {
+      "Type": "AWS::IAM::Group",
+      "Properties": {
+        "GroupName": {
+          "Fn::Sub": "${AWS::StackName}-Sec"
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/IAMReadOnlyAccess",
+          "arn:aws:iam::aws:policy/IAMUserSSHKeys"
+        ],
+        "Policies": [
+          {
+            "PolicyName": {
+              "Fn::Sub": "${AWS::StackName}_sec_policy"
+            },
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "codecommit:BatchGetRepositories",
+                    "codecommit:List*"
+                  ],
+                  "Resource": "*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "codecommit:Get*",
+                    "codecommit:GitPull",
+                    "codecommit:GitPush"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "arn:aws:codecommit:eu-west-1:${AWS::AccountId}:${AWS::StackName}-application"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ssm:PutParameter"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}.*"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ssm:GetParameters"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}.*"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ssm:DescribeParameters"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:*"
+                    }
+                  ]
+                },
+                {
+                  "Action": [
+                    "logs:GetLogEvents",
+                    "logs:DescribeMetricFilters",
+                    "logs:DescribeLogStreams"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${AWS::StackName}:*"
+                    }
+                  ],
+                  "Effect": "Allow"
+                },
+                {
+                  "Action": [
+                    "logs:DescribeLogGroups"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:*"
+                    }
+                  ],
+                  "Effect": "Allow"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "AddUsersToDevGroup": {
+      "Type": "AWS::IAM::UserToGroupAddition",
+      "Properties": {
+        "GroupName": {
+          "Ref": "DevGroup"
+        },
+        "Users": [
+          "devuser"
+        ]
+      }
+    },
+    "AddUsersToQAGroup": {
+      "Type": "AWS::IAM::UserToGroupAddition",
+      "Properties": {
+        "GroupName": {
+          "Ref": "QAGroup"
+        },
+        "Users": [
+          "qauser"
+        ]
+      }
+    },
+    "AddUsersToSecGroup": {
+      "Type": "AWS::IAM::UserToGroupAddition",
+      "Properties": {
+        "GroupName": {
+          "Ref": "SecGroup"
+        },
+        "Users": [
+          "secureuser"
+        ]
+      }
+    },
+    "CodeRepo": {
+      "Type": "AWS::CodeCommit::Repository",
+      "Properties": {
+        "RepositoryName": {
+          "Fn::Sub": "${AWS::StackName}-application"
+        },
+        "RepositoryDescription": "A code repository for the application"
+      }
+    },
+    "CodeBuildRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "${AWS::StackName}-CodeBuild"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": [
+                  "codebuild.amazonaws.com"
+                ]
+              },
+              "Action": [
+                "sts:AssumeRole"
+              ]
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "codebuild",
+            "PolicyDocument": {
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ecr:GetAuthorizationToken"
+                  ],
+                  "Resource": "*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ecr:BatchCheckLayerAvailability",
+                    "ecr:CompleteLayerUpload",
+                    "ecr:InitiateLayerUpload",
+                    "ecr:PutImage",
+                    "ecr:UploadLayerPart"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/${AWS::StackName}-application"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "codecommit:GitPull"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "arn:aws:codecommit:${AWS::Region}:${AWS::AccountId}:${AWS::StackName}-application"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-application:log-stream"
+                    },
+                    {
+                      "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-application:log-stream:*"
+                    },
+                    {
+                      "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-application-image:log-stream"
+                    },
+                    {
+                      "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-application-image:log-stream:*"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "CodeBuild": {
+      "Type": "AWS::CodeBuild::Project",
+      "DependsOn": [
+        "CodeRepo",
+        "CodeBuildRole"
+      ],
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-application"
+        },
+        "Description": "A description about my project",
+        "ServiceRole": {
+          "Fn::GetAtt": "CodeBuildRole.Arn"
+        },
+        "Artifacts": {
+          "Type": "CODEPIPELINE"
+        },
+        "Environment": {
+          "Type": "LINUX_CONTAINER",
+          "ComputeType": "BUILD_GENERAL1_SMALL",
+          "Image": "aws/codebuild/nodejs:7.0.0"
+        },
+        "Source": {
+          "Location": {
+            "Fn::GetAtt": "CodeRepo.CloneUrlHttp"
+          },
+          "Type": "CODEPIPELINE",
+          "BuildSpec": {
+            "Fn::Sub": "version: 0.1\nphases:\n  build:\n    commands:\n      - echo Install NodeJS dependencies...\n      - npm install\nartifacts:\n  files:\n  - \"**/*\" # All files recursively\n"
+          }
+        },
+        "TimeoutInMinutes": 300
+      }
+    },
+    "CodeDeployTrustRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "1",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "codedeploy.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Path": "/",
+        "RoleName": {
+          "Fn::Sub": "${AWS::StackName}-CodeDeployRole"
+        }
+      }
+    },
+    "CodeDeployRolePolicies": {
+      "Type": "AWS::IAM::Policy",
+      "Properties": {
+        "PolicyName": "CodeDeployPolicy",
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Resource": [
+                "*"
+              ],
+              "Action": [
+                "ec2:Describe*",
+                "ec2:TerminateInstances"
+              ]
+            },
+            {
+              "Effect": "Allow",
+              "Resource": [
+                "*"
+              ],
+              "Action": [
+                "autoscaling:*"
+              ]
+            },
+            {
+              "Effect": "Allow",
+              "Resource": [
+                "*"
+              ],
+              "Action": [
+                "elasticloadbalancing:DescribeLoadBalancers",
+                "elasticloadbalancing:DescribeInstanceHealth",
+                "elasticloadbalancing:RegisterInstancesWithLoadBalancer",
+                "elasticloadbalancing:DeregisterInstancesFromLoadBalancer"
+              ]
+            },
+            {
+              "Effect": "Allow",
+              "Resource": [
+                "*"
+              ],
+              "Action": [
+                "Tag:getResources",
+                "Tag:getTags",
+                "Tag:getTagsForResource",
+                "Tag:getTagsForResourceList"
+              ]
+            }
+          ]
+        },
+        "Roles": [
+          {
+            "Ref": "CodeDeployTrustRole"
+          }
+        ]
+      }
+    },
+    "CodeDeployApplication": {
+      "Type": "AWS::CodeDeploy::Application"
+    },
+    "CodeDeployDeploymentGroup": {
+      "Type": "AWS::CodeDeploy::DeploymentGroup",
+      "DependsOn": [
+        "CodeDeployApplication",
+        "CodeDeployTrustRole",
+        "AutoScalingGroup"
+      ],
+      "Properties": {
+        "ApplicationName": {
+          "Ref": "CodeDeployApplication"
+        },
+        "DeploymentConfigName": "CodeDeployDefault.HalfAtATime",
+        "AutoScalingGroups": [
+          {
+            "Ref": "AutoScalingGroup"
+          }
+        ],
+        "ServiceRoleArn": {
+          "Fn::GetAtt": "CodeDeployTrustRole.Arn"
+        }
+      }
+    },
+    "CodePipelineServiceRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "${AWS::StackName}-CodePipelineServiceRole"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": [
+                  "codepipeline.amazonaws.com"
+                ]
+              },
+              "Action": [
+                "sts:AssumeRole"
+              ]
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "root",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "codecommit:BatchGetRepositories",
+                    "codecommit:Get*",
+                    "codecommit:GitPull",
+                    "codecommit:List*",
+                    "codecommit:UploadArchive"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "arn:aws:codecommit:${AWS::Region}:${AWS::AccountId}:${AWS::StackName}-application"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ecr:BatchGetImage"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/${AWS::StackName}-application"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "codebuild:StartBuild",
+                    "codebuild:BatchGetBuilds",
+                    "cloudformation:*",
+                    "iam:PassRole"
+                  ],
+                  "Resource": "*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "codedeploy:*"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "ArtifactStoreS3Location": {
+      "Type": "AWS::S3::Bucket",
+      "DeletionPolicy": "Retain",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "${AWS::StackName}-artifacts"
+        }
+      }
+    },
+    "ArtifactStoreS3LocationPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Properties": {
+        "Bucket": {
+          "Ref": "ArtifactStoreS3Location"
+        },
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": [
+                "s3:*"
+              ],
+              "Resource": [
+                {
+                  "Fn::Sub": "arn:aws:s3:::${AWS::StackName}-artifacts"
+                },
+                {
+                  "Fn::Sub": "arn:aws:s3:::${AWS::StackName}-artifacts/*"
+                }
+              ],
+              "Principal": "*"
+            }
+          ]
+        }
+      }
+    },
+    "CodePipeline": {
+      "Type": "AWS::CodePipeline::Pipeline",
+      "DependsOn": [
+        "AutoScalingGroup",
+        "DBInstance"
+      ],
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-application"
+        },
+        "RoleArn": {
+          "Fn::GetAtt": "CodePipelineServiceRole.Arn"
+        },
+        "Stages": [
+          {
+            "Name": "Source",
+            "Actions": [
+              {
+                "Name": {
+                  "Fn::Sub": "${AWS::StackName}-Source"
+                },
+                "ActionTypeId": {
+                  "Category": "Source",
+                  "Owner": "AWS",
+                  "Version": 1,
+                  "Provider": "CodeCommit"
+                },
+                "OutputArtifacts": [
+                  {
+                    "Name": {
+                      "Fn::Sub": "${AWS::StackName}-SourceOutput"
+                    }
+                  }
+                ],
+                "Configuration": {
+                  "RepositoryName": {
+                    "Fn::GetAtt": "CodeRepo.Name"
+                  },
+                  "BranchName": "master"
+                }
+              }
+            ]
+          },
+          {
+            "Name": "Build",
+            "Actions": [
+              {
+                "Name": {
+                  "Fn::Sub": "${AWS::StackName}-Build"
+                },
+                "InputArtifacts": [
+                  {
+                    "Name": {
+                      "Fn::Sub": "${AWS::StackName}-SourceOutput"
+                    }
+                  }
+                ],
+                "ActionTypeId": {
+                  "Category": "Build",
+                  "Owner": "AWS",
+                  "Version": 1,
+                  "Provider": "CodeBuild"
+                },
+                "OutputArtifacts": [
+                  {
+                    "Name": {
+                      "Fn::Sub": "${AWS::StackName}-Build"
+                    }
+                  }
+                ],
+                "Configuration": {
+                  "ProjectName": {
+                    "Ref": "CodeBuild"
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "Name": "Deploy",
+            "Actions": [
+              {
+                "Name": "BetaAction",
+                "InputArtifacts": [
+                  {
+                    "Name": {
+                      "Fn::Sub": "${AWS::StackName}-Build"
+                    }
+                  }
+                ],
+                "ActionTypeId": {
+                  "Category": "Deploy",
+                  "Owner": "AWS",
+                  "Version": 1,
+                  "Provider": "CodeDeploy"
+                },
+                "Configuration": {
+                  "ApplicationName": {
+                    "Ref": "CodeDeployApplication"
+                  },
+                  "DeploymentGroupName": {
+                    "Ref": "CodeDeployDeploymentGroup"
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "ArtifactStore": {
+          "Type": "S3",
+          "Location": {
+            "Ref": "ArtifactStoreS3Location"
+          }
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "ServiceRoleName": {
+      "Value": {
+        "Ref": "CodeDeployTrustRole"
+      }
+    },
+    "ServiceRoleARN": {
+      "Value": {
+        "Fn::GetAtt": [
+          "CodeDeployTrustRole",
+          "Arn"
+        ]
+      }
+    },
+    "AutoScalingGroupName": {
+      "Value": {
+        "Ref": "AutoScalingGroup"
+      }
+    },
+    "URL": {
+      "Description": "The URL of the website",
+      "Value": {
+        "Fn::Join": [
+          "",
+          [
+            "http://",
+            {
+              "Fn::GetAtt": [
+                "ApplicationLoadBalancer",
+                "DNSName"
+              ]
+            }
+          ]
+        ]
+      }
+    },
+    "RepoURL": {
+      "Description": "Git Repository URL",
+      "Value": {
+        "Fn::GetAtt": "CodeRepo.CloneUrlSsh"
+      }
+    },
+    "LoadBalancerName": {
+      "Value": {
+        "Ref": "ApplicationLoadBalancer"
+      }
+    }
+  }
+}
