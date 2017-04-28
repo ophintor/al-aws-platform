@@ -4,11 +4,6 @@ var app = express();
 var morgan = require('morgan');
 var bodyParser = require('body-parser');
 var methodOverride = require('method-override');
-var winston = require('winston');
-
-winston.log('info', 'Hello distributed log files!');
-winston.info('Hello again distributed logs');
-
 const PORT = process.env.PORT || 3000;
 
 app.use(express.static('./public'));
@@ -18,7 +13,7 @@ app.use(bodyParser.json());
 app.use(bodyParser.json({type: 'application/vnd.api+json'}));
 app.use(methodOverride('X-HTTP-Method-Override'));
 
-var mysql      = require('mysql');
+var mysql = require('mysql');
 
 var connection = mysql.createConnection({
   host     : process.env.DB_CONNECTIONSTRING || 'localhost',
@@ -33,7 +28,6 @@ function getTodos(res, next) {
             next(error);
             return
         }
-
         res.json(results);
     });
 };
@@ -52,10 +46,8 @@ app.post('/api/todos', (req, res, next) => {
             next(error);
             return
         }
-
         getTodos(res, next);
-    });
-    winston.info("TODO Added" + post);
+    });    
 });
 
 app.delete('/api/todos/:todo_id', (req, res, next) => {
@@ -67,7 +59,6 @@ app.delete('/api/todos/:todo_id', (req, res, next) => {
             next(error);
             return
         }
-
         getTodos(res, next);
     });
 });
