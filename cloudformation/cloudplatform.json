@@ -436,7 +436,7 @@
         ]
       }
     },
-    "LambdaRole": {
+    "ParameterStoreLambdaRole": {
       "Type": "AWS::IAM::Role",
       "Metadata": {
         "Comment": "LambdaRole permits encryption of values under a KMS key without any restrictions and allows write to S3 to store the value"
@@ -460,21 +460,22 @@
         }
       }
     },
-    "LambdaRolePolicies": {
+    "ParameterStoreLambdaRolePolicies": {
       "Type": "AWS::IAM::Policy",
       "Metadata": {
         "Comment": "IAM Policy attached to Role for the Lambda. "
       },
       "Properties": {
-        "PolicyName": "LambdaRole",
+        "PolicyName": "ParameterStoreLambdaRolePolicy",
         "PolicyDocument": {
           "Statement": [
             {
               "Effect": "Allow",
               "Action": [
-                "logs:*"
+                "logs:CreateLogStream",
+                "logs:PutLogEvents"
               ],
-              "Resource": "*"
+              "Resource": { "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}-ParameterStoreLambda:*" }
             },
             {
               "Effect": "Allow",
@@ -492,7 +493,7 @@
         },
         "Roles": [
           {
-            "Ref": "LambdaRole"
+            "Ref": "ParameterStoreLambdaRole"
           }
         ]
       }
@@ -551,7 +552,7 @@
               "Principal": {
                 "AWS": {
                   "Fn::GetAtt": [
-                    "LambdaRole",
+                    "ParameterStoreLambdaRole",
                     "Arn"
                   ]
                 }
@@ -623,7 +624,7 @@
     },
     "ParameterStoreLambdaLogGroup":{
       "Type" : "AWS::Logs::LogGroup",
-      "DeletionPolicy" : "Retain",
+      "DeletionPolicy" : "Delete",
       "Properties" : {
         "LogGroupName" :{ "Fn::Sub": "/aws/lambda/${AWS::StackName}-ParameterStoreLambda" },
         "RetentionInDays" : 1
@@ -636,7 +637,7 @@
         "FunctionName": {"Fn::Sub":"${AWS::StackName}-ParameterStoreLambda"},
         "Role": {
           "Fn::GetAtt": [
-            "LambdaRole",
+            "ParameterStoreLambdaRole",
             "Arn"
           ]
         },
@@ -648,35 +649,34 @@
                 "var AWS = require('aws-sdk');",
                 "var response = require('cfn-response');",
                 "exports.lambda_handler = function (event, context) {",
-                "try {",
-                "var ssm = new AWS.SSM();",
-                "if(event.RequestType == 'Delete') {",
-                "console.log('Delete Called');",
-                "response.send(event, context, response.SUCCESS); //do nothing and send success by default",
-                "}",
-                "var params = {",
-                "Name: event.ResourceProperties.Name,",
-                "Type: 'SecureString',",
-                "Value: event.ResourceProperties.Value,",
-                "KeyId: event.ResourceProperties.KeyId,",
-                "Overwrite: true",
-                "};",
-                "ssm.putParameter(params, function(err, data) {",
-                "if (err){",
-                "console.log(err, err.stack); // an error occurred",
-                "response.send(event, context, response.FAILED);",
-                "}",
-                "else{",
-                "console.log(data);           // successful response",
-                "response.send(event, context, response.SUCCESS);",
-                "}",
-                "});",
-                "}",
-                "catch (err) {",
-                "console.log('General Error.');",
-                "console.log(err);",
-                "response.send(event, context, response.FAILED);",
-                "}",
+                    "try {",
+                        "var ssm = new AWS.SSM();",
+                        "if(event.RequestType == 'Delete') {",                            
+                            "response.send(event, context, response.SUCCESS); //do nothing and send success by default",
+                        "}",
+                        "var params = {",
+                            "Name: event.ResourceProperties.Name,",
+                            "Type: 'SecureString',",
+                            "Value: event.ResourceProperties.Value,",
+                            "KeyId: event.ResourceProperties.KeyId,",
+                            "Overwrite: true",
+                        "};",
+                        "ssm.putParameter(params, function(err, data) {",
+                            "if (err){",
+                                "console.log(err, err.stack); // an error occurred",
+                                "response.send(event, context, response.FAILED);",
+                            "}",
+                            "else{",
+                                "console.log(data);           // successful response",
+                                "response.send(event, context, response.SUCCESS);",
+                            "}",
+                        "});",
+                    "}",
+                    "catch (err) {",
+                        "console.log('General Error.');",
+                        "console.log(err);",
+                        "response.send(event, context, response.FAILED);",
+                    "}",
                 "};"
               ]
             ]
@@ -1101,7 +1101,7 @@
         "Comment": "IAM Policy attached to the ELBLogLambdaRole."
       },
       "Properties": {
-        "PolicyName": "ELBLogLambdaRole",
+        "PolicyName": "ELBLogLambdaRolePolicy",
         "PolicyDocument": {
           "Statement": [
             {
@@ -1147,7 +1147,7 @@
       "Properties": {        
         "FunctionName": {"Fn::Sub":"${AWS::StackName}-ELBLogsToCWLambda"},
         "Description": "This code will move your ELB logs from S3 to CloudWatch. It is compressed, so quite hard to read. Original: github.com/awslabs/cloudwatch-logs-centralize-logs",
-        "Role": { "Fn::GetAtt" : ["LambdaRole", "Arn"] },
+        "Role": { "Fn::GetAtt" : ["ELBLogLambdaRole", "Arn"] },
         "Handler": "index.handler",
         "Code": {
           "ZipFile": {
