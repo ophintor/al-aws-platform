@@ -625,6 +625,7 @@
       "Type": "AWS::Lambda::Function",
       "Properties": {
         "Handler": "index.lambda_handler",
+        "FunctionName": {"Fn::Sub":"${AWS::StackName}-ParameterStoreLambda"},
         "Role": {
           "Fn::GetAtt": [
             "LambdaRole",
