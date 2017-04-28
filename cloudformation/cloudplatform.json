@@ -1256,7 +1256,7 @@
         "LogGroupName": {
           "Ref": "AWS::StackName"
         },
-        "RetentionInDays": 1
+        "RetentionInDays": 7
       }
     },
     "EC2InstanceChangesMetricFilter": {
