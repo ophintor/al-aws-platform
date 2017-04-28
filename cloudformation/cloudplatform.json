@@ -297,7 +297,7 @@
         {
           "Ref": "UseHTTPS"
         },
-        "Disable"
+        "Enable"
       ]
     }
   },
@@ -1001,8 +1001,43 @@
       },
       "Condition": "cEnableHTTPS"
     },
+    "ELBLogsS3StoreLocation": {
+      "Type": "AWS::S3::Bucket",
+      "DependsOn": ["ELBLogsToCWLambda", "LambdaInvokePermission"],
+      "DeletionPolicy" : "Retain",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "${AWS::StackName}-elb-logs"
+        },
+        "NotificationConfiguration": {
+          "LambdaConfigurations": [ {
+            "Function": { "Fn::GetAtt" : ["ELBLogsToCWLambda", "Arn"] },
+            "Event": "s3:ObjectCreated:*"
+          } ]
+        }
+      }
+    },
+    "ELBLogsS3StoreLocationPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Properties": {
+        "Bucket": {
+          "Ref": "ELBLogsS3StoreLocation"
+        },
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": [ "s3:*" ],
+              "Resource": [ { "Fn::Sub": "arn:aws:s3:::${AWS::StackName}-elb-logs/*" } ],
+              "Principal": "*"
+            }
+          ]
+        }
+      }
+    },
     "ApplicationLoadBalancer": {
       "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+      "DependsOn": "ELBLogsS3StoreLocation",
       "Properties": {
         "Name": {
           "Fn::Sub": "${AWS::StackName}-loadbalancer"
@@ -1020,7 +1055,96 @@
           {
             "Ref": "SecurityGroup"
           }
+        ],
+        "LoadBalancerAttributes": [
+          { "Key": "access_logs.s3.enabled", "Value": "true" },
+          { "Key": "access_logs.s3.bucket", "Value": { "Fn::Sub": "${AWS::StackName}-elb-logs"} }
         ]
+      }
+    },
+    "ELBLogLambdaRole": {
+      "Type": "AWS::IAM::Role",
+      "Metadata": {
+        "Comment": "ELBLogLambdaRole allows Lambda to read from S3 and write to CloudWatch."
+      },
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": [
+                  "lambda.amazonaws.com"
+                ]
+              },
+              "Action": [
+                "sts:AssumeRole"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "ELBLogLambdaRolePolicies": {
+      "Type": "AWS::IAM::Policy",
+      "Metadata": {
+        "Comment": "IAM Policy attached to the ELBLogLambdaRole."
+      },
+      "Properties": {
+        "PolicyName": "ELBLogLambdaRole",
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": [
+                "logs:CreateLogStream",
+                "logs:PutLogEvents"
+              ],
+              "Resource": {
+                "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${AWS::StackName}:log-stream:ELB"
+              }
+            },
+            {
+              "Effect": "Allow",
+              "Action": [
+                "s3:GetObject"
+              ],
+              "Resource": {
+                "Fn::Sub": "arn:aws:s3:::${AWS::StackName}-elb-logs/*"
+              }
+            }
+          ]
+        },
+        "Roles": [
+          {
+            "Ref": "ELBLogLambdaRole"
+          }
+        ]
+      }
+    },
+    "LambdaInvokePermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName" : { "Fn::GetAtt" : ["ELBLogsToCWLambda", "Arn"] },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "s3.amazonaws.com",
+        "SourceAccount": { "Ref" : "AWS::AccountId" }
+      }
+    },
+    "ELBLogsToCWLambda": {
+      "Type": "AWS::Lambda::Function",
+      "DependsOn": "ELBLogLambdaRolePolicies",
+      "Properties": {
+        "Handler": "index.handler",
+        "Role": { "Fn::GetAtt" : ["LambdaRole", "Arn"] },
+        "Description": "This code will move your ELB logs from S3 to CloudWatch. It is compressed, so quite hard to read. Original: github.com/awslabs/cloudwatch-logs-centralize-logs",
+        "Code": {
+          "ZipFile": {
+            "Fn::Sub": "'use strict';const aws=require('aws-sdk');var zlib=require('zlib');const s3=new aws.S3({apiVersion:'2006-03-01'});const cloudWatchLogs=new aws.CloudWatchLogs({apiVersion:'2014-03-28'});const readline=require('readline');const stream=require('stream');const logGroupName='${AWS::StackName}';const logStreamName='ELB';exports.handler=(event,context,callback)=>{console.log('S3 object is:',event.Records[0].s3);const bucket=event.Records[0].s3.bucket.name;console.log('Name of S3 bucket is:',bucket);const key=decodeURIComponent(event.Records[0].s3.object.key.replace(/\\+/g,' '));const params={Bucket:bucket,Key:key,};s3.getObject(params,(err,data)=>{if(err){console.log(err);const message=`Error getting object ${!key}from bucket ${!bucket}.Make sure they exist and your bucket is in the same region as this function.`;console.log(message);callback(message)}else{zlib.gunzip(data.Body,function(a,b){if(a){console.log('Error uncompressing data',a);return}var c=b.toString('ascii');manageLogGroups(c)});callback(null,data.ContentType)}});function manageLogGroups(c){var d={logGroupNamePrefix:logGroupName};cloudWatchLogs.describeLogGroups(d,function(a,b){if(a){console.log('Error while describing log group:',a);createLogGroup(c)}else{if(!b.logGroups[0]){console.log('Need to  create log group:',b);createLogGroup(c)}else{console.log('Success while describing log group:',b);manageLogStreams(c)}}})}function createLogGroup(c){var d={logGroupName:logGroupName};cloudWatchLogs.createLogGroup(d,function(a,b){if(a){console.log('error while creating log group: ',a,a.stack);return}else{console.log('Success in creating log group: ',logGroupName);manageLogStreams(c)}})}function manageLogStreams(c){var d={logGroupName:logGroupName,logStreamNamePrefix:logStreamName};cloudWatchLogs.describeLogStreams(d,function(a,b){if(a){console.log('Error during describe log streams:',a);createLogStream(c)}else{if(!b.logStreams[0]){console.log('Need to  create log stream:',b);createLogStream(c)}else{console.log('Log Stream already defined:',logStreamName);putLogEvents(b.logStreams[0].uploadSequenceToken,c)}}})}function createLogStream(c){var d={logGroupName:logGroupName,logStreamName:logStreamName};cloudWatchLogs.createLogStream(d,function(a,b){if(a){console.log('error while creating log stream: ',a,a.stack);return}else{console.log('Success in creating log stream: ',logStreamName);putLogEvents(null,c)}})}function putLogEvents(a,b){const MAX_BATCH_SIZE=1048576;const MAX_BATCH_COUNT=10000;const LOG_EVENT_OVERHEAD=26;var c=[];var d=[];var e=0;var f=new stream.PassThrough();f.end(b);var g=readline.createInterface({input:f});var h=0;g.on('line',(line)=>{++h;var i=line.split(' ',2)[1];var j=Date.parse(i);var k=line.length+LOG_EVENT_OVERHEAD;e+=k;if(e>=MAX_BATCH_SIZE||d.length>=MAX_BATCH_COUNT){c.push(d);d=[];e=k}d.push({message:line,timestamp:j})});g.on('close',()=>{c.push(d);sendBatches(a,c)})}function sendBatches(e,f){var g=0;var h=0;function sendNextBatch(a,b){if(a){console.log('Error sending batch: ',a,a.stack);return}else{var c=f.shift();if(c){++h;g+=c.length;sendBatch(b,c,sendNextBatch)}else{var d=`Successfully put ${!g}events in ${!h}f`;console.log(d);callback(null,d)}}}sendNextBatch(null,e)}function sendBatch(c,d,e){var f={logEvents:d,logGroupName:logGroupName,logStreamName:logStreamName};if(c){f['sequenceToken']=c}f.logEvents.sort(function(a,b){if(a.timestamp>b.timestamp){return 1}if(a.timestamp<b.timestamp){return-1}return 0});cloudWatchLogs.putLogEvents(f,function(a,b){if(a){console.log('Error during put log events: ',a,a.stack);e(a,null)}else{console.log(`Success in putting ${!f.logEvents.length}events`);e(null,b.nextSequenceToken)}})}};"
+          }
+        },
+        "Runtime": "nodejs4.3"
       }
     },
     "ApplicationLoadBalancerTargetGroup": {
