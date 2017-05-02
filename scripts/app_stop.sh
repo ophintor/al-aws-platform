@@ -2,8 +2,8 @@
 
 set -xe
 
-for pid in `pidof node` ; do
-    kill -9 $pid
+for pid in $(pidof node) ; do
+    kill -9 "${pid}"
 done
 
 echo "[WebApp] App stoped"
