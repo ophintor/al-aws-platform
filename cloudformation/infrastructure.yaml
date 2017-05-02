@@ -489,7 +489,7 @@ Resources:
   #####################################################################################
   # Start of ECS
   #####################################################################################
-  ContainterCluster:
+  ContainerCluster:
     Type: "AWS::ECS::Cluster"
     Properties:
       ClusterName: !Sub "${AWS::StackName}-cluster"
@@ -526,7 +526,7 @@ Resources:
       UserData:
         Fn::Base64: !Sub |
           #!/bin/bash -xe
-          echo ECS_CLUSTER=${ContainterCluster} >> /etc/ecs/ecs.config
+          echo ECS_CLUSTER=${ContainerCluster} >> /etc/ecs/ecs.config
           yum install -y aws-cfn-bootstrap
           /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource ECSAutoScalingGroup --region ${AWS::Region}
   EcsSecurityGroup:
@@ -1190,7 +1190,7 @@ Resources:
     - MyAppBuildDockerImage
     - MyAppDeployApplication
     - MyAppDeployApplicationmentGroup
-    - ContainterCluster
+    - ContainerCluster
     - ECSTGMyApp
     - ECSServiceRole
     - DBInstance
@@ -1274,7 +1274,7 @@ Resources:
             ParameterOverrides:  !Sub |
               {
                 "ParamsPrefix": "${AWS::StackName}",
-                "Cluster": "${ContainterCluster}",
+                "Cluster": "${ContainerCluster}",
                 "CloudwatchLogsGroup": "${ECSTasksLogsGroup}",
                 "DockerImageTag": { "Fn::GetParam" : [ "DockerImageOutput", "build.json", "tag" ] },
                 "DockerImage": "${AWS::StackName}-myapp",
