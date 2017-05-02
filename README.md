@@ -51,7 +51,14 @@ git push codecommit master
 
 ### Cleanup
 
-To delete all the resources from the demo you should execute this steps sequentially:
+You can use a *cleanup* script from *utils/* folder to cleanup the resources created by a stack.
+
+```
+STACK_NAME=<stack name> REGION=<region> ./utils/cleanup.sh
+```
+
+
+To delete all the resources by hand from the demo you should execute this steps sequentially:
 
  1. Delete the [stack name]-Service stack. [AWS console](https://eu-west-1.console.aws.amazon.com/cloudformation/home?region=eu-west-1)
 ```
@@ -67,5 +74,13 @@ aws cloudformation wait stack-delete-complete --region "eu-west-1" --stack-name 
 ```
  4. Delete the `<stack name>`. [AWS console](https://eu-west-1.console.aws.amazon.com/cloudformation/home?region=eu-west-1)
 ```
-aws cloudformation delete-stack --stack-name <stack name>
+aws cloudformation delete-stack --region "eu-west-1" --stack-name <stack name>
+```
+ 5. Delete the ACM Certificates. [AWS console](https://eu-west-1.console.aws.amazon.com/acm/home?region=eu-west-1)
+```
+aws acm delete-certificate --region "eu-west-1" --certificate-arn <certificate ARN>
+```
+ 6. Delete the Log Groups from CloudWatch. [AWS console](https://eu-west-1.console.aws.amazon.com/cloudwatch/home?region=eu-west-1#logs:)
+```
+aws logs delete-log-group --region "eu-west-1" --log-group-name <group name>
 ```
