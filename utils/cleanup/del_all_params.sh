@@ -2,8 +2,9 @@
 
 set -xu
 
-PARAMS=$(aws --region "${region}" ssm describe-parameters --query 'Parameters[*].{Name:Name}' --output text)
+REGION="${REGION:-eu-west-1}"
+
+PARAMS=$(aws --region "${REGION}" ssm describe-parameters --query 'Parameters[*].{Name:Name}' --output text)
 for param in $PARAMS ; do
-	value=$(aws --region "${region}" ssm delete-parameter --name "${param}")
-	[ "$?" -eq "0" ] || continue	
+	aws --region "${REGION}" ssm delete-parameter --name "${param}"
 done

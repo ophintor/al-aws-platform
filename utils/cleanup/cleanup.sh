@@ -31,7 +31,7 @@ aws cloudformation wait stack-delete-complete \
 	--region "${REGION}" \
 	--stack-name "${STACK_NAME}"
 
-# Cleanup ACM Certificates
+# Cleanup ACM Certificates
 CERT_ARN=$(\
 	aws acm list-certificates \
 		--region "${REGION}" \
@@ -45,7 +45,7 @@ for arn in ${CERT_ARN} ; do
 		--certificate-arn "${arn}"
 done
 
-# Cleanup Los Groups
+# Cleanup Los Groups
 declare -a LOG_GROUPS=(
 	"/aws/codebuild/${STACK_NAME}-myapp"
 	"/aws/codebuild/${STACK_NAME}-myapp-image"
@@ -62,7 +62,7 @@ for groupName in "${LOG_GROUPS[@]}" ; do
 		--log-group-name "${groupName}"
 done
 
-# Cleanup CloudTrail S3 objects
+# Cleanup CloudTrail S3 objects
 CT_BUCKET=$(aws s3api list-buckets \
 	--region "${REGION}" \
 	--query "Buckets[?starts_with(Name, \`${STACK_NAME}-trailbucket\`)].Name" \
@@ -75,9 +75,9 @@ if [ -n "${CT_BUCKET}" ]; then
 		--force
 fi
 
-# Cleanup Parameter Store
-# NOTE: parameter "namespace" are splited using ',' (dot) and so we use it to
-# delimit the <STACK_NAME>
+# Cleanup Parameter Store
+# NOTE: parameter "namespace" are splited using ',' (dot) and so we use it to
+# delimit the <STACK_NAME>
 SSM_PARAMS=$(aws ssm describe-parameters \
 	--region "${REGION}" \
 	--query "Parameters[?starts_with(Name, \`${STACK_NAME}.\`)].{Name:Name}" \

@@ -24,10 +24,10 @@ aws s3 cp \
 	"${CF_TEMPLATE}" \
 	"${CF_S3_OBJECT}"
 
-# # Wait if any update running
-# aws cloudformation wait stack-update-complete \
-# 	--region "${REGION}" \
-# 	--stack-name "${STACK_NAME}" || true # We don't care here
+# # Wait if any update running
+# aws cloudformation wait stack-update-complete \
+# 	--region "${REGION}" \
+# 	--stack-name "${STACK_NAME}" || true # We don't care here
 
 STACK_STATUS=$(aws cloudformation describe-stacks \
 	--region "${REGION}" \
@@ -36,14 +36,14 @@ STACK_STATUS=$(aws cloudformation describe-stacks \
 )
 
 case "${STACK_STATUS}" in
-	# Supported states
-	# CREATE_IN_PROGRESS | CREATE_FAILED | CREATE_COMPLETE | ROLLBACK_IN_PROGRESS | ROLLBACK_FAILED | ROLLBACK_COMPLETE |
-	# DELETE_IN_PROGRESS | DELETE_FAILED | DELETE_COMPLETE | UPDATE_IN_PROGRESS | UPDATE_COMPLETE_CLEANUP_IN_PROGRESS |
-	# UPDATE_COMPLETE | UPDATE_ROLLBACK_IN_PROGRESS | UPDATE_ROLLBACK_FAILED |
-	# UPDATE_ROLLBACK_COMPLETE_CLEANUP_IN_PROGRESS | UPDATE_ROLLBACK_COMPLETE | REVIEW_IN_PROGRESS
+	# Supported states
+	# CREATE_IN_PROGRESS | CREATE_FAILED | CREATE_COMPLETE | ROLLBACK_IN_PROGRESS | ROLLBACK_FAILED | ROLLBACK_COMPLETE |
+	# DELETE_IN_PROGRESS | DELETE_FAILED | DELETE_COMPLETE | UPDATE_IN_PROGRESS | UPDATE_COMPLETE_CLEANUP_IN_PROGRESS |
+	# UPDATE_COMPLETE | UPDATE_ROLLBACK_IN_PROGRESS | UPDATE_ROLLBACK_FAILED |
+	# UPDATE_ROLLBACK_COMPLETE_CLEANUP_IN_PROGRESS | UPDATE_ROLLBACK_COMPLETE | REVIEW_IN_PROGRESS
 
-	# "UPDATE_IN_PROGRESS")
-	# ;;
+	# "UPDATE_IN_PROGRESS")
+	# ;;
 	"CREATE_COMPLETE")
 		declare -r action="update-stack"
 		declare -r wait_action="stack-update-complete"
@@ -74,20 +74,20 @@ aws cloudformation wait ${wait_action} \
 	--region "${REGION}" \
 	--stack-name "${STACK_NAME}"
 
-# Wait input from user
+# Wait input from user
 read -s -n 1 -r -p "Press [Enter] key to push code..." ; echo
 
-# Upload code to codecommit
-GIT_REMOTE=$(aws --region ${REGION} cloudformation describe-stacks --stack-name ${STACK_NAME} --query "Stacks[0].Outputs[?OutputKey=='RepoURL'].OutputValue"  --output text)
+# Upload code to codecommit
+GIT_REMOTE=$(aws --region "${REGION}" cloudformation describe-stacks --stack-name "${STACK_NAME}" --query "Stacks[0].Outputs[?OutputKey=='RepoURL'].OutputValue"  --output text)
 
 # Close the eyes and delete, just to work multiple times
 git remote rm codecommit &>/dev/null || true
 
-git remote add codecommit ${GIT_REMOTE}
-# Push the current commit to codecommit master branch
+git remote add codecommit "${GIT_REMOTE}"
+# Push the current commit to codecommit master branch
 git push codecommit HEAD:master
 
-# Dump outputs from CF Stack
+# Dump outputs from CF Stack
 aws cloudformation describe-stacks \
 	--region "${REGION}" \
 	--stack-name pm \

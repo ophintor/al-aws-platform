@@ -1,0 +1,16 @@
+---
+
+image: ubuntu:17.04
+
+options:
+  docker: true
+
+pipelines:
+  default:
+    - step:
+        script:
+          - apt-get update
+          - apt-get install -y shellcheck
+          - find . -name "*.sh" | xargs shellcheck
+
+...
