@@ -181,7 +181,6 @@ Resources:
     Properties:
       Tags:
       - Key: Name
-        Value: PMInternetGateway
         Value: !Sub "${AWS::StackName}-InternetGateway"
   AttachInternetGateway:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -1358,4 +1357,87 @@ Resources:
     Condition: cEnableDNS
   #####################################################################################
   # End of Public DNS
+  #####################################################################################
+  #####################################################################################
+  # Start of CloudTrail to CloudWatch
+  #####################################################################################
+## Mapping Log groups to the Lambda that ships them to Elasticsearch
+  Trail:
+    DependsOn: TrailBucketPolicy
+    Properties:
+      CloudWatchLogsLogGroupArn: !GetAtt TrailLogGroup.Arn
+      CloudWatchLogsRoleArn: !GetAtt TrailLogGroupRole.Arn
+      IncludeGlobalServiceEvents: true
+      IsLogging: true
+      IsMultiRegionTrail: true
+      S3BucketName:
+        Ref: TrailBucket
+    Type: AWS::CloudTrail::Trail
+  TrailBucket:
+    DeletionPolicy: Retain
+    Properties: {}
+    Type: AWS::S3::Bucket
+# This is ugly yaml but it stopped working when cleaned up, and is style used
+# in AWS docs :(
+  TrailBucketPolicy:
+    Properties:
+      Bucket:
+        Ref: TrailBucket
+      PolicyDocument:
+        Statement:
+        - Action: s3:GetBucketAcl
+          Effect: Allow
+          Principal:
+            Service: cloudtrail.amazonaws.com
+          Resource:
+            Fn::Join:
+            - ''
+            - - 'arn:aws:s3:::'
+              - Ref: TrailBucket
+        - Action: s3:PutObject
+          Condition:
+            StringEquals:
+              s3:x-amz-acl: bucket-owner-full-control
+          Effect: Allow
+          Principal:
+            Service: cloudtrail.amazonaws.com
+          Resource:
+            Fn::Join:
+            - ''
+            - - 'arn:aws:s3:::'
+              - Ref: TrailBucket
+              - /AWSLogs/
+              - Ref: AWS::AccountId
+              - /*
+        Version: '2012-10-17'
+    Type: AWS::S3::BucketPolicy
+  TrailLogGroup:
+    Properties:
+      LogGroupName: !Sub "/aws/cloudtrail/${AWS::StackName}"
+      RetentionInDays: '7'
+    Type: AWS::Logs::LogGroup
+  TrailLogGroupRole:
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+        - Action: sts:AssumeRole
+          Effect: Allow
+          Principal:
+            Service: cloudtrail.amazonaws.com
+        Version: '2012-10-17'
+      Policies:
+      - PolicyDocument:
+          Statement:
+          - Action: logs:CreateLogStream
+            Effect: Allow
+            Resource: !GetAtt TrailLogGroup.Arn
+          - Action:
+            - logs:PutLogEvents
+            Effect: Allow
+            Resource: !GetAtt TrailLogGroup.Arn
+          Version: '2012-10-17'
+        PolicyName: cloudtrail-policy
+    Type: AWS::IAM::Role
+  #####################################################################################
+  # End of CloudTrail to CloudWatch
   #####################################################################################
