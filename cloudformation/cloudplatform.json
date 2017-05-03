@@ -651,7 +651,7 @@
                 "exports.lambda_handler = function (event, context) {",
                     "try {",
                         "var ssm = new AWS.SSM();",
-                        "if(event.RequestType == 'Delete') {",                            
+                        "if(event.RequestType == 'Delete') {",
                             "response.send(event, context, response.SUCCESS); //do nothing and send success by default",
                         "}",
                         "var params = {",
@@ -1107,12 +1107,9 @@
             {
               "Effect": "Allow",
               "Action": [
-                "logs:CreateLogStream",
-                "logs:PutLogEvents"
+                "logs:*"
               ],
-              "Resource": {
-                "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${AWS::StackName}:log-stream:ELB"
-              }
+              "Resource": "*"
             },
             {
               "Effect": "Allow",
@@ -1144,7 +1141,7 @@
     "ELBLogsToCWLambda": {
       "Type": "AWS::Lambda::Function",
       "DependsOn": "ELBLogLambdaRolePolicies",
-      "Properties": {        
+      "Properties": {
         "FunctionName": {"Fn::Sub":"${AWS::StackName}-ELBLogsToCWLambda"},
         "Description": "This code will move your ELB logs from S3 to CloudWatch. It is compressed, so quite hard to read. Original: github.com/awslabs/cloudwatch-logs-centralize-logs",
         "Role": { "Fn::GetAtt" : ["ELBLogLambdaRole", "Arn"] },
