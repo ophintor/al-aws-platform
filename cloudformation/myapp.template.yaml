@@ -37,9 +37,9 @@ Resources:
       DesiredCount: 2
       TaskDefinition: !Ref MyAppDefinition
       LoadBalancers:
-      - ContainerName: myapp
-        ContainerPort: 3000
-        TargetGroupArn: !Ref ECSTGMyApp
+        - ContainerName: myapp
+          ContainerPort: 3000
+          TargetGroupArn: !Ref ECSTGMyApp
       Role: !Ref ECSServiceRole
   MyAppDefinition:
     Type: AWS::ECS::TaskDefinition
@@ -47,26 +47,26 @@ Resources:
       Family: !Sub "${AWS::StackName}-myapp"
       TaskRoleArn: !Ref TaskRole
       ContainerDefinitions:
-      - Name: myapp
-        Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${DockerImage}:${DockerImageTag}
-        Memory: '300'
-        Environment:
-        - Name: SSM_DB_USERNAME
-          Value: !Sub "${ParamsPrefix}.db.username"
-        - Name: SSM_DB_PASSWORD
-          Value: !Sub "${ParamsPrefix}.db.password"
-        - Name: SSM_DB_NAME
-          Value: !Sub "${ParamsPrefix}.db.name"
-        - Name: DB_CONNECTIONSTRING
-          Value: !Ref DBAddress
-        PortMappings:
-        - ContainerPort: 3000
-        LogConfiguration:
-          LogDriver: awslogs
-          Options:
-            awslogs-group: !Ref 'CloudwatchLogsGroup'
-            awslogs-region: !Ref 'AWS::Region'
-            awslogs-stream-prefix: myapp
+        - Name: myapp
+          Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${DockerImage}:${DockerImageTag}
+          Memory: '300'
+          Environment:
+            - Name: SSM_DB_USERNAME
+              Value: !Sub "${ParamsPrefix}.db.username"
+            - Name: SSM_DB_PASSWORD
+              Value: !Sub "${ParamsPrefix}.db.password"
+            - Name: SSM_DB_NAME
+              Value: !Sub "${ParamsPrefix}.db.name"
+            - Name: DB_CONNECTIONSTRING
+              Value: !Ref DBAddress
+          PortMappings:
+            - ContainerPort: 3000
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref 'CloudwatchLogsGroup'
+              awslogs-region: !Ref 'AWS::Region'
+              awslogs-stream-prefix: myapp
   #####################################################################################
   # End of ECS
   #####################################################################################
