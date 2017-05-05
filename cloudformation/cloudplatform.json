@@ -1265,6 +1265,213 @@
         "RetentionInDays": 7
       }
     },
+    "LogStoreS3Location": {
+      "Type": "AWS::S3::Bucket",
+      "DeletionPolicy" : "Retain",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "${AWS::StackName}-logs"
+        },
+        "LifecycleConfiguration":{
+          "Rules":[
+            {              
+              "ExpirationInDays" : 90,
+              "Id" : {
+                "Fn::Sub": "${AWS::StackName}-LogMigrationLifecycleRule"
+              },              
+              "Status" : "Enabled",              
+              "Transitions" : [ 
+                {
+                  "StorageClass" : "STANDARD_IA",                  
+                  "TransitionInDays" : 30
+                },
+                {
+                  "StorageClass" : "GLACIER",
+                  "TransitionInDays" : 60
+                }                
+               ]
+            }
+          ]
+        }
+      }
+    },
+    "LogStoreS3LocationPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Properties": {
+        "Bucket": {
+          "Ref": "LogStoreS3Location"
+        },
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": {"Fn::Sub":"logs.${AWS::Region}.amazonaws.com"}
+              },
+              "Action": "s3:GetBucketAcl",
+              "Resource": [
+                {
+                  "Fn::Sub": "arn:aws:s3:::${AWS::StackName}-logs"
+                }
+              ]
+            },
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": {"Fn::Sub":"logs.${AWS::Region}.amazonaws.com"}
+              },
+              "Action": "s3:PutObject",
+              "Resource":[
+                {
+                  "Fn::Sub": "arn:aws:s3:::${AWS::StackName}-logs/*"
+                }
+              ],
+              "Condition": {
+                "StringEquals": {
+                  "s3:x-amz-acl": "bucket-owner-full-control"
+                }
+              }
+            }                        
+          ]
+        }
+      }
+    },
+    "LogMigrationLambdaRole": {
+      "Type": "AWS::IAM::Role",
+      "Metadata": {
+        "Comment": "Lambda Role to allow log migration from cloudwatch logs to S3"
+      },
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+        "Version": "2012-10-17",
+        "Statement":
+          [{
+            "Effect": "Allow",
+            "Principal": { "Service": [ "lambda.amazonaws.com" ] },
+            "Action": [ "sts:AssumeRole"]
+          }]
+        }
+      }
+    },
+    "LogMigrationLambdaRolePolicies": {
+      "Type": "AWS::IAM::Policy",
+      "Metadata": {
+        "Comment": "IAM Policy attached to Role for the Log Migration Lambda. "
+      },
+      "Properties": {
+        "PolicyName": "LogMigrationLambdaRolePolicy",
+        "PolicyDocument": {
+          "Statement":[
+            {
+              "Effect":"Allow",
+              "Action": [
+                  "logs:CreateExportTask"
+              ],
+              "Resource":
+              [
+                {
+                  "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${AWS::StackName}:*"
+                }
+              ]
+            },
+            {
+              "Effect": "Allow",
+              "Action": [
+                "logs:CreateLogStream",
+                "logs:PutLogEvents"
+              ],
+              "Resource": { "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}-LogMigrationLambda:*" }
+            },            
+            {
+              "Effect":"Allow",
+              "Action": [
+                  "s3:PutObject"
+              ],
+              "Resource":[
+                {
+                  "Fn::Sub": "arn:aws:s3:::${AWS::StackName}-logs/*"
+                }
+              ]
+            }
+          ]
+        },
+        "Roles": [
+          {
+            "Ref": "LogMigrationLambdaRole"
+          }
+        ]
+      }
+    },
+    "LogMigrationScheduledRule": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "Description": "ScheduledRule",
+        "ScheduleExpression": "rate(2 minutes)",
+        "State": "ENABLED",
+        "Targets": [{
+          "Arn": { "Fn::GetAtt": ["LogMigrationLambda", "Arn"] },
+          "Id": "TargetFunctionV1"
+        }]
+      }
+    },
+    "PermissionForEventsToInvokeLambda": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": { "Ref": "LogMigrationLambda" },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "events.amazonaws.com",
+        "SourceArn": { "Fn::GetAtt": ["LogMigrationScheduledRule", "Arn"] }
+      }
+    },
+    "LogMigrationLambdaLogGroup":{
+      "Type" : "AWS::Logs::LogGroup",
+      "DeletionPolicy" : "Delete",
+      "Properties" : {
+        "LogGroupName" :{ "Fn::Sub": "/aws/lambda/${AWS::StackName}-LogMigrationLambda" },
+        "RetentionInDays" : 1
+      }
+    },    
+    "LogMigrationLambda" : {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "Handler": "index.lambda_handler",
+        "FunctionName": {"Fn::Sub":"${AWS::StackName}-LogMigrationLambda"},
+        "Role": { "Fn::GetAtt" : ["LogMigrationLambdaRole", "Arn"] },
+        "Code": {
+          "ZipFile": { "Fn::Join": ["", [
+          "var AWS = require('aws-sdk');\n",
+          "exports.lambda_handler = function (event, context) {\n",
+            "try {\n",
+              "var cloudwatchlogs = new AWS.CloudWatchLogs();\n",
+              "var now = new Date();\n",
+              "var params = {\n",
+                "destination:'",{"Fn::Sub": "${AWS::StackName}-logs"},"',\n",
+                "from: now.getTime() - 3600000,\n",
+                "logGroupName:'",{"Fn::Sub": "${AWS::StackName}"},"',\n",
+                "to: now.getTime(),\n",
+                "taskName: 'LogTask_'+now.getTime().toString()\n",
+              "};\n",
+              "console.log('Log Migrate Action Called with Params : ' +JSON.stringify(params));\n",
+              "cloudwatchlogs.createExportTask(params, function(err, data) {\n",
+                  "if (err){\n",
+                      "console.log('Error : '+ err, err.stack); // an error occurred\n",                              
+                  "}\n",
+                  "else{\n",
+                      "console.log('Success : ' + data);     // successful response\n",                              
+                  "}\n",
+              "});\n",
+            "}\n",
+            "catch (err) {\n",
+                "console.log('General Error.');\n",
+                "console.log(err);\n",                      
+            "}\n",
+          "};"
+          ]]}
+        },
+        "Runtime": "nodejs6.10",
+        "Timeout": "300"
+      }      
+    },                
     "EC2InstanceChangesMetricFilter": {
       "Type": "AWS::Logs::MetricFilter",
       "Properties": {
