@@ -97,7 +97,7 @@
       "ConstraintDescription": "must be a valid email address."
     },
     "UserName": {
-      "Description": "The EC2 tag key that identifies this as a target for deployments.",
+      "Description": "The Username of the User creating the stack. Used to provide IAM permisions.",
       "Type": "String",
       "Default": "xavier.thomas"
     },
