@@ -1138,6 +1138,14 @@
         "SourceAccount": { "Ref" : "AWS::AccountId" }
       }
     },
+    "ELBLogsToCWLambdaLogGroup":{
+      "Type" : "AWS::Logs::LogGroup",
+      "DeletionPolicy" : "Delete",
+      "Properties" : {
+        "LogGroupName" :{ "Fn::Sub": "/aws/lambda/${AWS::StackName}-ELBLogsToCWLambda" },
+        "RetentionInDays" : 1
+      }
+    },    
     "ELBLogsToCWLambda": {
       "Type": "AWS::Lambda::Function",
       "DependsOn": "ELBLogLambdaRolePolicies",
@@ -2447,6 +2455,14 @@
         ]
       }
     },
+    "CodeBuildLogGroup":{
+      "Type" : "AWS::Logs::LogGroup",
+      "DeletionPolicy" : "Delete",
+      "Properties" : {
+        "LogGroupName" :{ "Fn::Sub": "/aws/codebuild/${AWS::StackName}-application" },
+        "RetentionInDays" : 1
+      }
+    },     
     "CodeBuild": {
       "Type": "AWS::CodeBuild::Project",
       "DependsOn": [
