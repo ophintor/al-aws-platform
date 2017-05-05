@@ -815,7 +815,7 @@
               "Fn::GetAZs": ""
             }
           ]
-        },        
+        },
         "Tags": [
           {
             "Key": "Name",
