@@ -1129,7 +1129,7 @@
         ]
       }
     },
-    "LambdaInvokePermission": {
+    "ELBLogLambdaInvokePermission": {
       "Type": "AWS::Lambda::Permission",
       "Properties": {
         "FunctionName" : { "Fn::GetAtt" : ["ELBLogsToCWLambda", "Arn"] },
