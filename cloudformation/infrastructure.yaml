@@ -41,6 +41,16 @@ Mappings:
       Pattern: '[]'
     ECS:
       Pattern: '"Container"'
+  # http://docs.aws.amazon.com/elasticloadbalancing/latest/classic/enable-access-logs.html#enable-access-logs-console
+  AWSELBAccountID:
+    us-east-1:
+      id: 127311923021
+    us-east-2:
+      id: 033677994240
+    us-west-2:
+      id: 797873946194
+    eu-west-1:
+      id: 156460612806
 
 Outputs:
   WebsiteURLCodeDeployLB:
@@ -140,6 +150,13 @@ Parameters:
     Default: c3.large
     Description: WebServer EC2 instance type
     Type: String
+  ELBLogging:
+    Description: Enable/Disable LoadBalancers logging
+    AllowedValues:
+      - Enable
+      - Disable
+    Default: Disable
+    Type: String
   OperatingSystem:
     AllowedValues:
       - Ubuntu16x04
@@ -191,6 +208,7 @@ Conditions:
   cEnableDNS: !Equals [!Ref UseDNS, 'Enable']
   cEnableHTTPS: !Equals [!Ref UseHTTPS, 'Enable']
   cEnableElasticSearchLogs: !Equals [!Ref ElasticsearchLogs, 'Enable']
+  cEnableELBLogging: !Equals [!Ref ELBLogging, 'Enable']
   cEnableSpotInstances: !Equals [!Ref UseSpotInstances, 'Enable']
   cEnableApprovalEmails: !Not [!Equals [!Ref EmailApprovals, '']]
   cEnableSlackApprovals: !Not [!Equals [!Ref SlackApprovalsWebhook, '']]
@@ -552,6 +570,48 @@ Resources:
   # End of RDS
   ####################################################################################
 
+  ####################################################################################
+  # Start of ELB Logging buckets
+  ####################################################################################
+  ELBAccessLogsBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    Condition: cEnableELBLogging
+    Properties:
+      BucketName: !Sub "${AWS::StackName}-elb-logs"
+      LifecycleConfiguration:
+        Rules:
+          - Id: !Sub "${AWS::StackName}-elb-logs-lifecycle"
+            ExpirationInDays: 90
+            Status: "Enabled"
+            Transitions:
+              - StorageClass: "STANDARD_IA"
+                TransitionInDays: 30
+              - StorageClass: "GLACIER"
+                TransitionInDays: 60
+  ELBAccessLogsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Condition: cEnableELBLogging
+    Properties:
+      Bucket: !Ref ELBAccessLogsBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: ELBAccessLogsBucket
+            Effect: Allow
+            Resource:
+              - !Sub "arn:aws:s3:::${ELBAccessLogsBucket}/ECS-ELB/AWSLogs/${AWS::AccountId}/*"
+              - !Sub "arn:aws:s3:::${ELBAccessLogsBucket}/CodeDeploy-ELB/AWSLogs/${AWS::AccountId}/*"
+            Principal:
+              AWS:
+                - !FindInMap [AWSELBAccountID, !Ref 'AWS::Region', id]
+                - !Sub "arn:aws:iam::${AWS::AccountId}:root"
+            Action:
+              - s3:PutObject
+  ####################################################################################
+  # End of ELB Logging buckets
+  ####################################################################################
+
   #####################################################################################
   # Start of ECS
   #####################################################################################
@@ -712,9 +772,17 @@ Resources:
     Properties:
       Name: !Sub ${AWS::StackName}-ECS-LB
       Scheme: internet-facing
-      LoadBalancerAttributes:
-        - Key: idle_timeout.timeout_seconds
-          Value: '30'
+      LoadBalancerAttributes: !If
+        - cEnableELBLogging
+        - - Key: idle_timeout.timeout_seconds
+            Value: '30'
+          - Key: access_logs.s3.enabled
+            Value: True
+          - Key: access_logs.s3.bucket
+            Value: !Ref ELBAccessLogsBucket
+          - Key: access_logs.s3.prefix
+            Value: "ECS-ELB"
+        - !Ref 'AWS::NoValue'
       Subnets: [!Ref publicSubnet01, !Ref publicSubnet02]
       SecurityGroups: [!Ref ECSALBSecurityGroup]
   ECSTGMyApp:
@@ -1232,6 +1300,21 @@ Resources:
       LoadBalancerAttributes:
         - Key: idle_timeout.timeout_seconds
           Value: '30'
+        - !If
+          - cEnableELBLogging
+          - Key: access_logs.s3.enabled
+            Value: True
+          - !Ref 'AWS::NoValue'
+        - !If
+          - cEnableELBLogging
+          - Key: access_logs.s3.bucket
+            Value: !Ref ELBAccessLogsBucket
+          - !Ref 'AWS::NoValue'
+        - !If
+          - cEnableELBLogging
+          - Key: access_logs.s3.prefix
+            Value: "CodeDeploy-ELB"
+          - !Ref 'AWS::NoValue'
       Subnets: [!Ref publicSubnet01, !Ref publicSubnet02]
       SecurityGroups: [!Ref CodeDeployALBSecurityGroup]
   CodeDeployTG:
