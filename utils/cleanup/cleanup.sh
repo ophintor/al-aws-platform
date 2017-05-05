@@ -5,11 +5,6 @@ set -xu
 STACK_NAME="${STACK_NAME:-presentation}"
 REGION="${REGION:-eu-west-1}"
 
-aws s3 rb \
-	--region "${REGION}" \
-	"s3://${STACK_NAME}-codepipeline-artifacts" \
-	--force
-
 aws ecr delete-repository \
 	--region "${REGION}" \
 	--repository-name "${STACK_NAME}-myapp" \
@@ -63,17 +58,23 @@ for groupName in "${LOG_GROUPS[@]}" ; do
 done
 
 # Cleanup CloudTrail S3 objects
-CT_BUCKET=$(aws s3api list-buckets \
-	--region "${REGION}" \
-	--query "Buckets[?starts_with(Name, \`${STACK_NAME}-trailbucket\`)].Name" \
-	--output text
+declare -a S3_BUCKETS=(
+	"${STACK_NAME}-codepipeline-artifacts"
 )
-if [ -n "${CT_BUCKET}" ]; then
+
+S3_BUCKETS+=(
+	$(aws s3api list-buckets \
+		--region "${REGION}" \
+		--query "Buckets[?starts_with(Name, \`${STACK_NAME}-trailbucket\`)].Name" \
+		--output text
+	)
+)
+for bucketName in "${S3_BUCKETS[@]}"; do
 	aws s3 rb \
 		--region "${REGION}" \
-		"s3://" \
+		"s3://${bucketName}" \
 		--force
-fi
+done
 
 # Cleanup Parameter Store
 # NOTE: parameter "namespace" are splited using ',' (dot) and so we use it to

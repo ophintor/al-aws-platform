@@ -1144,6 +1144,7 @@ Resources:
                 Resource: "*"
   ArtifactStoreS3Location:
     Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
     Properties:
       BucketName: !Sub ${AWS::StackName}-codepipeline-artifacts
   ArtifactStoreS3LocationPolicy:
