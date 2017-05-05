@@ -1012,7 +1012,7 @@
     },
     "ELBLogsS3StoreLocation": {
       "Type": "AWS::S3::Bucket",
-      "DependsOn": ["ELBLogsToCWLambda", "LambdaInvokePermission"],
+      "DependsOn": ["ELBLogsToCWLambda", "ELBLogLambdaInvokePermission"],
       "DeletionPolicy" : "Retain",
       "Properties": {
         "BucketName": {
