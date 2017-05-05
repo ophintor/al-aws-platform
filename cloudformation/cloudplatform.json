@@ -1406,7 +1406,7 @@
       "Type": "AWS::Events::Rule",
       "Properties": {
         "Description": "ScheduledRule",
-        "ScheduleExpression": "rate(2 minutes)",
+        "ScheduleExpression": "rate(59 minutes)",
         "State": "ENABLED",
         "Targets": [{
           "Arn": { "Fn::GetAtt": ["LogMigrationLambda", "Arn"] },
