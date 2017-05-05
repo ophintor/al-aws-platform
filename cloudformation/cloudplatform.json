@@ -241,7 +241,7 @@
         "Enable",
         "Disable"
       ],
-      "Default": "Enable",
+      "Default": "Disable",
       "Type": "String"
     }
   },
