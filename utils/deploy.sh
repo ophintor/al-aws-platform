@@ -88,6 +88,6 @@ git push codecommit HEAD:master
 # Dump outputs from CF Stack
 aws cloudformation describe-stacks \
 	--region "${REGION}" \
-	--stack-name pm \
+	--stack-name "${STACK_NAME}" \
 	--query 'Stacks[0].Outputs' \
 	--output table
