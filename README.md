@@ -28,13 +28,21 @@ You need also to have an AWS account and configure the [AWS CLI](https://aws.ama
 
 ### Launch the stack
 
+You can use a *deploy* script from *utils/* folder to create the stack.
+
+```
+STACK_NAME=<stack name> REGION=<region> ./utils/deploy.sh
+```
+
+#### Manual creation
+
 *Note*: you need to specify your key name on parameters _KeyName_!
 
 ```
 aws cloudformation deploy --region "eu-west-1" --template-file "cloudformation/infrastructure.yaml" --stack-name "test-stack" --capabilities "CAPABILITY_NAMED_IAM" --parameter-overrides KeyName="mykey"
 ```
 
-### Deploy the code to code commit (It will trigger the code pipeline)
+##### Deploy the code to code commit (It will trigger the code pipeline)
 
 First you need to get your git repo URL (from CodeCommit) to push your code. You can go to AWS CodeCommit UI or use the AWS CLI:
 
@@ -57,7 +65,7 @@ You can use a *cleanup* script from *utils/* folder to cleanup the resources cre
 STACK_NAME=<stack name> REGION=<region> ./utils/cleanup.sh
 ```
 
-
+#### Manual delete
 To delete all the resources by hand from the demo you should execute this steps sequentially:
 
  1. Delete the [stack name]-Service stack. [AWS console](https://eu-west-1.console.aws.amazon.com/cloudformation/home?region=eu-west-1)
