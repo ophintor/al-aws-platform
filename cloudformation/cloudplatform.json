@@ -97,7 +97,7 @@
       "ConstraintDescription": "must be a valid email address."
     },
     "UserName": {
-      "Description": "The EC2 tag key that identifies this as a target for deployments.",
+      "Description": "The Username of the User creating the stack. Used to provide IAM permisions.",
       "Type": "String",
       "Default": "xavier.thomas"
     },
@@ -241,7 +241,7 @@
         "Enable",
         "Disable"
       ],
-      "Default": "Enable",
+      "Default": "Disable",
       "Type": "String"
     }
   },
@@ -816,7 +816,6 @@
             }
           ]
         },
-        "MapPublicIpOnLaunch": "true",
         "Tags": [
           {
             "Key": "Name",
@@ -1012,7 +1011,7 @@
     },
     "ELBLogsS3StoreLocation": {
       "Type": "AWS::S3::Bucket",
-      "DependsOn": ["ELBLogsToCWLambda", "LambdaInvokePermission"],
+      "DependsOn": ["ELBLogsToCWLambda", "ELBLogLambdaInvokePermission"],
       "DeletionPolicy" : "Retain",
       "Properties": {
         "BucketName": {
@@ -1129,7 +1128,7 @@
         ]
       }
     },
-    "LambdaInvokePermission": {
+    "ELBLogLambdaInvokePermission": {
       "Type": "AWS::Lambda::Permission",
       "Properties": {
         "FunctionName" : { "Fn::GetAtt" : ["ELBLogsToCWLambda", "Arn"] },
@@ -1138,6 +1137,14 @@
         "SourceAccount": { "Ref" : "AWS::AccountId" }
       }
     },
+    "ELBLogsToCWLambdaLogGroup":{
+      "Type" : "AWS::Logs::LogGroup",
+      "DeletionPolicy" : "Delete",
+      "Properties" : {
+        "LogGroupName" :{ "Fn::Sub": "/aws/lambda/${AWS::StackName}-ELBLogsToCWLambda" },
+        "RetentionInDays" : 1
+      }
+    },    
     "ELBLogsToCWLambda": {
       "Type": "AWS::Lambda::Function",
       "DependsOn": "ELBLogLambdaRolePolicies",
@@ -2447,6 +2454,14 @@
         ]
       }
     },
+    "CodeBuildLogGroup":{
+      "Type" : "AWS::Logs::LogGroup",
+      "DeletionPolicy" : "Delete",
+      "Properties" : {
+        "LogGroupName" :{ "Fn::Sub": "/aws/codebuild/${AWS::StackName}-application" },
+        "RetentionInDays" : 1
+      }
+    },     
     "CodeBuild": {
       "Type": "AWS::CodeBuild::Project",
       "DependsOn": [
