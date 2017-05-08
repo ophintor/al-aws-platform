@@ -108,8 +108,8 @@ Parameters:
     Type: String
 
 Conditions:
-  cEnableDNS: !Equals [!Ref UseDNS, True]
-  cEnableHTTPS: !Equals [!Ref UseHTTPS, True]
+  cEnableDNS: !Equals [!Ref UseDNS, 'Enable']
+  cEnableHTTPS: !Equals [!Ref UseHTTPS, 'Enable']
 
 # Resources documentation
 # http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-template-resource-type-ref.html
