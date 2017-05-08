@@ -23,6 +23,28 @@ Mappings:
       ecs: ami-022b9262
     eu-west-1:
       ecs: ami-a7f2acc1
+  # Elasticsearch
+  ## Applied at the point CloudWatch log is sent to the LogStreamer Log Group
+  FilterPatternLookup:
+    CloudTrail:
+      Pattern: ''
+    Common:
+      Pattern:
+        '[host, ident, authuser, date, request, status, bytes, referrer, agent]'
+    FlowLogs:
+      Pattern:
+        '[version, account_id, interface_id, srcaddr != "-", dstaddr != "-",
+        srcport != "-", dstport != "-", protocol, packets, bytes, start, end,
+        action, log_status]'
+    Lambda:
+      Pattern: '[timestamp=*Z, request_id="*-*", event]'
+    Other:
+      Pattern: ''
+    SpaceDelimited:
+      Pattern: '[]'
+    ECS:
+      Pattern: '"Container"'
+
 Outputs:
   WebsiteURLCodeDeployLB:
     Description: Website
@@ -35,6 +57,13 @@ Outputs:
     Value: !Sub "http://${ECSALB.DNSName}/"
   PipelineUrl:
     Value: !Sub https://console.aws.amazon.com/codepipeline/home?region=${AWS::Region}#/view/${MyAppPipeline}
+# These exported values are sent in every request by the lambda function, not sure where they get included
+# This value below is already exported but not being picked up by the lambda function
+  DomainEndpoint:
+    Condition: cEnableElasticSearchLogs
+    Value:
+      Fn::ImportValue:
+        !Sub ${ElasticsearchStack}-DomainEndpointES
 Parameters:
   DBAllocatedStorage:
     ConstraintDescription: must be between 5 and 1024Gb.
@@ -77,6 +106,18 @@ Parameters:
     MinLength: '1'
     NoEcho: 'true'
     Type: String
+  ElasticsearchLogs:
+    Description: Enable/Disable Elasticsearch
+    AllowedValues:
+      - Enable
+      - Disable
+    Default: Disable
+    Type: String
+  ElasticsearchStack:
+    Description: Elasticstack to extend
+    MaxLength: '64'
+    MinLength: '0'
+    Type: String
   InstanceType:
     AllowedValues:
       - t2.micro
@@ -110,6 +151,7 @@ Parameters:
 Conditions:
   cEnableDNS: !Equals [!Ref UseDNS, 'Enable']
   cEnableHTTPS: !Equals [!Ref UseHTTPS, 'Enable']
+  cEnableElasticSearchLogs: !Equals [!Ref ElasticsearchLogs, 'Enable']
 
 # Resources documentation
 # http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-template-resource-type-ref.html
@@ -1354,7 +1396,7 @@ Resources:
       HostedZoneName: al-labs.co.uk.
       Comment: Zone apex alias targeted to myELB LoadBalancer.
       RecordSets:
-        #Â One subdoamin for each type
+        # One subdoamin for each type
         - Name: !Sub "ec2.${AWS::StackName}.al-labs.co.uk."
           Type: A
           AliasTarget:
@@ -1372,7 +1414,7 @@ Resources:
   #####################################################################################
   # Start of CloudTrail to CloudWatch
   #####################################################################################
-## Mapping Log groups to the Lambda that ships them to Elasticsearch
+  # Mapping Log groups to the Lambda that ships them to Elasticsearch
   Trail:
     DependsOn: TrailBucketPolicy
     Properties:
@@ -1388,23 +1430,19 @@ Resources:
     DeletionPolicy: Retain
     Properties: {}
     Type: AWS::S3::Bucket
-# This is ugly yaml but it stopped working when cleaned up, and is style used
-# in AWS docs :(
   TrailBucketPolicy:
+    Type: AWS::S3::BucketPolicy
     Properties:
       Bucket:
         Ref: TrailBucket
       PolicyDocument:
+        Version: '2012-10-17'
         Statement:
           - Action: s3:GetBucketAcl
             Effect: Allow
             Principal:
               Service: cloudtrail.amazonaws.com
-            Resource:
-              Fn::Join:
-                - ''
-                - - 'arn:aws:s3:::'
-                  - Ref: TrailBucket
+            Resource: !Sub arn:aws:s3:::${TrailBucket}
           - Action: s3:PutObject
             Condition:
               StringEquals:
@@ -1412,16 +1450,7 @@ Resources:
             Effect: Allow
             Principal:
               Service: cloudtrail.amazonaws.com
-            Resource:
-              Fn::Join:
-                - ''
-                - - 'arn:aws:s3:::'
-                  - Ref: TrailBucket
-                  - /AWSLogs/
-                  - Ref: AWS::AccountId
-                  - /*
-        Version: '2012-10-17'
-    Type: AWS::S3::BucketPolicy
+            Resource: !Sub arn:aws:s3:::${TrailBucket}/AWSLogs/${AWS::AccountId}/*
   TrailLogGroup:
     Properties:
       LogGroupName: !Sub "/aws/cloudtrail/${AWS::StackName}"
@@ -1452,3 +1481,168 @@ Resources:
   #####################################################################################
   # End of CloudTrail to CloudWatch
   #####################################################################################
+  #####################################################################################
+  # Start of Elasticsearch logging domain
+  # Logs => CloudWatch logs => CloudWatch/ LogStreamer which triggers lambda
+  #####################################################################################
+  LambdaInvokePermission:
+    Condition: cEnableElasticSearchLogs
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName:
+        Ref: LogStreamer
+      Principal: !Sub logs.${AWS::Region}.amazonaws.com
+      SourceAccount:
+        Ref: AWS::AccountId
+    Type: AWS::Lambda::Permission
+
+## Mapping Log groups to the Lambda that ships them to Elasticsearch
+  LogGrouptoLambdaMappingCloudTrail:
+    Condition: cEnableElasticSearchLogs
+    DependsOn: LambdaInvokePermission
+    Properties:
+      DestinationArn: !GetAtt LogStreamer.Arn
+      FilterPattern: !FindInMap [FilterPatternLookup, CloudTrail, Pattern]
+      LogGroupName:
+        Ref: TrailLogGroup
+    Type: AWS::Logs::SubscriptionFilter
+
+  LogGrouptoLambdaMappingFlowLogs:
+    Condition: cEnableElasticSearchLogs
+    DependsOn: LambdaInvokePermission
+    Properties:
+      DestinationArn: !GetAtt LogStreamer.Arn
+      FilterPattern: !FindInMap [FilterPatternLookup, FlowLogs, Pattern]
+      LogGroupName:
+        Ref: VPCFlowLogsLogGroup
+    Type: AWS::Logs::SubscriptionFilter
+
+  LogRole:
+    Condition: cEnableElasticSearchLogs
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - sts:AssumeRole
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+      Path: /
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - logs:Create*
+                  - logs:PutLogEvents
+                  - s3:GetObject
+                Effect: Allow
+                Resource:
+                  - arn:aws:logs:*:*:*
+                  - arn:aws:s3:::*
+            Version: '2012-10-17'
+          PolicyName: LogRolePolicy
+    Type: AWS::IAM::Role
+
+  LogRoleInstanceProfile:
+    Condition: cEnableElasticSearchLogs
+    Properties:
+      Path: /
+      Roles:
+        - Ref: LogRole
+    Type: AWS::IAM::InstanceProfile
+
+  # Exported so service stacks can stream logs to it.
+  LogStreamer:
+    Condition: cEnableElasticSearchLogs
+    Properties:
+      Code:
+        S3Bucket: !Sub solutions-${AWS::Region}
+        S3Key: centralized-logging/v1/centralizedLoggingDownload.zip
+      Description: Lambda function for moving log data to AES.
+      Handler: index.handler
+      Role: !GetAtt LogStreamerRole.Arn
+      Runtime: nodejs4.3
+      Timeout: '300'
+    Type: AWS::Lambda::Function
+  LogStreamerRole:
+    Condition: cEnableElasticSearchLogs
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+        Version: '2012-10-17'
+      Path: /
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Effect: "Allow"
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource:
+                  !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}*'
+              - Effect: Allow
+                Action:
+                  - es:ESHttpPost
+                Resource: arn:aws:es:*:*:*
+              - Effect: Allow
+                Action:
+                  - cloudformation:DescribeStacks
+                  - Cloudformation:ListStackResources
+                Resource: !Sub 'arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}*'
+            Version: "2012-10-17"
+          PolicyName: My_Lambda_Function_Permissions
+    Type: AWS::IAM::Role
+  MyFlowLog:
+    Condition: cEnableElasticSearchLogs
+    Properties:
+      DeliverLogsPermissionArn: !GetAtt flowlogsRole.Arn
+      LogGroupName:
+        Ref: VPCFlowLogsLogGroup
+      ResourceId:
+        Ref: myVPC
+      ResourceType: VPC
+      TrafficType: ALL
+    Type: AWS::EC2::FlowLog
+
+  VPCFlowLogsLogGroup:
+    Condition: cEnableElasticSearchLogs
+    Properties:
+      RetentionInDays: 7
+    Type: AWS::Logs::LogGroup
+  flowlogsRole:
+    Condition: cEnableElasticSearchLogs
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - vpc-flow-logs.amazonaws.com
+        Version: 2012-10-17
+      Path: /
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:DescribeLogGroups
+                  - logs:DescribeLogStreams
+                  - logs:PutLogEvents
+                Effect: Allow
+                Resource: "*"
+            Version: "2012-10-17"
+          PolicyName: LogRolePolicy
+    Type: AWS::IAM::Role
+###########################################
+# End of Elasticsearch logging domain
+###########################################
