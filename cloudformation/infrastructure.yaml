@@ -502,6 +502,10 @@ Resources:
       MinSize: 2
       MaxSize: 10
       DesiredCapacity: 3
+      MetricsCollection:
+        - Granularity: "1Minute"
+          # No metrics specified, send all!
+          # http://docs.aws.amazon.com/AutoScaling/latest/APIReference/API_EnableMetricsCollection.html
       Tags:
         - Key: Name
           Value: !Sub ${AWS::StackName}-ECS
@@ -522,6 +526,7 @@ Resources:
       KeyName: !Ref KeyName
       SecurityGroups: [!Ref EcsSecurityGroup]
       IamInstanceProfile: !Ref EC2InstanceProfile
+      InstanceMonitoring: True
       UserData:
         Fn::Base64: !Sub |
           #!/bin/bash -xe
@@ -989,6 +994,10 @@ Resources:
       MaxSize: 10
       DesiredCapacity: 3
       TargetGroupARNs: [!Ref CodeDeployTG]
+      MetricsCollection:
+        - Granularity: "1Minute"
+          # No metrics specified, send all!
+          # http://docs.aws.amazon.com/AutoScaling/latest/APIReference/API_EnableMetricsCollection.html
       Tags:
         - Key: Name
           Value: !Sub ${AWS::StackName}-CodeDeploy
@@ -1014,6 +1023,7 @@ Resources:
       KeyName: !Ref KeyName
       SecurityGroups: [!Ref CodeDeployLinuxEC2SecurityGroup]
       IamInstanceProfile: !Ref CodeDeployLinuxEC2InstanceRoleInstanceProfile
+      InstanceMonitoring: True
       UserData:
         'Fn::Base64': !Sub |
           #!/bin/bash -ex
