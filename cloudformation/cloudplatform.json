@@ -1785,7 +1785,7 @@
                         "Ref": "LogGroupAppLog"
                       },
                       "\n",
-                      "log_stream_name = app.nodejs.serverlog-{instance_id}\n",
+                      "log_stream_name = nodejs.serverlog-{instance_id}\n",
                       "datetime_format = %d/%b/%Y:%H:%M:%S\n",
                       "[nodejs-errorlog]\n",
                       "file = /tmp/server.err\n",
@@ -1794,7 +1794,7 @@
                         "Ref": "LogGroupAppErrorLog"
                       },
                       "\n",
-                      "log_stream_name = app.nodejs.errorlog-{instance_id}\n",
+                      "log_stream_name = nodejs.errorlog-{instance_id}\n",
                       "datetime_format = %d/%b/%Y:%H:%M:%S\n",
                       "[cloud-init-outputlog]\n",
                       "file = /var/log/cloud-init-output.log\n",
@@ -1803,7 +1803,7 @@
                         "Ref": "LogGroupCloudInit"
                       },
                       "\n",
-                      "log_stream_name = system.cloudinit.outputlog-{instance_id}\n",
+                      "log_stream_name = cloudinit.outputlog-{instance_id}\n",
                       "datetime_format = %d/%b/%Y:%H:%M:%S\n",
                       "[system-log]\n",
                       "file = /var/log/syslog\n",
@@ -1812,7 +1812,7 @@
                         "Ref": "LogGroupSysLog"
                       },
                       "\n",
-                      "log_stream_name = system.linux.syslog-{instance_id}\n",
+                      "log_stream_name = syslog-{instance_id}\n",
                       "datetime_format = %b %d %H:%M:%S\n"
                     ]
                   ]
