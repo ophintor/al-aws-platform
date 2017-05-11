@@ -7,7 +7,7 @@ var methodOverride = require('method-override');
 const PORT = process.env.PORT || 3000;
 
 app.use(express.static('./public'));
-app.use(morgan(':remote-addr [:date[clf]] :method :url :status :res[content-length] - :response-time ms ":user-agent"'));
+app.use(morgan(':remote-addr [:date[clf]] :method :url :status :res[content-length] :response-time ":user-agent"'));
 app.use(bodyParser.urlencoded({'extended': 'true'}));
 app.use(bodyParser.json());
 app.use(bodyParser.json({type: 'application/vnd.api+json'}));
