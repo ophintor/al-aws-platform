@@ -528,7 +528,7 @@
               ],
               "Resource": [
                 {
-                  "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${AWS::StackName}:*"
+                  "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${AWS::StackName}*:*"
                 }
               ]
             }
@@ -1274,7 +1274,7 @@
         "Handler": "index.handler",
         "Code": {
           "ZipFile": {
-            "Fn::Sub": "'use strict';const aws=require('aws-sdk');var zlib=require('zlib');const s3=new aws.S3({apiVersion:'2006-03-01'});const cloudWatchLogs=new aws.CloudWatchLogs({apiVersion:'2014-03-28'});const readline=require('readline');const stream=require('stream');const logGroupName='${AWS::StackName}';const logStreamName='ELB';exports.handler=(event,context,callback)=>{console.log('S3 object is:',event.Records[0].s3);const bucket=event.Records[0].s3.bucket.name;console.log('Name of S3 bucket is:',bucket);const key=decodeURIComponent(event.Records[0].s3.object.key.replace(/\\+/g,' '));const params={Bucket:bucket,Key:key,};s3.getObject(params,(err,data)=>{if(err){console.log(err);const message=`Error getting object ${!key}from bucket ${!bucket}.Make sure they exist and your bucket is in the same region as this function.`;console.log(message);callback(message)}else{zlib.gunzip(data.Body,function(a,b){if(a){console.log('Error uncompressing data',a);return}var c=b.toString('ascii');manageLogGroups(c)});callback(null,data.ContentType)}});function manageLogGroups(c){var d={logGroupNamePrefix:logGroupName};cloudWatchLogs.describeLogGroups(d,function(a,b){if(a){console.log('Error while describing log group:',a);createLogGroup(c)}else{if(!b.logGroups[0]){console.log('Need to  create log group:',b);createLogGroup(c)}else{console.log('Success while describing log group:',b);manageLogStreams(c)}}})}function createLogGroup(c){var d={logGroupName:logGroupName};cloudWatchLogs.createLogGroup(d,function(a,b){if(a){console.log('error while creating log group: ',a,a.stack);return}else{console.log('Success in creating log group: ',logGroupName);manageLogStreams(c)}})}function manageLogStreams(c){var d={logGroupName:logGroupName,logStreamNamePrefix:logStreamName};cloudWatchLogs.describeLogStreams(d,function(a,b){if(a){console.log('Error during describe log streams:',a);createLogStream(c)}else{if(!b.logStreams[0]){console.log('Need to  create log stream:',b);createLogStream(c)}else{console.log('Log Stream already defined:',logStreamName);putLogEvents(b.logStreams[0].uploadSequenceToken,c)}}})}function createLogStream(c){var d={logGroupName:logGroupName,logStreamName:logStreamName};cloudWatchLogs.createLogStream(d,function(a,b){if(a){console.log('error while creating log stream: ',a,a.stack);return}else{console.log('Success in creating log stream: ',logStreamName);putLogEvents(null,c)}})}function putLogEvents(a,b){const MAX_BATCH_SIZE=1048576;const MAX_BATCH_COUNT=10000;const LOG_EVENT_OVERHEAD=26;var c=[];var d=[];var e=0;var f=new stream.PassThrough();f.end(b);var g=readline.createInterface({input:f});var h=0;g.on('line',(line)=>{++h;var i=line.split(' ',2)[1];var j=Date.parse(i);var k=line.length+LOG_EVENT_OVERHEAD;e+=k;if(e>=MAX_BATCH_SIZE||d.length>=MAX_BATCH_COUNT){c.push(d);d=[];e=k}d.push({message:line,timestamp:j})});g.on('close',()=>{c.push(d);sendBatches(a,c)})}function sendBatches(e,f){var g=0;var h=0;function sendNextBatch(a,b){if(a){console.log('Error sending batch: ',a,a.stack);return}else{var c=f.shift();if(c){++h;g+=c.length;sendBatch(b,c,sendNextBatch)}else{var d=`Successfully put ${!g}events in ${!h}f`;console.log(d);callback(null,d)}}}sendNextBatch(null,e)}function sendBatch(c,d,e){var f={logEvents:d,logGroupName:logGroupName,logStreamName:logStreamName};if(c){f['sequenceToken']=c}f.logEvents.sort(function(a,b){if(a.timestamp>b.timestamp){return 1}if(a.timestamp<b.timestamp){return-1}return 0});cloudWatchLogs.putLogEvents(f,function(a,b){if(a){console.log('Error during put log events: ',a,a.stack);e(a,null)}else{console.log(`Success in putting ${!f.logEvents.length}events`);e(null,b.nextSequenceToken)}})}};"
+            "Fn::Sub": "'use strict';const aws=require('aws-sdk');var zlib=require('zlib');const s3=new aws.S3({apiVersion:'2006-03-01'});const cloudWatchLogs=new aws.CloudWatchLogs({apiVersion:'2014-03-28'});const readline=require('readline');const stream=require('stream');const logGroupName='${AWS::StackName}-elblog';const logStreamName='ELB';exports.handler=(event,context,callback)=>{console.log('S3 object is:',event.Records[0].s3);const bucket=event.Records[0].s3.bucket.name;console.log('Name of S3 bucket is:',bucket);const key=decodeURIComponent(event.Records[0].s3.object.key.replace(/\\+/g,' '));const params={Bucket:bucket,Key:key,};s3.getObject(params,(err,data)=>{if(err){console.log(err);const message=`Error getting object ${!key}from bucket ${!bucket}.Make sure they exist and your bucket is in the same region as this function.`;console.log(message);callback(message)}else{zlib.gunzip(data.Body,function(a,b){if(a){console.log('Error uncompressing data',a);return}var c=b.toString('ascii');manageLogGroups(c)});callback(null,data.ContentType)}});function manageLogGroups(c){var d={logGroupNamePrefix:logGroupName};cloudWatchLogs.describeLogGroups(d,function(a,b){if(a){console.log('Error while describing log group:',a);createLogGroup(c)}else{if(!b.logGroups[0]){console.log('Need to  create log group:',b);createLogGroup(c)}else{console.log('Success while describing log group:',b);manageLogStreams(c)}}})}function createLogGroup(c){var d={logGroupName:logGroupName};cloudWatchLogs.createLogGroup(d,function(a,b){if(a){console.log('error while creating log group: ',a,a.stack);return}else{console.log('Success in creating log group: ',logGroupName);manageLogStreams(c)}})}function manageLogStreams(c){var d={logGroupName:logGroupName,logStreamNamePrefix:logStreamName};cloudWatchLogs.describeLogStreams(d,function(a,b){if(a){console.log('Error during describe log streams:',a);createLogStream(c)}else{if(!b.logStreams[0]){console.log('Need to  create log stream:',b);createLogStream(c)}else{console.log('Log Stream already defined:',logStreamName);putLogEvents(b.logStreams[0].uploadSequenceToken,c)}}})}function createLogStream(c){var d={logGroupName:logGroupName,logStreamName:logStreamName};cloudWatchLogs.createLogStream(d,function(a,b){if(a){console.log('error while creating log stream: ',a,a.stack);return}else{console.log('Success in creating log stream: ',logStreamName);putLogEvents(null,c)}})}function putLogEvents(a,b){const MAX_BATCH_SIZE=1048576;const MAX_BATCH_COUNT=10000;const LOG_EVENT_OVERHEAD=26;var c=[];var d=[];var e=0;var f=new stream.PassThrough();f.end(b);var g=readline.createInterface({input:f});var h=0;g.on('line',(line)=>{++h;var i=line.split(' ',2)[1];var j=Date.parse(i);var k=line.length+LOG_EVENT_OVERHEAD;e+=k;if(e>=MAX_BATCH_SIZE||d.length>=MAX_BATCH_COUNT){c.push(d);d=[];e=k}d.push({message:line,timestamp:j})});g.on('close',()=>{c.push(d);sendBatches(a,c)})}function sendBatches(e,f){var g=0;var h=0;function sendNextBatch(a,b){if(a){console.log('Error sending batch: ',a,a.stack);return}else{var c=f.shift();if(c){++h;g+=c.length;sendBatch(b,c,sendNextBatch)}else{var d=`Successfully put ${!g}events in ${!h}f`;console.log(d);callback(null,d)}}}sendNextBatch(null,e)}function sendBatch(c,d,e){var f={logEvents:d,logGroupName:logGroupName,logStreamName:logStreamName};if(c){f['sequenceToken']=c}f.logEvents.sort(function(a,b){if(a.timestamp>b.timestamp){return 1}if(a.timestamp<b.timestamp){return-1}return 0});cloudWatchLogs.putLogEvents(f,function(a,b){if(a){console.log('Error during put log events: ',a,a.stack);e(a,null)}else{console.log(`Success in putting ${!f.logEvents.length}events`);e(null,b.nextSequenceToken)}})}};"
           }
         },
         "Runtime": "nodejs4.3"
@@ -1381,16 +1381,54 @@
         ]
       }
     },
-    "LogGroup": {
-      "Type": "AWS::Logs::LogGroup",
-      "DeletionPolicy": "Retain",
-      "Properties": {
-        "LogGroupName": {
-          "Ref": "AWS::StackName"
-        },
-        "RetentionInDays": 7
+    "LogGroupAppLog":{
+      "Type" : "AWS::Logs::LogGroup",
+      "DeletionPolicy" : "Delete",
+      "Properties" : {
+        "LogGroupName" : { "Fn::Sub":"${AWS::StackName}-applog"},
+        "RetentionInDays" : 7
       }
     },
+    "LogGroupELBLog":{
+      "Type" : "AWS::Logs::LogGroup",
+      "DeletionPolicy" : "Delete",
+      "Properties" : {
+        "LogGroupName" : { "Fn::Sub":"${AWS::StackName}-elblog"},
+        "RetentionInDays" : 7
+      }
+    },
+    "LogGroupAppErrorLog":{
+      "Type" : "AWS::Logs::LogGroup",
+      "DeletionPolicy" : "Delete",
+      "Properties" : {
+        "LogGroupName" : { "Fn::Sub":"${AWS::StackName}-apperr"},
+        "RetentionInDays" : 7
+      }
+    }, 
+    "LogGroupCloudInit":{
+      "Type" : "AWS::Logs::LogGroup",
+      "DeletionPolicy" : "Delete",
+      "Properties" : {
+        "LogGroupName" : { "Fn::Sub":"${AWS::StackName}-cloudinitoutput"},
+        "RetentionInDays" : 7
+      }
+    },
+    "LogGroupSysLog":{
+      "Type" : "AWS::Logs::LogGroup",
+      "DeletionPolicy" : "Delete",
+      "Properties" : {
+        "LogGroupName" : { "Fn::Sub":"${AWS::StackName}-syslog"},
+        "RetentionInDays" : 7
+      }
+    },
+    "LogGroupCloudTrail":{
+      "Type" : "AWS::Logs::LogGroup",
+      "DeletionPolicy" : "Delete",
+      "Properties" : {
+        "LogGroupName" : { "Fn::Sub":"${AWS::StackName}-cloutrail"},
+        "RetentionInDays" : 7
+      }
+    },             
     "LogStoreS3Location": {
       "Type": "AWS::S3::Bucket",
       "DeletionPolicy" : "Retain",
@@ -1496,7 +1534,7 @@
               "Resource":
               [
                 {
-                  "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${AWS::StackName}:*"
+                  "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${AWS::StackName}*:*"
                 }
               ]
             },
@@ -1573,9 +1611,9 @@
               "var params = {\n",
                 "destination:'",{"Fn::Sub": "${AWS::StackName}-logs"},"',\n",
                 "from: now.getTime() - 3600000,\n",
-                "logGroupName:'",{"Fn::Sub": "${AWS::StackName}"},"',\n",
+                "logGroupName:'",{"Fn::Sub": "${AWS::StackName}-applog"},"',\n",
                 "to: now.getTime(),\n",
-                "taskName: 'LogTask_'+now.getTime().toString()\n",
+                "taskName: 'LogTask_applog_'+now.getTime().toString()\n",
               "};\n",
               "console.log('Log Migrate Action Called with Params : ' +JSON.stringify(params));\n",
               "cloudwatchlogs.createExportTask(params, function(err, data) {\n",
@@ -1602,13 +1640,13 @@
       "Type": "AWS::Logs::MetricFilter",
       "Properties": {
         "LogGroupName": {
-          "Ref": "LogGroup"
+          "Ref": "LogGroupCloudTrail"
         },
         "FilterPattern": "{ ($.eventName = RunInstances) || ($.eventName = RebootInstances) || ($.eventName = StartInstances) || ($.eventName = StopInstances) || ($.eventName = TerminateInstances) }",
         "MetricTransformations": [
           {
             "MetricNamespace": {
-              "Fn::Sub": "${AWS::StackName}/CloudTrail/"
+              "Fn::Sub": "${AWS::StackName}"
             },
             "MetricName": "EC2InstanceEventCount",
             "MetricValue": "1"
@@ -1620,7 +1658,7 @@
       "Type": "AWS::Logs::MetricFilter",
       "Properties": {
         "LogGroupName": {
-          "Ref": "LogGroup"
+          "Ref": "LogGroupAppLog"
         },
         "FilterPattern": "App listening on port",
         "MetricTransformations": [
@@ -1638,7 +1676,7 @@
       "Type": "AWS::Logs::MetricFilter",
       "Properties": {
         "LogGroupName": {
-          "Ref": "LogGroup"
+          "Ref": "LogGroupAppLog"
         },
         "FilterPattern": "[ip, timestamp, method=GET, url, status_code,bytes,responsetime,useragent]",
         "MetricTransformations": [
@@ -1656,7 +1694,7 @@
       "Type": "AWS::Logs::MetricFilter",
       "Properties": {
         "LogGroupName": {
-          "Ref": "LogGroup"
+          "Ref": "LogGroupAppLog"
         },
         "FilterPattern": "[ip, timestamp, method=POST, url, status_code,bytes,responsetime,useragent]",
         "MetricTransformations": [
@@ -1674,7 +1712,7 @@
       "Type": "AWS::Logs::MetricFilter",
       "Properties": {
         "LogGroupName": {
-          "Ref": "LogGroup"
+          "Ref": "LogGroupAppLog"
         },
         "FilterPattern": "[ip, timestamp, method=DELETE, url, status_code,bytes,responsetime,useragent]",
         "MetricTransformations": [
@@ -1692,7 +1730,7 @@
       "Type": "AWS::Logs::MetricFilter",
       "Properties": {
         "LogGroupName": {
-          "Ref": "LogGroup"
+          "Ref": "LogGroupAppLog"
         },
         "FilterPattern": "[ip, timestamp, method, url, status_code,bytes,responsetime,useragent]",
         "MetricTransformations": [
@@ -1710,7 +1748,7 @@
       "Type": "AWS::Logs::MetricFilter",
       "Properties": {
         "LogGroupName": {
-          "Ref": "LogGroup"
+          "Ref": "LogGroupAppLog"
         },
         "FilterPattern": "[ip, timestamp, method, url, status_code=4*,bytes,responsetime,useragent]",
         "MetricTransformations": [
@@ -1728,7 +1766,7 @@
       "Type": "AWS::Logs::MetricFilter",
       "Properties": {
         "LogGroupName": {
-          "Ref": "LogGroup"
+          "Ref": "LogGroupAppLog"
         },
         "FilterPattern": "[ip, timestamp, method, url, status_code=200,bytes,responsetime,useragent]",
         "MetricTransformations": [
@@ -1746,7 +1784,7 @@
       "Type": "AWS::Logs::MetricFilter",
       "Properties": {
         "LogGroupName": {
-          "Ref": "LogGroup"
+          "Ref": "LogGroupAppLog"
         },
         "FilterPattern": "[ip, timestamp, method, url, status_code,bytes,responsetime,useragent=*Chrome*]",
         "MetricTransformations": [
@@ -1764,7 +1802,7 @@
       "Type": "AWS::Logs::MetricFilter",
       "Properties": {
         "LogGroupName": {
-          "Ref": "LogGroup"
+          "Ref": "LogGroupAppLog"
         },
         "FilterPattern": "[ip, timestamp, method, url, status_code,bytes,responsetime,useragent=*Firefox*]",
         "MetricTransformations": [
@@ -1863,37 +1901,37 @@
                       "file = /tmp/server.log\n",
                       "log_group_name = ",
                       {
-                        "Ref": "LogGroup"
+                        "Ref": "LogGroupAppLog"
                       },
                       "\n",
-                      "log_stream_name = app.nodejs.serverlog-{instance_id}\n",
+                      "log_stream_name = nodejs.serverlog-{instance_id}\n",
                       "datetime_format = %d/%b/%Y:%H:%M:%S\n",
                       "[nodejs-errorlog]\n",
                       "file = /tmp/server.err\n",
                       "log_group_name = ",
                       {
-                        "Ref": "LogGroup"
+                        "Ref": "LogGroupAppErrorLog"
                       },
                       "\n",
-                      "log_stream_name = app.nodejs.errorlog-{instance_id}\n",
+                      "log_stream_name = nodejs.errorlog-{instance_id}\n",
                       "datetime_format = %d/%b/%Y:%H:%M:%S\n",
                       "[cloud-init-outputlog]\n",
                       "file = /var/log/cloud-init-output.log\n",
                       "log_group_name = ",
                       {
-                        "Ref": "LogGroup"
+                        "Ref": "LogGroupCloudInit"
                       },
                       "\n",
-                      "log_stream_name = system.cloudinit.outputlog-{instance_id}\n",
+                      "log_stream_name = cloudinit.outputlog-{instance_id}\n",
                       "datetime_format = %d/%b/%Y:%H:%M:%S\n",
                       "[system-log]\n",
                       "file = /var/log/syslog\n",
                       "log_group_name = ",
                       {
-                        "Ref": "LogGroup"
+                        "Ref": "LogGroupSysLog"
                       },
                       "\n",
-                      "log_stream_name = system.linux.syslog-{instance_id}\n",
+                      "log_stream_name = syslog-{instance_id}\n",
                       "datetime_format = %b %d %H:%M:%S\n"
                     ]
                   ]

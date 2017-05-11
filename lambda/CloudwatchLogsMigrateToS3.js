@@ -8,9 +8,9 @@ exports.handler = function (event, context) {
         var cloudwatchlogs = new AWS.CloudWatchLogs();       
         var now = new Date();
         var params = {
-          destination: "logstore-al-labs", /* required */
+          destination: {"Fn::Sub": "${AWS::StackName}-logs"}, /* required */
           from: now.getTime() - 3600000, /* required */  /* Current Time minus One Hour in Milliseconds */
-          logGroupName: "klog", /* required */
+          logGroupName: {"Fn::Sub": "${AWS::StackName}-applog"}, /* required */
           to: now.getTime(), /* required */
           taskName: "LogTask_"+now.getTime().toString()
         };        
