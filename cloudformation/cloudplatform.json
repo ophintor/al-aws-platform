@@ -3346,7 +3346,7 @@
             {
               "Effect": "Allow",
               "Action": [
-                "cloudformation:*"
+                "cloudformation:DescribeStacks"
               ],
               "Resource": "*"
             },
@@ -3366,7 +3366,8 @@
         "FunctionName" : { "Fn::GetAtt" : ["LogStreamer", "Arn"] },
         "Action": "lambda:InvokeFunction",
         "Principal": "logs.us-west-2.amazonaws.com",
-        "SourceAccount": { "Ref" : "AWS::AccountId" }
+        "SourceAccount": { "Ref" : "AWS::AccountId" },
+        "SourceArn": "arn:aws:logs:us-west-2:505076813643:log-group:kamil09-applog:*"
       }
     },
 
@@ -3407,7 +3408,7 @@
         "DestinationArn": {
           "Fn::GetAtt" : [ "LogStreamer", "Arn" ]
         },
-        "FilterPattern": "[host, ident, authuser, date, request, status, bytes, referrer, agent]",
+        "FilterPattern": "",
         "LogGroupName": { "Fn::Sub":"${AWS::StackName}-applog"}
       }
     }
