@@ -1404,7 +1404,7 @@
         "LogGroupName" : { "Fn::Sub":"${AWS::StackName}-apperr"},
         "RetentionInDays" : 7
       }
-    }, 
+    },
     "LogGroupCloudInit":{
       "Type" : "AWS::Logs::LogGroup",
       "DeletionPolicy" : "Delete",
@@ -1428,7 +1428,7 @@
         "LogGroupName" : { "Fn::Sub":"${AWS::StackName}-cloutrail"},
         "RetentionInDays" : 7
       }
-    },             
+    },
     "LogStoreS3Location": {
       "Type": "AWS::S3::Bucket",
       "DeletionPolicy" : "Retain",
@@ -3302,55 +3302,88 @@
       "Type": "AWS::IAM::Role",
       "Properties": {
         "AssumeRolePolicyDocument": {
-          "Statement": [ {
-            "Action": "sts:AssumeRole",
-            "Effect": "Allow",
-            "Principal": {
-              "Service": "lambda.amazonaws.com"
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": [
+                  "lambda.amazonaws.com"
+                ]
+              },
+              "Action": [
+                "sts:AssumeRole"
+              ]
             }
-          } ],
-          "Version": "2012-10-17"
+          ]
+        }
+      }
+    },
+
+    "LogStreamerRolePolicies": {
+      "Type": "AWS::IAM::Policy",
+      "Metadata": {
+        "Comment": "IAM Policy attached to the LogStreamerRole."
+      },
+      "Properties": {
+        "PolicyName": "LogStreamerRolePolicy",
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": [
+                "logs:*"
+              ],
+              "Resource": "*"
+            },
+            {
+              "Effect": "Allow",
+              "Action": [
+                "es:*"
+              ],
+              "Resource": "*"
+            },
+            {
+              "Effect": "Allow",
+              "Action": [
+                "cloudformation:*"
+              ],
+              "Resource": "*"
+            },
+          ]
         },
-        "Path": "/",
-        "Policies": [ {
-          "PolicyDocument": {
-            "Statement": [ {
-              "Effect": "Allow",
-              "Action": [
-                "logs:CreateLogGroup",
-                "logs:CreateLogStream",
-                "logs:PutLogEvents"
-              ],
-              "Resource": {
-                "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}*"
-              }
-            },
-            {
-              "Effect": "Allow",
-              "Action": [
-                "es:ESHttpPost"
-              ],
-              "Resource": "arn:aws:es:*:*:*"
-            },
-            {
-              "Effect": "Allow",
-              "Action": [
-                "cloudformation:DescribeStacks",
-                "Cloudformation:ListStackResources"
-              ],
-              "Resource": {
-                "Fn::Sub": "arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}*"
-              }
-            } ],
-            "Version": "2012-10-17"
-          },
-          "PolicyName": "My_Lambda_Function_Permissions"
-        } ]
+        "Roles": [
+          {
+            "Ref": "LogStreamerRole"
+          }
+        ]
+      }
+    },
+
+    "LogStreamerInvokePermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName" : { "Fn::GetAtt" : ["LogStreamer", "Arn"] },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "logs.us-west-2.amazonaws.com",
+        "SourceAccount": { "Ref" : "AWS::AccountId" }
+      }
+    },
+
+    "LogStreamerLogGroup":{
+      "Type" : "AWS::Logs::LogGroup",
+      "DeletionPolicy" : "Delete",
+      "Properties" : {
+        "LogGroupName" :{ "Fn::Sub": "/aws/lambda/${AWS::StackName}-LogStreamer" },
+        "RetentionInDays" : 1
       }
     },
 
     "LogStreamer": {
       "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "${AWS::StackName}-LogStreamer"
+        },
         "Code": {
           "S3Bucket": {
             "Fn::Sub": "solutions-${AWS::Region}"
@@ -3360,7 +3393,7 @@
         "Description": "Lambda function for moving log data to Amazon Elasticsearch.",
         "Handler": "index.handler",
         "Role": {
-          "Fn::GetAtt": "LogStreamerRole.Arn"
+          "Fn::GetAtt": [ "LogStreamerRole", "Arn" ]
         },
         "Runtime": "nodejs4.3",
         "Timeout": "300"
@@ -3368,21 +3401,16 @@
       "Type": "AWS::Lambda::Function"
     },
 
-    "LambdaInvokePermission": {
-      "Type": "AWS::Lambda::Permission",
+    "applogSubscriptionFilter": {
+      "Type": "AWS::Logs::SubscriptionFilter",
       "Properties": {
-        "Action": "lambda:InvokeFunction",
-        "FunctionName": {
-          "Ref": "LogStreamer"
+        "DestinationArn": {
+          "Fn::GetAtt" : [ "LogStreamer", "Arn" ]
         },
-        "Principal": {
-          "Fn::Sub": "logs.${AWS::Region}.amazonaws.com"
-        },
-        "SourceAccount": {
-          "Ref": "AWS::AccountId"
-        }
+        "FilterPattern": "[host, ident, authuser, date, request, status, bytes, referrer, agent]",
+        "LogGroupName": { "Fn::Sub":"${AWS::StackName}-applog"}
       }
-    },
+    }
 
   },
   "Outputs": {
