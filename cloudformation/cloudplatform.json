@@ -1640,7 +1640,7 @@
         "LogGroupName": {
           "Ref": "LogGroup"
         },
-        "FilterPattern": "[ip, timestamp, method=GET, url, status_code,bytes,responsetime,ms,useragent]",
+        "FilterPattern": "[ip, timestamp, method=GET, url, status_code,bytes,responsetime,useragent]",
         "MetricTransformations": [
           {
             "MetricNamespace": {
@@ -1658,7 +1658,7 @@
         "LogGroupName": {
           "Ref": "LogGroup"
         },
-        "FilterPattern": "[ip, timestamp, method=POST, url, status_code,bytes,responsetime,ms,useragent]",
+        "FilterPattern": "[ip, timestamp, method=POST, url, status_code,bytes,responsetime,useragent]",
         "MetricTransformations": [
           {
             "MetricNamespace": {
@@ -1676,7 +1676,7 @@
         "LogGroupName": {
           "Ref": "LogGroup"
         },
-        "FilterPattern": "[ip, timestamp, method=DELETE, url, status_code,bytes,responsetime,ms,useragent]",
+        "FilterPattern": "[ip, timestamp, method=DELETE, url, status_code,bytes,responsetime,useragent]",
         "MetricTransformations": [
           {
             "MetricNamespace": {
@@ -1694,7 +1694,7 @@
         "LogGroupName": {
           "Ref": "LogGroup"
         },
-        "FilterPattern": "[ip, timestamp, method, url, status_code,bytes,responsetime,ms,useragent]",
+        "FilterPattern": "[ip, timestamp, method, url, status_code,bytes,responsetime,useragent]",
         "MetricTransformations": [
           {
             "MetricNamespace": {
@@ -1712,7 +1712,7 @@
         "LogGroupName": {
           "Ref": "LogGroup"
         },
-        "FilterPattern": "[ip, timestamp, method, url, status_code=4*,bytes,responsetime,ms,useragent]",
+        "FilterPattern": "[ip, timestamp, method, url, status_code=4*,bytes,responsetime,useragent]",
         "MetricTransformations": [
           {
             "MetricNamespace": {
@@ -1730,7 +1730,7 @@
         "LogGroupName": {
           "Ref": "LogGroup"
         },
-        "FilterPattern": "[ip, timestamp, method, url, status_code=200,bytes,responsetime,ms,useragent]",
+        "FilterPattern": "[ip, timestamp, method, url, status_code=200,bytes,responsetime,useragent]",
         "MetricTransformations": [
           {
             "MetricNamespace": {
@@ -1748,7 +1748,7 @@
         "LogGroupName": {
           "Ref": "LogGroup"
         },
-        "FilterPattern": "[ip, timestamp, method, url, status_code,bytes,responsetime,ms,useragent=*Chrome*]",
+        "FilterPattern": "[ip, timestamp, method, url, status_code,bytes,responsetime,useragent=*Chrome*]",
         "MetricTransformations": [
           {
             "MetricNamespace": {
@@ -1766,7 +1766,7 @@
         "LogGroupName": {
           "Ref": "LogGroup"
         },
-        "FilterPattern": "[ip, timestamp, method, url, status_code,bytes,responsetime,ms,useragent=*Firefox*]",
+        "FilterPattern": "[ip, timestamp, method, url, status_code,bytes,responsetime,useragent=*Firefox*]",
         "MetricTransformations": [
           {
             "MetricNamespace": {
