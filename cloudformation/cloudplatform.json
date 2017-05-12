@@ -42,7 +42,8 @@
           "Parameters": [
             "KeyPairName",
             "SSHLocation",
-            "UserName"
+            "UserName",
+            "UseHTTPS"
           ]
         },
         {
@@ -1410,7 +1411,7 @@
         "LifecycleConfiguration":{
           "Rules":[
             {              
-              "ExpirationInDays" : 30,
+              "ExpirationInDays" : 90,
               "Id" : {
                 "Fn::Sub": "${AWS::StackName}-LogMigrationLifecycleRule"
               },              
@@ -1422,7 +1423,7 @@
                 },
                 {
                   "StorageClass" : "GLACIER",
-                  "TransitionInDays" : 14
+                  "TransitionInDays" : 45
                 }                
                ]
             }
