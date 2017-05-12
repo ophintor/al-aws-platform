@@ -3328,7 +3328,7 @@
       }
     },
 
-    "LogStreamerInvokePermission": {
+    "applogLogStreamerInvokePermission": {
       "Type": "AWS::Lambda::Permission",
       "Properties": {
         "FunctionName" : { "Fn::GetAtt" : ["LogStreamer", "Arn"] },
@@ -3337,6 +3337,32 @@
         "SourceAccount": { "Ref" : "AWS::AccountId" },
         "SourceArn": {
           "Fn::Sub": "arn:aws:logs:us-west-2:505076813643:log-group:${AWS::StackName}-applog:*"
+        }
+      }
+    },
+
+    "syslogLogStreamerInvokePermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName" : { "Fn::GetAtt" : ["LogStreamer", "Arn"] },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "logs.us-west-2.amazonaws.com",
+        "SourceAccount": { "Ref" : "AWS::AccountId" },
+        "SourceArn": {
+          "Fn::Sub": "arn:aws:logs:us-west-2:505076813643:log-group:${AWS::StackName}-syslog:*"
+        }
+      }
+    },
+
+    "elblogLogStreamerInvokePermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName" : { "Fn::GetAtt" : ["LogStreamer", "Arn"] },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "logs.us-west-2.amazonaws.com",
+        "SourceAccount": { "Ref" : "AWS::AccountId" },
+        "SourceArn": {
+          "Fn::Sub": "arn:aws:logs:us-west-2:505076813643:log-group:${AWS::StackName}-elblog:*"
         }
       }
     },
@@ -3377,8 +3403,30 @@
         "DestinationArn": {
           "Fn::GetAtt" : [ "LogStreamer", "Arn" ]
         },
-        "FilterPattern": "[ip, date, method, request, statuscode, bytes, responsetime, agent]",
+        "FilterPattern": "[ip, date, method, request, statuscode, bytes, responsetime, user_agent]",
         "LogGroupName": { "Fn::Sub":"${AWS::StackName}-applog"}
+      }
+    },
+
+    "syslogSubscriptionFilter": {
+      "Type": "AWS::Logs::SubscriptionFilter",
+      "Properties": {
+        "DestinationArn": {
+          "Fn::GetAtt" : [ "LogStreamer", "Arn" ]
+        },
+        "FilterPattern": "[month, day, hour, host, service, message]",
+        "LogGroupName": { "Fn::Sub":"${AWS::StackName}-syslog"}
+      }
+    },
+
+    "elblogSubscriptionFilter": {
+      "Type": "AWS::Logs::SubscriptionFilter",
+      "Properties": {
+        "DestinationArn": {
+          "Fn::GetAtt" : [ "LogStreamer", "Arn" ]
+        },
+        "FilterPattern": "[type, timestamp, elb, client, target, request_processing_time, target_processing_time, response_processing_time, elb_status_code, target_status_code, received_bytes, sent_bytes, request, user_agent, ssl_cipher, ssl_protocol, target_group_arn, trace_id]",
+        "LogGroupName": { "Fn::Sub":"${AWS::StackName}-syslog"}
       }
     }
 
