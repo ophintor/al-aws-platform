@@ -61,6 +61,14 @@
             "TagKey",
             "TagValue"
           ]
+        },
+        {
+          "Label" : {
+            "default": "Logging: "
+          },
+          "Parameters":[
+            "LogCloudTrail"
+          ]
         }
       ],
       "ParameterLabels": {
@@ -84,6 +92,9 @@
         },
         "UseHTTPS": {
           "default": "Use HTTPS"
+        },
+        "LogCloudTrail": {
+          "default": "Enable CloudTrail Logging"
         }
       }
     }
@@ -243,6 +254,15 @@
       ],
       "Default": "Disable",
       "Type": "String"
+    },
+    "LogCloudTrail": {
+      "Description": "Enable / Disable CloudTrail Logging.",
+      "AllowedValues": [
+        "Enable",
+        "Disable"
+      ],
+      "Default": "Enable",
+      "Type": "String"
     }
   },
   "Mappings": {
@@ -299,9 +319,78 @@
         },
         "Enable"
       ]
+    },
+    "cEnableCloudTrail": {
+      "Fn::Equals": [
+        {
+          "Ref": "LogCloudTrail"
+        },
+        "Enable"
+      ]
     }
   },
   "Resources": {
+    "CloudTrailToCloudWatchLogsRole": {
+      "Type": "AWS::IAM::Role",
+      "Metadata": {
+        "Comment": "IAM Role for the CloudTrail Logs to be written to the CloudWatch Logs Group"
+      },
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": [
+                  "cloudtrail.amazonaws.com"
+                ]
+              },
+              "Action": [
+                "sts:AssumeRole"
+              ]
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "CloudTrailToCloudWatchLogsRolePolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Sid": "AWSCloudTrailCreateLogStreamAndPutLogEvents2014",
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": [
+                    {"Fn::GetAtt":["LogGroupCloudTrail","Arn"]}
+                  ]
+                }
+              ]
+            }
+          }
+        ],       
+        "Path": "/"
+      },
+      "Condition" : "cEnableCloudTrail"
+    },
+    "CloudTrail": {
+      "Type" : "AWS::CloudTrail::Trail",
+      "DeletionPolicy" : "Delete",
+      "DependsOn" : ["LogStoreS3LocationPolicy","CloudTrailToCloudWatchLogsRole","LogGroupCloudTrail"],
+      "Properties" : {
+        "CloudWatchLogsLogGroupArn" : {"Fn::GetAtt":["LogGroupCloudTrail","Arn"]},
+        "CloudWatchLogsRoleArn" : {"Fn::GetAtt":["CloudTrailToCloudWatchLogsRole","Arn"]},
+        "EnableLogFileValidation" : false,
+        "IncludeGlobalServiceEvents" : true,
+        "IsLogging" : true,
+        "IsMultiRegionTrail" : false,        
+        "S3BucketName" : {"Ref":"LogStoreS3Location"}
+      },
+      "Condition" : "cEnableCloudTrail"
+    },
     "WaitHandle": {
       "Type": "AWS::CloudFormation::WaitConditionHandle"
     },
@@ -1308,7 +1397,8 @@
       "Properties" : {
         "LogGroupName" : { "Fn::Sub":"${AWS::StackName}-cloutrail"},
         "RetentionInDays" : 7
-      }
+      },
+      "Condition" : "cEnableCloudTrail"      
     },             
     "LogStoreS3Location": {
       "Type": "AWS::S3::Bucket",
@@ -1320,7 +1410,7 @@
         "LifecycleConfiguration":{
           "Rules":[
             {              
-              "ExpirationInDays" : 90,
+              "ExpirationInDays" : 30,
               "Id" : {
                 "Fn::Sub": "${AWS::StackName}-LogMigrationLifecycleRule"
               },              
@@ -1328,11 +1418,11 @@
               "Transitions" : [ 
                 {
                   "StorageClass" : "STANDARD_IA",                  
-                  "TransitionInDays" : 30
+                  "TransitionInDays" : 7
                 },
                 {
                   "StorageClass" : "GLACIER",
-                  "TransitionInDays" : 60
+                  "TransitionInDays" : 14
                 }                
                ]
             }
@@ -1349,6 +1439,7 @@
         "PolicyDocument": {
           "Statement": [
             {
+              "Sid": "AWSCloudWatchLogsAclCheck",
               "Effect": "Allow",
               "Principal": {
                 "Service": {"Fn::Sub":"logs.${AWS::Region}.amazonaws.com"}
@@ -1361,6 +1452,7 @@
               ]
             },
             {
+              "Sid": "AWSCloudWatchLogsWrite",
               "Effect": "Allow",
               "Principal": {
                 "Service": {"Fn::Sub":"logs.${AWS::Region}.amazonaws.com"}
@@ -1376,7 +1468,26 @@
                   "s3:x-amz-acl": "bucket-owner-full-control"
                 }
               }
-            }                        
+            },
+            {
+              "Sid": "AWSCloudTrailAclCheck",
+              "Effect": "Allow",
+              "Principal": { "Service":"cloudtrail.amazonaws.com"},
+              "Action": "s3:GetBucketAcl",
+              "Resource": { "Fn::Sub" : "arn:aws:s3:::${LogStoreS3Location}" }
+            },
+            {
+              "Sid": "AWSCloudTrailWrite",
+              "Effect": "Allow",
+              "Principal": { "Service":"cloudtrail.amazonaws.com"},
+              "Action": "s3:PutObject",
+              "Resource": { "Fn::Sub" : "arn:aws:s3:::${LogStoreS3Location}/AWSLogs/${AWS::AccountId}/*"},
+              "Condition": {
+                "StringEquals": {
+                  "s3:x-amz-acl": "bucket-owner-full-control"
+                }
+              }
+            }                                    
           ]
         }
       }
@@ -1516,24 +1627,6 @@
         "Runtime": "nodejs6.10",
         "Timeout": "300"
       }      
-    },                
-    "EC2InstanceChangesMetricFilter": {
-      "Type": "AWS::Logs::MetricFilter",
-      "Properties": {
-        "LogGroupName": {
-          "Ref": "LogGroupCloudTrail"
-        },
-        "FilterPattern": "{ ($.eventName = RunInstances) || ($.eventName = RebootInstances) || ($.eventName = StartInstances) || ($.eventName = StopInstances) || ($.eventName = TerminateInstances) }",
-        "MetricTransformations": [
-          {
-            "MetricNamespace": {
-              "Fn::Sub": "${AWS::StackName}"
-            },
-            "MetricName": "EC2InstanceEventCount",
-            "MetricValue": "1"
-          }
-        ]
-      }
     },
     "AppRestartMetricFilter": {
       "Type": "AWS::Logs::MetricFilter",
@@ -1759,6 +1852,316 @@
         "ComparisonOperator": "GreaterThanThreshold"
       }
     },
+    "SecurityGroupChangesMetricFilter": {
+      "Type": "AWS::Logs::MetricFilter",
+      "Properties": {
+        "LogGroupName": { "Ref" : "LogGroupCloudTrail" },
+        "FilterPattern": "{ ($.eventName = AuthorizeSecurityGroupIngress) || ($.eventName = AuthorizeSecurityGroupEgress) || ($.eventName = RevokeSecurityGroupIngress) || ($.eventName = RevokeSecurityGroupEgress) || ($.eventName = CreateSecurityGroup) || ($.eventName = DeleteSecurityGroup) }",
+        "MetricTransformations": [
+          {
+            "MetricNamespace": "CloudTrailMetrics",
+            "MetricName": "SecurityGroupEventCount",
+            "MetricValue": "1"
+          }
+        ]
+      },
+      "Condition" : "cEnableCloudTrail"
+    },
+    "SecurityGroupChangesAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName" : "CloudTrailSecurityGroupChanges",
+        "AlarmDescription" : "Alarms when an API call is made to create, update or delete a Security Group.",
+        "AlarmActions" : [{ "Ref" : "NotificationTopic" }],
+        "MetricName" : "SecurityGroupEventCount",
+        "Namespace" : "CloudTrailMetrics",
+        "ComparisonOperator" : "GreaterThanOrEqualToThreshold",
+        "EvaluationPeriods" : "1",
+        "Period" : "300",
+        "Statistic" : "Sum",
+        "Threshold" : "1"
+      },
+      "Condition" : "cEnableCloudTrail"
+    },
+    "NetworkAclChangesMetricFilter": {
+      "Type": "AWS::Logs::MetricFilter",
+      "Properties": {
+        "LogGroupName": { "Ref" : "LogGroupCloudTrail" },
+        "FilterPattern": "{ ($.eventName = CreateNetworkAcl) || ($.eventName = CreateNetworkAclEntry) || ($.eventName = DeleteNetworkAcl) || ($.eventName = DeleteNetworkAclEntry) || ($.eventName = ReplaceNetworkAclEntry) || ($.eventName = ReplaceNetworkAclAssociation) }",
+        "MetricTransformations": [
+          {
+            "MetricNamespace": "CloudTrailMetrics",
+            "MetricName": "NetworkAclEventCount",
+            "MetricValue": "1"
+          }
+        ]
+      },
+      "Condition" : "cEnableCloudTrail"
+    },
+    "NetworkAclChangesAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName" : "CloudTrailNetworkAclChanges",
+        "AlarmDescription" : "Alarms when an API call is made to create, update or delete a Network ACL.",
+        "AlarmActions" : [{ "Ref" : "NotificationTopic" }],
+        "MetricName" : "NetworkAclEventCount",
+        "Namespace" : "CloudTrailMetrics",
+        "ComparisonOperator" : "GreaterThanOrEqualToThreshold",
+        "EvaluationPeriods" : "1",
+        "Period" : "300",
+        "Statistic" : "Sum",
+        "Threshold" : "1"
+      },
+      "Condition" : "cEnableCloudTrail"
+    },
+    "GatewayChangesMetricFilter": {
+      "Type": "AWS::Logs::MetricFilter",
+      "Properties": {
+        "LogGroupName": { "Ref" : "LogGroupCloudTrail" },
+        "FilterPattern": "{ ($.eventName = CreateCustomerGateway) || ($.eventName = DeleteCustomerGateway) || ($.eventName = AttachInternetGateway) || ($.eventName = CreateInternetGateway) || ($.eventName = DeleteInternetGateway) || ($.eventName = DetachInternetGateway) }",
+        "MetricTransformations": [
+          {
+            "MetricNamespace": "CloudTrailMetrics",
+            "MetricName": "GatewayEventCount",
+            "MetricValue": "1"
+          }
+        ]
+      },
+      "Condition" : "cEnableCloudTrail"
+    },
+    "GatewayChangesAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName" : "CloudTrailGatewayChanges",
+        "AlarmDescription" : "Alarms when an API call is made to create, update or delete a Customer or Internet Gateway.",
+        "AlarmActions" : [{ "Ref" : "NotificationTopic" }],
+        "MetricName" : "GatewayEventCount",
+        "Namespace" : "CloudTrailMetrics",
+        "ComparisonOperator" : "GreaterThanOrEqualToThreshold",
+        "EvaluationPeriods" : "1",
+        "Period" : "300",
+        "Statistic" : "Sum",
+        "Threshold" : "1"
+      },
+      "Condition" : "cEnableCloudTrail"
+    },
+    "VpcChangesMetricFilter": {
+      "Type": "AWS::Logs::MetricFilter",
+      "Properties": {
+        "LogGroupName": { "Ref" : "LogGroupCloudTrail" },
+        "FilterPattern": "{ ($.eventName = CreateVpc) || ($.eventName = DeleteVpc) || ($.eventName = ModifyVpcAttribute) || ($.eventName = AcceptVpcPeeringConnection) || ($.eventName = CreateVpcPeeringConnection) || ($.eventName = DeleteVpcPeeringConnection) || ($.eventName = RejectVpcPeeringConnection) || ($.eventName = AttachClassicLinkVpc) || ($.eventName = DetachClassicLinkVpc) || ($.eventName = DisableVpcClassicLink) || ($.eventName = EnableVpcClassicLink) }",
+        "MetricTransformations": [
+          {
+            "MetricNamespace": "CloudTrailMetrics",
+            "MetricName": "VpcEventCount",
+            "MetricValue": "1"
+          }
+        ]
+      },
+      "Condition" : "cEnableCloudTrail"
+    },
+    "VpcChangesAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName" : "CloudTrailVpcChanges",
+        "AlarmDescription" : "Alarms when an API call is made to create, update or delete a VPC, VPC peering connection or VPC connection to classic.",
+        "AlarmActions" : [{ "Ref" : "NotificationTopic" }],
+        "MetricName" : "VpcEventCount",
+        "Namespace" : "CloudTrailMetrics",
+        "ComparisonOperator" : "GreaterThanOrEqualToThreshold",
+        "EvaluationPeriods" : "1",
+        "Period" : "300",
+        "Statistic" : "Sum",
+        "Threshold" : "1"
+      },
+      "Condition" : "cEnableCloudTrail"
+    },
+    "EC2InstanceChangesMetricFilter": {
+      "Type": "AWS::Logs::MetricFilter",
+      "Properties": {
+        "LogGroupName": { "Ref" : "LogGroupCloudTrail" },
+        "FilterPattern": "{ ($.eventName = RunInstances) || ($.eventName = RebootInstances) || ($.eventName = StartInstances) || ($.eventName = StopInstances) || ($.eventName = TerminateInstances) }",
+        "MetricTransformations": [
+          {
+            "MetricNamespace": "CloudTrailMetrics",
+            "MetricName": "EC2InstanceEventCount",
+            "MetricValue": "1"
+          }
+        ]
+      },
+      "Condition" : "cEnableCloudTrail"
+    },
+    "EC2InstanceChangesAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName" : "CloudTrailEC2InstanceChanges",
+        "AlarmDescription" : "Alarms when an API call is made to create, terminate, start, stop or reboot an EC2 instance.",
+        "AlarmActions" : [{ "Ref" : "NotificationTopic" }],
+        "MetricName" : "EC2InstanceEventCount",
+        "Namespace" : "CloudTrailMetrics",
+        "ComparisonOperator" : "GreaterThanOrEqualToThreshold",
+        "EvaluationPeriods" : "1",
+        "Period" : "300",
+        "Statistic" : "Sum",
+        "Threshold" : "1"
+      },
+      "Condition" : "cEnableCloudTrail"
+    },
+    "EC2LargeInstanceChangesMetricFilter": {
+      "Type": "AWS::Logs::MetricFilter",
+      "Properties": {
+        "LogGroupName": { "Ref" : "LogGroupCloudTrail" },
+        "FilterPattern": "{ ($.eventName = RunInstances) && (($.requestParameters.instanceType = *.8xlarge) || ($.requestParameters.instanceType = *.4xlarge)) }",
+        "MetricTransformations": [
+          {
+            "MetricNamespace": "CloudTrailMetrics",
+            "MetricName": "EC2LargeInstanceEventCount",
+            "MetricValue": "1"
+          }
+        ]
+      },
+      "Condition" : "cEnableCloudTrail"
+    },
+    "EC2LargeInstanceChangesAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName" : "CloudTrailEC2LargeInstanceChanges",
+        "AlarmDescription" : "Alarms when an API call is made to create, terminate, start, stop or reboot a 4x or 8x-large EC2 instance.",
+        "AlarmActions" : [{ "Ref" : "NotificationTopic" }],
+        "MetricName" : "EC2LargeInstanceEventCount",
+        "Namespace" : "CloudTrailMetrics",
+        "ComparisonOperator" : "GreaterThanOrEqualToThreshold",
+        "EvaluationPeriods" : "1",
+        "Period" : "300",
+        "Statistic" : "Sum",
+        "Threshold" : "1"
+      },
+      "Condition" : "cEnableCloudTrail"
+    },
+    "CloudTrailChangesMetricFilter": {
+      "Type": "AWS::Logs::MetricFilter",
+      "Properties": {
+        "LogGroupName": { "Ref" : "LogGroupCloudTrail" },
+        "FilterPattern": "{ ($.eventName = CreateTrail) || ($.eventName = UpdateTrail) || ($.eventName = DeleteTrail) || ($.eventName = StartLogging) || ($.eventName = StopLogging) }",
+        "MetricTransformations": [
+          {
+            "MetricNamespace": "CloudTrailMetrics",
+            "MetricName": "CloudTrailEventCount",
+            "MetricValue": "1"
+          }
+        ]
+      },
+      "Condition" : "cEnableCloudTrail"
+    },
+    "CloudTrailChangesAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName" : "CloudTrailChanges",
+        "AlarmDescription" : "Alarms when an API call is made to create, update or delete a CloudTrail trail, or to start or stop logging to a trail.",
+        "AlarmActions" : [{ "Ref" : "NotificationTopic" }],
+        "MetricName" : "CloudTrailEventCount",
+        "Namespace" : "CloudTrailMetrics",
+        "ComparisonOperator" : "GreaterThanOrEqualToThreshold",
+        "EvaluationPeriods" : "1",
+        "Period" : "300",
+        "Statistic" : "Sum",
+        "Threshold" : "1"
+      },
+      "Condition" : "cEnableCloudTrail"
+    },
+    "ConsoleSignInFailuresMetricFilter": {
+      "Type": "AWS::Logs::MetricFilter",
+      "Properties": {
+        "LogGroupName": { "Ref" : "LogGroupCloudTrail" },
+        "FilterPattern": "{ ($.eventName = ConsoleLogin) && ($.errorMessage = \"Failed authentication\") }",
+        "MetricTransformations": [
+          {
+            "MetricNamespace": "CloudTrailMetrics",
+            "MetricName": "ConsoleSignInFailureCount",
+            "MetricValue": "1"
+          }
+        ]
+      },
+      "Condition" : "cEnableCloudTrail"
+    },
+    "ConsoleSignInFailuresAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName" : "CloudTrailConsoleSignInFailures",
+        "AlarmDescription" : "Alarms when an unauthenticated API call is made to sign into the console.",
+        "AlarmActions" : [{ "Ref" : "NotificationTopic" }],
+        "MetricName" : "ConsoleSignInFailureCount",
+        "Namespace" : "CloudTrailMetrics",
+        "ComparisonOperator" : "GreaterThanOrEqualToThreshold",
+        "EvaluationPeriods" : "1",
+        "Period" : "300",
+        "Statistic" : "Sum",
+        "Threshold" : "3"
+      },
+      "Condition" : "cEnableCloudTrail"
+    },
+    "AuthorizationFailuresMetricFilter": {
+      "Type": "AWS::Logs::MetricFilter",
+      "Properties": {
+        "LogGroupName": { "Ref" : "LogGroupCloudTrail" },
+        "FilterPattern": "{ ($.errorCode = \"*UnauthorizedOperation\") || ($.errorCode = \"AccessDenied*\") }",
+        "MetricTransformations": [
+          {
+            "MetricNamespace": "CloudTrailMetrics",
+            "MetricName": "AuthorizationFailureCount",
+            "MetricValue": "1"
+          }
+        ]
+      },
+      "Condition" : "cEnableCloudTrail"
+    },
+    "AuthorizationFailuresAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName" : "CloudTrailAuthorizationFailures",
+        "AlarmDescription" : "Alarms when an unauthorized API call is made.",
+        "AlarmActions" : [{ "Ref" : "NotificationTopic" }],
+        "MetricName" : "AuthorizationFailureCount",
+        "Namespace" : "CloudTrailMetrics",
+        "ComparisonOperator" : "GreaterThanOrEqualToThreshold",
+        "EvaluationPeriods" : "1",
+        "Period" : "300",
+        "Statistic" : "Sum",
+        "Threshold" : "1"            
+      },
+      "Condition" : "cEnableCloudTrail"
+    },
+    "IAMPolicyChangesMetricFilter": {
+      "Type": "AWS::Logs::MetricFilter",
+      "Properties": {
+        "LogGroupName": { "Ref" : "LogGroupCloudTrail" },
+        "FilterPattern": "{($.eventName=DeleteGroupPolicy)||($.eventName=DeleteRolePolicy)||($.eventName=DeleteUserPolicy)||($.eventName=PutGroupPolicy)||($.eventName=PutRolePolicy)||($.eventName=PutUserPolicy)||($.eventName=CreatePolicy)||($.eventName=DeletePolicy)||($.eventName=CreatePolicyVersion)||($.eventName=DeletePolicyVersion)||($.eventName=AttachRolePolicy)||($.eventName=DetachRolePolicy)||($.eventName=AttachUserPolicy)||($.eventName=DetachUserPolicy)||($.eventName=AttachGroupPolicy)||($.eventName=DetachGroupPolicy)}",
+        "MetricTransformations": [
+          {
+            "MetricNamespace": "CloudTrailMetrics",
+            "MetricName": "IAMPolicyEventCount",
+            "MetricValue": "1"
+          }
+        ]
+      },
+      "Condition" : "cEnableCloudTrail"
+    },
+    "IAMPolicyChangesAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName" : "CloudTrailIAMPolicyChanges",
+        "AlarmDescription" : "Alarms when an API call is made to change an IAM policy.",
+        "AlarmActions" : [{ "Ref" : "NotificationTopic" }],
+        "MetricName" : "IAMPolicyEventCount",
+        "Namespace" : "CloudTrailMetrics",
+        "ComparisonOperator" : "GreaterThanOrEqualToThreshold",
+        "EvaluationPeriods" : "1",
+        "Period" : "300",
+        "Statistic" : "Sum",
+        "Threshold" : "1"
+      },
+      "Condition" : "cEnableCloudTrail"
+    },    
     "LaunchConfig": {
       "Type": "AWS::AutoScaling::LaunchConfiguration",
       "Metadata": {
