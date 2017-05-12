@@ -42,7 +42,8 @@
           "Parameters": [
             "KeyPairName",
             "SSHLocation",
-            "UserName"
+            "UserName",
+            "UseHTTPS"
           ]
         },
         {
@@ -1328,11 +1329,11 @@
               "Transitions" : [ 
                 {
                   "StorageClass" : "STANDARD_IA",                  
-                  "TransitionInDays" : 30
+                  "TransitionInDays" : 7
                 },
                 {
                   "StorageClass" : "GLACIER",
-                  "TransitionInDays" : 60
+                  "TransitionInDays" : 45
                 }                
                ]
             }
