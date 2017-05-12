@@ -63,6 +63,7 @@ aws cloudformation "${action}" \
 	--capabilities "CAPABILITY_NAMED_IAM" \
 	--parameters \
 		ParameterKey=KeyName,ParameterValue="pmarques@al" \
+		ParameterKey=ElasticsearchStack,ParameterValue="" \
 		ParameterKey=DBName,ParameterValue="todo" \
 		ParameterKey=UseDNS,ParameterValue="Disable" \
 		ParameterKey=UseHTTPS,ParameterValue="Disable" \

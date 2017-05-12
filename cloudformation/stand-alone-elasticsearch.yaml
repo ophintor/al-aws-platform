@@ -1,0 +1,120 @@
+---
+# Standalone elasticsearch cluster
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Standalone ES cluster
+# Elasticsearch
+Parameters:
+  ClusterSize:
+    AllowedValues:
+      - Tiny
+      - Small
+      - Medium
+      - Large
+    Default: Small
+    Description: 'Amazon ES cluster size: small (2 data nodes), medium (4 data nodes), large (6 data nodes)'
+    Type: String
+
+  # TODO this shouldn't allow giving global access to cluster it also should be
+  # locked down to instances in the VPC but that depends on network info.
+  IPAccess:
+    AllowedPattern: (\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})
+    ConstraintDescription: must be a valid IP CIDR range of the form x.x.x.x/x.
+    Description: IP address range that can access Elasticsearch
+    Default: 0.0.0.0/0
+    MaxLength: '18'
+    MinLength: '9'
+    Type: String
+
+Conditions:
+  SizeLarge:
+    !Equals [!Ref ClusterSize, Large]
+  SizeMedium:
+    !Equals [!Ref ClusterSize, Medium]
+  SizeSmall:
+    !Equals [!Ref ClusterSize, Small]
+  SizeTiny:
+    !Equals [!Ref ClusterSize, Tiny]
+
+Mappings:
+  MasterSizing:
+    elasticsearch:
+      Large: m3.medium.elasticsearch
+      Medium: m3.medium.elasticsearch
+      Small: t2.small.elasticsearch
+      Tiny: t2.small.elasticsearch
+
+  instanceCount:
+    elasticsearch:
+      Large: '10'
+      Medium: '4'
+      Small: '2'
+      Tiny: '2'
+
+  instanceSizing:
+    elasticsearch:
+      Large: r3.8xlarge.elasticsearch
+      Medium: r3.2xlarge.elasticsearch
+      Small: m3.large.elasticsearch
+      Tiny: t2.medium.elasticsearch
+
+Outputs:
+  # Elasticsearch Outputs
+  DomainEndpointES:
+    Description: URL of domain endpoint - for lambda function
+    Value: !Sub ${ElasticsearchAWSLogs.DomainEndpoint}
+    Export:
+      Name: !Sub ${AWS::StackName}-DomainEndpointES
+  KibanaURL:
+    Description: URL of the Kibana dashboard
+    Value: !Sub https://${ElasticsearchAWSLogs.DomainEndpoint}/_plugin/kibana/
+
+Resources:
+  ElasticsearchAWSLogs:
+    Properties:
+      AccessPolicies:
+        Statement:
+          - Action: es:*
+            Condition:
+              IpAddress:
+                aws:SourceIp: !Ref IPAccess
+            Effect: Allow
+            Principal:
+              AWS: '*'
+            Resource: '*'
+        Version: '2012-10-17'
+      AdvancedOptions:
+        # Breaks lambda log posting :(
+        rest.action.multi.allow_explicit_index: 'true'
+      # Max length 28 chars
+      DomainName: !Sub logs-${AWS::StackName}
+      EBSOptions:
+        Fn::If:
+          - SizeTiny
+          - EBSEnabled: true
+            Iops: 0
+            VolumeSize: 10
+            VolumeType: gp2
+          - Fn::If:
+              - SizeSmall
+              - EBSEnabled: true
+                Iops: 0
+                VolumeSize: 50
+                VolumeType: gp2
+              - Fn::If:
+                  - SizeMedium
+                  - EBSEnabled: false
+                  - EBSEnabled: false
+      ElasticsearchClusterConfig:
+        DedicatedMasterCount: '3'
+        DedicatedMasterEnabled: 'true'
+        DedicatedMasterType:
+          !FindInMap [MasterSizing, elasticsearch, !Ref ClusterSize]
+        InstanceCount:
+          !FindInMap [instanceCount, elasticsearch, !Ref ClusterSize]
+        InstanceType:
+          !FindInMap [instanceSizing, elasticsearch, !Ref ClusterSize]
+        ZoneAwarenessEnabled: 'true'
+      ElasticsearchVersion: '5.1'
+      SnapshotOptions:
+        AutomatedSnapshotStartHour: '1'
+    Type: AWS::Elasticsearch::Domain
