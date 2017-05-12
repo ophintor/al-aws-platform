@@ -322,29 +322,6 @@
         "Ubuntu": "ami-7379e31f"
       }
     },
-    "FilterPatternLookup": {
-        "CloudTrail": {
-            "Pattern": ""
-        },
-        "Common": {
-            "Pattern": "[host, ident, authuser, date, request, status, bytes, referrer, agent]"
-        },
-        "FlowLogs": {
-            "Pattern": "[version, account_id, interface_id, srcaddr != \"-\", dstaddr != \"-\", srcport != \"-\", dstport != \"-\", protocol, packets, bytes, start, end, action, log_status]"
-        },
-        "Lambda": {
-            "Pattern": "[timestamp=*Z, request_id=\"*-*\", event]"
-        },
-        "Other": {
-            "Pattern": ""
-        },
-        "SpaceDelimited": {
-            "Pattern": "[]"
-        },
-        "ECS": {
-            "Pattern": "\"Container\""
-        }
-    },
     "MasterSizing": {
         "elasticsearch": {
             "Large": "m3.medium.elasticsearch",
@@ -3342,21 +3319,12 @@
                 "es:*"
               ],
               "Resource": "*"
-            },
-            {
-              "Effect": "Allow",
-              "Action": [
-                "cloudformation:DescribeStacks"
-              ],
-              "Resource": "*"
-            },
+            }
           ]
         },
-        "Roles": [
-          {
-            "Ref": "LogStreamerRole"
-          }
-        ]
+        "Roles": [ {
+          "Ref": "LogStreamerRole"
+        } ]
       }
     },
 
@@ -3367,7 +3335,9 @@
         "Action": "lambda:InvokeFunction",
         "Principal": "logs.us-west-2.amazonaws.com",
         "SourceAccount": { "Ref" : "AWS::AccountId" },
-        "SourceArn": "arn:aws:logs:us-west-2:505076813643:log-group:kamil09-applog:*"
+        "SourceArn": {
+          "Fn::Sub": "arn:aws:logs:us-west-2:505076813643:log-group:${AWS::StackName}-applog:*"
+        }
       }
     },
 
@@ -3386,10 +3356,9 @@
           "Fn::Sub": "${AWS::StackName}-LogStreamer"
         },
         "Code": {
-          "S3Bucket": {
-            "Fn::Sub": "solutions-${AWS::Region}"
-          },
-          "S3Key": "centralized-logging/v1/centralizedLoggingDownload.zip"
+          "ZipFile": {
+            "Fn::Sub": "var https=require('https');var zlib=require('zlib');var crypto=require('crypto');var endpoint='${ElasticsearchAWSLogs.DomainEndpoint}';exports.handler=function(i,j){var k=new Buffer(i.awslogs.data,'base64');zlib.gunzip(k,function(e,f){if(e){j.fail(e);return}var g=JSON.parse(f.toString('utf8'));var h=transform(g);if(!h){console.log('Received a control message');j.succeed('Control message handled successfully');return}post(h,function(a,b,c,d){console.log('Response: '+JSON.stringify({\"statusCode\":c}));if(a){console.log('Error: '+JSON.stringify(a,null,2));if(d&&d.length>0){console.log(\"Failed Items: \"+JSON.stringify(d,null,2))}j.fail(JSON.stringify(a))}else{console.log('Success: '+JSON.stringify(b));j.succeed('Success')}})})};function transform(f){if(f.messageType==='CONTROL_MESSAGE'){return null}var g='';f.logEvents.forEach(function(a){var b=new Date(1*a.timestamp);var c=['cwl-'+b.getUTCFullYear(),('0'+(b.getUTCMonth()+1)).slice(-2),('0'+b.getUTCDate()).slice(-2)].join('.');var d=buildSource(a.message,a.extractedFields);d['@id']=a.id;d['@timestamp']=new Date(1*a.timestamp).toISOString();d['@message']=a.message;d['@owner']=f.owner;d['@log_group']=f.logGroup;d['@log_stream']=f.logStream;var e={\"index\":{}};e.index._index=c;e.index._type=f.logGroup;e.index._id=a.id;g+=[JSON.stringify(e),JSON.stringify(d),].join('\\n')+'\\n'});return g}function buildSource(a,b){if(b){var c={};for(var d in b){if(b.hasOwnProperty(d)&&b[d]){var e=b[d];if(isNumeric(e)){c[d]=1*e;continue}jsonSubString=extractJson(e);if(jsonSubString!==null){c['$'+d]=JSON.parse(jsonSubString)}c[d]=e}}return c}jsonSubString=extractJson(a);if(jsonSubString!==null){return JSON.parse(jsonSubString)}return{}}function extractJson(a){var b=a.indexOf('{');if(b<0)return null;var c=a.substring(b);return isValidJson(c)?c:null}function isValidJson(a){try{JSON.parse(a)}catch(e){return false}return true}function isNumeric(n){return!isNaN(parseFloat(n))&&isFinite(n)}function post(g,h){var i=buildRequest(endpoint,g);var j=https.request(i,function(e){var f='';e.on('data',function(a){f+=a});e.on('end',function(){var a=JSON.parse(f);var b;var c;if(e.statusCode>=200&&e.statusCode<299){b=a.items.filter(function(x){return x.index.status>=300});c={\"attemptedItems\":a.items.length,\"successfulItems\":a.items.length-b.length,\"failedItems\":b.length}}var d=e.statusCode!==200||a.errors===true?{\"statusCode\":e.statusCode,\"responseBody\":f}:null;h(d,c,e.statusCode,b)})}).on('error',function(e){h(e)});j.end(i.body)}function buildRequest(c,d){var e=c.match(/^([^\\.]+)\\.?([^\\.]*)\\.?([^\\.]*)\\.amazonaws\\.com$/);var f=e[2];var g=e[3];var h=(new Date()).toISOString().replace(/[:\\-]|\\.\\d{3}/g,'');var i=h.substr(0,8);var j=hmac('AWS4'+process.env.AWS_SECRET_ACCESS_KEY,i);var l=hmac(j,f);var m=hmac(l,g);var n=hmac(m,'aws4_request');var o={host:c,method:'POST',path:'/_bulk',body:d,headers:{'Content-Type':'application/json','Host':c,'Content-Length':Buffer.byteLength(d),'X-Amz-Security-Token':process.env.AWS_SESSION_TOKEN,'X-Amz-Date':h}};var p=Object.keys(o.headers).sort(function(a,b){return a.toLowerCase()<b.toLowerCase()?-1:1}).map(function(k){return k.toLowerCase()+':'+o.headers[k]}).join('\\n');var q=Object.keys(o.headers).map(function(k){return k.toLowerCase()}).sort().join(';');var r=[o.method,o.path,'',p,'',q,hash(o.body,'hex'),].join('\\n');var s=[i,f,g,'aws4_request'].join('/');var t=['AWS4-HMAC-SHA256',h,s,hash(r,'hex')].join('\\n');o.headers.Authorization=['AWS4-HMAC-SHA256 Credential='+process.env.AWS_ACCESS_KEY_ID+'/'+s,'SignedHeaders='+q,'Signature='+hmac(n,t,'hex')].join(', ');return o}function hmac(a,b,c){return crypto.createHmac('sha256',a).update(b,'utf8').digest(c)}function hash(a,b){return crypto.createHash('sha256').update(a,'utf8').digest(b)}"
+          }
         },
         "Description": "Lambda function for moving log data to Amazon Elasticsearch.",
         "Handler": "index.handler",
@@ -3408,7 +3377,7 @@
         "DestinationArn": {
           "Fn::GetAtt" : [ "LogStreamer", "Arn" ]
         },
-        "FilterPattern": "",
+        "FilterPattern": "[ip, date, method, request, statuscode, bytes, responsetime, agent]",
         "LogGroupName": { "Fn::Sub":"${AWS::StackName}-applog"}
       }
     }
