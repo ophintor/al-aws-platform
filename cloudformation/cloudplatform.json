@@ -1384,10 +1384,14 @@
                 "Fn::Sub": "${AWS::StackName}-LogMigrationLifecycleRule"
               },              
               "Status" : "Enabled",              
-              "Transitions" : [
+              "Transitions" : [ 
+                {
+                  "StorageClass" : "STANDARD_IA",                  
+                  "TransitionInDays" : 7
+                },
                 {
                   "StorageClass" : "GLACIER",
-                  "TransitionInDays" : 7
+                  "TransitionInDays" : 14
                 }                
                ]
             }
