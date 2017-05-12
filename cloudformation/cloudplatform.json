@@ -1515,11 +1515,11 @@
               "Transitions" : [
                 {
                   "StorageClass" : "STANDARD_IA",
-                  "TransitionInDays" : 7
+                  "TransitionInDays" : 30
                 },
                 {
                   "StorageClass" : "GLACIER",
-                  "TransitionInDays" : 45
+                  "TransitionInDays" : 60
                 }
                ]
             }
@@ -1956,7 +1956,7 @@
         "FilterPattern": "{ ($.eventName = AuthorizeSecurityGroupIngress) || ($.eventName = AuthorizeSecurityGroupEgress) || ($.eventName = RevokeSecurityGroupIngress) || ($.eventName = RevokeSecurityGroupEgress) || ($.eventName = CreateSecurityGroup) || ($.eventName = DeleteSecurityGroup) }",
         "MetricTransformations": [
           {
-            "MetricNamespace": "CloudTrailMetrics",
+            "MetricNamespace": {"Fn::Sub": "${AWS::StackName}-CloudTrailMetrics"},
             "MetricName": "SecurityGroupEventCount",
             "MetricValue": "1"
           }
@@ -1967,7 +1967,7 @@
     "SecurityGroupChangesAlarm": {
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
-        "AlarmName" : "CloudTrailSecurityGroupChanges",
+        "AlarmName" : {"Fn::Sub": "${AWS::StackName}-CloudTrailSecurityGroupChanges"},
         "AlarmDescription" : "Alarms when an API call is made to create, update or delete a Security Group.",
         "AlarmActions" : [{ "Ref" : "NotificationTopic" }],
         "MetricName" : "SecurityGroupEventCount",
@@ -1987,7 +1987,7 @@
         "FilterPattern": "{ ($.eventName = CreateNetworkAcl) || ($.eventName = CreateNetworkAclEntry) || ($.eventName = DeleteNetworkAcl) || ($.eventName = DeleteNetworkAclEntry) || ($.eventName = ReplaceNetworkAclEntry) || ($.eventName = ReplaceNetworkAclAssociation) }",
         "MetricTransformations": [
           {
-            "MetricNamespace": "CloudTrailMetrics",
+            "MetricNamespace": {"Fn::Sub": "${AWS::StackName}-CloudTrailMetrics"},
             "MetricName": "NetworkAclEventCount",
             "MetricValue": "1"
           }
@@ -1998,7 +1998,7 @@
     "NetworkAclChangesAlarm": {
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
-        "AlarmName" : "CloudTrailNetworkAclChanges",
+        "AlarmName" : {"Fn::Sub": "${AWS::StackName}-CloudTrailNetworkAclChanges"},
         "AlarmDescription" : "Alarms when an API call is made to create, update or delete a Network ACL.",
         "AlarmActions" : [{ "Ref" : "NotificationTopic" }],
         "MetricName" : "NetworkAclEventCount",
@@ -2018,7 +2018,7 @@
         "FilterPattern": "{ ($.eventName = CreateCustomerGateway) || ($.eventName = DeleteCustomerGateway) || ($.eventName = AttachInternetGateway) || ($.eventName = CreateInternetGateway) || ($.eventName = DeleteInternetGateway) || ($.eventName = DetachInternetGateway) }",
         "MetricTransformations": [
           {
-            "MetricNamespace": "CloudTrailMetrics",
+            "MetricNamespace": {"Fn::Sub": "${AWS::StackName}-CloudTrailMetrics"},
             "MetricName": "GatewayEventCount",
             "MetricValue": "1"
           }
@@ -2029,7 +2029,7 @@
     "GatewayChangesAlarm": {
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
-        "AlarmName" : "CloudTrailGatewayChanges",
+        "AlarmName" : {"Fn::Sub": "${AWS::StackName}-CloudTrailGatewayChanges"},
         "AlarmDescription" : "Alarms when an API call is made to create, update or delete a Customer or Internet Gateway.",
         "AlarmActions" : [{ "Ref" : "NotificationTopic" }],
         "MetricName" : "GatewayEventCount",
@@ -2049,7 +2049,7 @@
         "FilterPattern": "{ ($.eventName = CreateVpc) || ($.eventName = DeleteVpc) || ($.eventName = ModifyVpcAttribute) || ($.eventName = AcceptVpcPeeringConnection) || ($.eventName = CreateVpcPeeringConnection) || ($.eventName = DeleteVpcPeeringConnection) || ($.eventName = RejectVpcPeeringConnection) || ($.eventName = AttachClassicLinkVpc) || ($.eventName = DetachClassicLinkVpc) || ($.eventName = DisableVpcClassicLink) || ($.eventName = EnableVpcClassicLink) }",
         "MetricTransformations": [
           {
-            "MetricNamespace": "CloudTrailMetrics",
+            "MetricNamespace": {"Fn::Sub": "${AWS::StackName}-CloudTrailMetrics"},
             "MetricName": "VpcEventCount",
             "MetricValue": "1"
           }
@@ -2060,7 +2060,7 @@
     "VpcChangesAlarm": {
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
-        "AlarmName" : "CloudTrailVpcChanges",
+        "AlarmName" : {"Fn::Sub": "${AWS::StackName}-CloudTrailVpcChanges"},
         "AlarmDescription" : "Alarms when an API call is made to create, update or delete a VPC, VPC peering connection or VPC connection to classic.",
         "AlarmActions" : [{ "Ref" : "NotificationTopic" }],
         "MetricName" : "VpcEventCount",
@@ -2080,7 +2080,7 @@
         "FilterPattern": "{ ($.eventName = RunInstances) || ($.eventName = RebootInstances) || ($.eventName = StartInstances) || ($.eventName = StopInstances) || ($.eventName = TerminateInstances) }",
         "MetricTransformations": [
           {
-            "MetricNamespace": "CloudTrailMetrics",
+            "MetricNamespace": {"Fn::Sub": "${AWS::StackName}-CloudTrailMetrics"},
             "MetricName": "EC2InstanceEventCount",
             "MetricValue": "1"
           }
@@ -2091,7 +2091,7 @@
     "EC2InstanceChangesAlarm": {
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
-        "AlarmName" : "CloudTrailEC2InstanceChanges",
+        "AlarmName" : {"Fn::Sub": "${AWS::StackName}-CloudTrailEC2InstanceChanges"},
         "AlarmDescription" : "Alarms when an API call is made to create, terminate, start, stop or reboot an EC2 instance.",
         "AlarmActions" : [{ "Ref" : "NotificationTopic" }],
         "MetricName" : "EC2InstanceEventCount",
@@ -2111,7 +2111,7 @@
         "FilterPattern": "{ ($.eventName = RunInstances) && (($.requestParameters.instanceType = *.8xlarge) || ($.requestParameters.instanceType = *.4xlarge)) }",
         "MetricTransformations": [
           {
-            "MetricNamespace": "CloudTrailMetrics",
+            "MetricNamespace": {"Fn::Sub": "${AWS::StackName}-CloudTrailMetrics"},
             "MetricName": "EC2LargeInstanceEventCount",
             "MetricValue": "1"
           }
@@ -2122,7 +2122,7 @@
     "EC2LargeInstanceChangesAlarm": {
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
-        "AlarmName" : "CloudTrailEC2LargeInstanceChanges",
+        "AlarmName" : {"Fn::Sub": "${AWS::StackName}-CloudTrailEC2LargeInstanceChanges"},
         "AlarmDescription" : "Alarms when an API call is made to create, terminate, start, stop or reboot a 4x or 8x-large EC2 instance.",
         "AlarmActions" : [{ "Ref" : "NotificationTopic" }],
         "MetricName" : "EC2LargeInstanceEventCount",
@@ -2142,7 +2142,7 @@
         "FilterPattern": "{ ($.eventName = CreateTrail) || ($.eventName = UpdateTrail) || ($.eventName = DeleteTrail) || ($.eventName = StartLogging) || ($.eventName = StopLogging) }",
         "MetricTransformations": [
           {
-            "MetricNamespace": "CloudTrailMetrics",
+            "MetricNamespace": {"Fn::Sub": "${AWS::StackName}-CloudTrailMetrics"},
             "MetricName": "CloudTrailEventCount",
             "MetricValue": "1"
           }
@@ -2153,7 +2153,7 @@
     "CloudTrailChangesAlarm": {
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
-        "AlarmName" : "CloudTrailChanges",
+        "AlarmName" : {"Fn::Sub": "${AWS::StackName}-CloudTrailChanges"},
         "AlarmDescription" : "Alarms when an API call is made to create, update or delete a CloudTrail trail, or to start or stop logging to a trail.",
         "AlarmActions" : [{ "Ref" : "NotificationTopic" }],
         "MetricName" : "CloudTrailEventCount",
@@ -2173,7 +2173,7 @@
         "FilterPattern": "{ ($.eventName = ConsoleLogin) && ($.errorMessage = \"Failed authentication\") }",
         "MetricTransformations": [
           {
-            "MetricNamespace": "CloudTrailMetrics",
+            "MetricNamespace": {"Fn::Sub": "${AWS::StackName}-CloudTrailMetrics"},
             "MetricName": "ConsoleSignInFailureCount",
             "MetricValue": "1"
           }
@@ -2184,7 +2184,7 @@
     "ConsoleSignInFailuresAlarm": {
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
-        "AlarmName" : "CloudTrailConsoleSignInFailures",
+        "AlarmName" : {"Fn::Sub": "${AWS::StackName}-CloudTrailConsoleSignInFailures"},
         "AlarmDescription" : "Alarms when an unauthenticated API call is made to sign into the console.",
         "AlarmActions" : [{ "Ref" : "NotificationTopic" }],
         "MetricName" : "ConsoleSignInFailureCount",
@@ -2204,7 +2204,7 @@
         "FilterPattern": "{ ($.errorCode = \"*UnauthorizedOperation\") || ($.errorCode = \"AccessDenied*\") }",
         "MetricTransformations": [
           {
-            "MetricNamespace": "CloudTrailMetrics",
+            "MetricNamespace": {"Fn::Sub": "${AWS::StackName}-CloudTrailMetrics"},
             "MetricName": "AuthorizationFailureCount",
             "MetricValue": "1"
           }
@@ -2215,7 +2215,7 @@
     "AuthorizationFailuresAlarm": {
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
-        "AlarmName" : "CloudTrailAuthorizationFailures",
+        "AlarmName" : {"Fn::Sub": "${AWS::StackName}-CloudTrailAuthorizationFailures"},
         "AlarmDescription" : "Alarms when an unauthorized API call is made.",
         "AlarmActions" : [{ "Ref" : "NotificationTopic" }],
         "MetricName" : "AuthorizationFailureCount",
@@ -2235,7 +2235,7 @@
         "FilterPattern": "{($.eventName=DeleteGroupPolicy)||($.eventName=DeleteRolePolicy)||($.eventName=DeleteUserPolicy)||($.eventName=PutGroupPolicy)||($.eventName=PutRolePolicy)||($.eventName=PutUserPolicy)||($.eventName=CreatePolicy)||($.eventName=DeletePolicy)||($.eventName=CreatePolicyVersion)||($.eventName=DeletePolicyVersion)||($.eventName=AttachRolePolicy)||($.eventName=DetachRolePolicy)||($.eventName=AttachUserPolicy)||($.eventName=DetachUserPolicy)||($.eventName=AttachGroupPolicy)||($.eventName=DetachGroupPolicy)}",
         "MetricTransformations": [
           {
-            "MetricNamespace": "CloudTrailMetrics",
+            "MetricNamespace": {"Fn::Sub": "${AWS::StackName}-CloudTrailMetrics"},
             "MetricName": "IAMPolicyEventCount",
             "MetricValue": "1"
           }
@@ -2246,7 +2246,7 @@
     "IAMPolicyChangesAlarm": {
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
-        "AlarmName" : "CloudTrailIAMPolicyChanges",
+        "AlarmName" : {"Fn::Sub": "${AWS::StackName}-CloudTrailIAMPolicyChanges"},
         "AlarmDescription" : "Alarms when an API call is made to change an IAM policy.",
         "AlarmActions" : [{ "Ref" : "NotificationTopic" }],
         "MetricName" : "IAMPolicyEventCount",
