@@ -3888,18 +3888,6 @@
         "Ref": "ApplicationLoadBalancer"
       }
     },
-    "DomainEndpoint": {
-        "Description": "URL of domain endpoint - for lambda function",
-        "Value": {
-            "Fn::Sub": "https://${ElasticsearchAWSLogs.DomainEndpoint}"
-        },
-        "Export": {
-            "Name": {
-                "Fn::Sub": "${AWS::StackName}-ES"
-            }
-        },
-        "Condition": "cEnableES"
-    },
     "KibanaURL": {
         "Description": "URL of the Kibana dashboard",
         "Value": {
