@@ -1419,11 +1419,11 @@
               "Transitions" : [ 
                 {
                   "StorageClass" : "STANDARD_IA",                  
-                  "TransitionInDays" : 7
+                  "TransitionInDays" : 30
                 },
                 {
                   "StorageClass" : "GLACIER",
-                  "TransitionInDays" : 45
+                  "TransitionInDays" : 60
                 }                
                ]
             }
