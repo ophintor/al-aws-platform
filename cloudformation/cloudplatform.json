@@ -61,6 +61,14 @@
             "TagKey",
             "TagValue"
           ]
+        },
+        {
+          "Label" : {
+            "default": "Logging: "
+          },
+          "Parameters":[
+            "LogCloudTrail"
+          ]
         }
       ],
       "ParameterLabels": {
@@ -84,6 +92,9 @@
         },
         "UseHTTPS": {
           "default": "Use HTTPS"
+        },
+        "LogCloudTrail": {
+          "default": "Enable CloudTrail Logging"
         }
       }
     }
@@ -243,6 +254,15 @@
       ],
       "Default": "Disable",
       "Type": "String"
+    },
+    "LogCloudTrail": {
+      "Description": "Enable / Disable CloudTrail Logging.",
+      "AllowedValues": [
+        "Enable",
+        "Disable"
+      ],
+      "Default": "Enable",
+      "Type": "String"
     }
   },
   "Mappings": {
@@ -299,6 +319,14 @@
         },
         "Enable"
       ]
+    },
+    "cEnableCloudTrail": {
+      "Fn::Equals": [
+        {
+          "Ref": "LogCloudTrail"
+        },
+        "Enable"
+      ]
     }
   },
   "Resources": {
@@ -345,7 +373,8 @@
           }
         ],       
         "Path": "/"
-      }
+      },
+      "Condition" : "cEnableCloudTrail"
     },
     "CloudTrail": {
       "Type" : "AWS::CloudTrail::Trail",
@@ -359,7 +388,8 @@
         "IsLogging" : true,
         "IsMultiRegionTrail" : false,        
         "S3BucketName" : {"Ref":"LogStoreS3Location"}
-      }
+      },
+      "Condition" : "cEnableCloudTrail"
     },
     "WaitHandle": {
       "Type": "AWS::CloudFormation::WaitConditionHandle"
@@ -1367,7 +1397,8 @@
       "Properties" : {
         "LogGroupName" : { "Fn::Sub":"${AWS::StackName}-cloutrail"},
         "RetentionInDays" : 7
-      }
+      },
+      "Condition" : "cEnableCloudTrail"      
     },             
     "LogStoreS3Location": {
       "Type": "AWS::S3::Bucket",
@@ -1833,7 +1864,8 @@
             "MetricValue": "1"
           }
         ]
-      }
+      },
+      "Condition" : "cEnableCloudTrail"
     },
     "SecurityGroupChangesAlarm": {
       "Type": "AWS::CloudWatch::Alarm",
@@ -1848,7 +1880,8 @@
         "Period" : "300",
         "Statistic" : "Sum",
         "Threshold" : "1"
-      }
+      },
+      "Condition" : "cEnableCloudTrail"
     },
     "NetworkAclChangesMetricFilter": {
       "Type": "AWS::Logs::MetricFilter",
@@ -1862,7 +1895,8 @@
             "MetricValue": "1"
           }
         ]
-      }
+      },
+      "Condition" : "cEnableCloudTrail"
     },
     "NetworkAclChangesAlarm": {
       "Type": "AWS::CloudWatch::Alarm",
@@ -1877,7 +1911,8 @@
         "Period" : "300",
         "Statistic" : "Sum",
         "Threshold" : "1"
-      }
+      },
+      "Condition" : "cEnableCloudTrail"
     },
     "GatewayChangesMetricFilter": {
       "Type": "AWS::Logs::MetricFilter",
@@ -1891,7 +1926,8 @@
             "MetricValue": "1"
           }
         ]
-      }
+      },
+      "Condition" : "cEnableCloudTrail"
     },
     "GatewayChangesAlarm": {
       "Type": "AWS::CloudWatch::Alarm",
@@ -1906,7 +1942,8 @@
         "Period" : "300",
         "Statistic" : "Sum",
         "Threshold" : "1"
-      }
+      },
+      "Condition" : "cEnableCloudTrail"
     },
     "VpcChangesMetricFilter": {
       "Type": "AWS::Logs::MetricFilter",
@@ -1920,7 +1957,8 @@
             "MetricValue": "1"
           }
         ]
-      }
+      },
+      "Condition" : "cEnableCloudTrail"
     },
     "VpcChangesAlarm": {
       "Type": "AWS::CloudWatch::Alarm",
@@ -1935,7 +1973,8 @@
         "Period" : "300",
         "Statistic" : "Sum",
         "Threshold" : "1"
-      }
+      },
+      "Condition" : "cEnableCloudTrail"
     },
     "EC2InstanceChangesMetricFilter": {
       "Type": "AWS::Logs::MetricFilter",
@@ -1949,7 +1988,8 @@
             "MetricValue": "1"
           }
         ]
-      }
+      },
+      "Condition" : "cEnableCloudTrail"
     },
     "EC2InstanceChangesAlarm": {
       "Type": "AWS::CloudWatch::Alarm",
@@ -1964,7 +2004,8 @@
         "Period" : "300",
         "Statistic" : "Sum",
         "Threshold" : "1"
-      }
+      },
+      "Condition" : "cEnableCloudTrail"
     },
     "EC2LargeInstanceChangesMetricFilter": {
       "Type": "AWS::Logs::MetricFilter",
@@ -1978,7 +2019,8 @@
             "MetricValue": "1"
           }
         ]
-      }
+      },
+      "Condition" : "cEnableCloudTrail"
     },
     "EC2LargeInstanceChangesAlarm": {
       "Type": "AWS::CloudWatch::Alarm",
@@ -1993,7 +2035,8 @@
         "Period" : "300",
         "Statistic" : "Sum",
         "Threshold" : "1"
-      }
+      },
+      "Condition" : "cEnableCloudTrail"
     },
     "CloudTrailChangesMetricFilter": {
       "Type": "AWS::Logs::MetricFilter",
@@ -2007,7 +2050,8 @@
             "MetricValue": "1"
           }
         ]
-      }
+      },
+      "Condition" : "cEnableCloudTrail"
     },
     "CloudTrailChangesAlarm": {
       "Type": "AWS::CloudWatch::Alarm",
@@ -2022,7 +2066,8 @@
         "Period" : "300",
         "Statistic" : "Sum",
         "Threshold" : "1"
-      }
+      },
+      "Condition" : "cEnableCloudTrail"
     },
     "ConsoleSignInFailuresMetricFilter": {
       "Type": "AWS::Logs::MetricFilter",
@@ -2036,7 +2081,8 @@
             "MetricValue": "1"
           }
         ]
-      }
+      },
+      "Condition" : "cEnableCloudTrail"
     },
     "ConsoleSignInFailuresAlarm": {
       "Type": "AWS::CloudWatch::Alarm",
@@ -2051,7 +2097,8 @@
         "Period" : "300",
         "Statistic" : "Sum",
         "Threshold" : "3"
-      }
+      },
+      "Condition" : "cEnableCloudTrail"
     },
     "AuthorizationFailuresMetricFilter": {
       "Type": "AWS::Logs::MetricFilter",
@@ -2065,7 +2112,8 @@
             "MetricValue": "1"
           }
         ]
-      }
+      },
+      "Condition" : "cEnableCloudTrail"
     },
     "AuthorizationFailuresAlarm": {
       "Type": "AWS::CloudWatch::Alarm",
@@ -2080,7 +2128,8 @@
         "Period" : "300",
         "Statistic" : "Sum",
         "Threshold" : "1"            
-      }
+      },
+      "Condition" : "cEnableCloudTrail"
     },
     "IAMPolicyChangesMetricFilter": {
       "Type": "AWS::Logs::MetricFilter",
@@ -2094,7 +2143,8 @@
             "MetricValue": "1"
           }
         ]
-      }
+      },
+      "Condition" : "cEnableCloudTrail"
     },
     "IAMPolicyChangesAlarm": {
       "Type": "AWS::CloudWatch::Alarm",
@@ -2109,7 +2159,8 @@
         "Period" : "300",
         "Statistic" : "Sum",
         "Threshold" : "1"
-      }
+      },
+      "Condition" : "cEnableCloudTrail"
     },    
     "LaunchConfig": {
       "Type": "AWS::AutoScaling::LaunchConfiguration",
