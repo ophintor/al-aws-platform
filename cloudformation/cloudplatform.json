@@ -3737,10 +3737,12 @@
       "Properties": {
         "FunctionName" : { "Fn::GetAtt" : ["LogStreamer", "Arn"] },
         "Action": "lambda:InvokeFunction",
-        "Principal": "logs.us-west-2.amazonaws.com",
+        "Principal": {
+          "Fn::Sub": "logs.${AWS::Region}.amazonaws.com"
+        },
         "SourceAccount": { "Ref" : "AWS::AccountId" },
         "SourceArn": {
-          "Fn::Sub": "arn:aws:logs:us-west-2:505076813643:log-group:${AWS::StackName}-applog:*"
+          "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${AWS::StackName}-applog:*"
         }
       }
     },
@@ -3750,10 +3752,12 @@
       "Properties": {
         "FunctionName" : { "Fn::GetAtt" : ["LogStreamer", "Arn"] },
         "Action": "lambda:InvokeFunction",
-        "Principal": "logs.us-west-2.amazonaws.com",
+        "Principal": {
+          "Fn::Sub": "logs.${AWS::Region}.amazonaws.com"
+        },
         "SourceAccount": { "Ref" : "AWS::AccountId" },
         "SourceArn": {
-          "Fn::Sub": "arn:aws:logs:us-west-2:505076813643:log-group:${AWS::StackName}-syslog:*"
+          "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${AWS::StackName}-syslog:*"
         }
       }
     },
@@ -3763,10 +3767,12 @@
       "Properties": {
         "FunctionName" : { "Fn::GetAtt" : ["LogStreamer", "Arn"] },
         "Action": "lambda:InvokeFunction",
-        "Principal": "logs.us-west-2.amazonaws.com",
+        "Principal": {
+          "Fn::Sub": "logs.${AWS::Region}.amazonaws.com"
+        },
         "SourceAccount": { "Ref" : "AWS::AccountId" },
         "SourceArn": {
-          "Fn::Sub": "arn:aws:logs:us-west-2:505076813643:log-group:${AWS::StackName}-elblog:*"
+          "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${AWS::StackName}-elblog:*"
         }
       }
     },
