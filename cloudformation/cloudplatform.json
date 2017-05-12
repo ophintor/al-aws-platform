@@ -302,6 +302,65 @@
     }
   },
   "Resources": {
+    "CloudTrailToCloudWatchLogsRole": {
+      "Type": "AWS::IAM::Role",
+      "Metadata": {
+        "Comment": "IAM Role for the CloudTrail Logs to be written to the CloudWatch Logs Group"
+      },
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": [
+                  "cloudtrail.amazonaws.com"
+                ]
+              },
+              "Action": [
+                "sts:AssumeRole"
+              ]
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "CloudTrailToCloudWatchLogsRolePolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Sid": "AWSCloudTrailCreateLogStreamAndPutLogEvents2014",
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": [
+                    {"Fn::GetAtt":["LogGroupCloudTrail","Arn"]}
+                  ]
+                }
+              ]
+            }
+          }
+        ],       
+        "Path": "/"
+      }
+    },
+    "CloudTrail": {
+      "Type" : "AWS::CloudTrail::Trail",
+      "DeletionPolicy" : "Delete",
+      "DependsOn" : ["LogStoreS3LocationPolicy","CloudTrailToCloudWatchLogsRole","LogGroupCloudTrail"],
+      "Properties" : {
+        "CloudWatchLogsLogGroupArn" : {"Fn::GetAtt":["LogGroupCloudTrail","Arn"]},
+        "CloudWatchLogsRoleArn" : {"Fn::GetAtt":["CloudTrailToCloudWatchLogsRole","Arn"]},
+        "EnableLogFileValidation" : false,
+        "IncludeGlobalServiceEvents" : true,
+        "IsLogging" : true,
+        "IsMultiRegionTrail" : false,        
+        "S3BucketName" : {"Ref":"LogStoreS3Location"}
+      }
+    },
     "WaitHandle": {
       "Type": "AWS::CloudFormation::WaitConditionHandle"
     },
@@ -1320,19 +1379,15 @@
         "LifecycleConfiguration":{
           "Rules":[
             {              
-              "ExpirationInDays" : 90,
+              "ExpirationInDays" : 30,
               "Id" : {
                 "Fn::Sub": "${AWS::StackName}-LogMigrationLifecycleRule"
               },              
               "Status" : "Enabled",              
-              "Transitions" : [ 
-                {
-                  "StorageClass" : "STANDARD_IA",                  
-                  "TransitionInDays" : 30
-                },
+              "Transitions" : [
                 {
                   "StorageClass" : "GLACIER",
-                  "TransitionInDays" : 60
+                  "TransitionInDays" : 7
                 }                
                ]
             }
@@ -1349,6 +1404,7 @@
         "PolicyDocument": {
           "Statement": [
             {
+              "Sid": "AWSCloudWatchLogsAclCheck",
               "Effect": "Allow",
               "Principal": {
                 "Service": {"Fn::Sub":"logs.${AWS::Region}.amazonaws.com"}
@@ -1361,6 +1417,7 @@
               ]
             },
             {
+              "Sid": "AWSCloudWatchLogsWrite",
               "Effect": "Allow",
               "Principal": {
                 "Service": {"Fn::Sub":"logs.${AWS::Region}.amazonaws.com"}
@@ -1376,7 +1433,26 @@
                   "s3:x-amz-acl": "bucket-owner-full-control"
                 }
               }
-            }                        
+            },
+            {
+              "Sid": "AWSCloudTrailAclCheck",
+              "Effect": "Allow",
+              "Principal": { "Service":"cloudtrail.amazonaws.com"},
+              "Action": "s3:GetBucketAcl",
+              "Resource": { "Fn::Sub" : "arn:aws:s3:::${LogStoreS3Location}" }
+            },
+            {
+              "Sid": "AWSCloudTrailWrite",
+              "Effect": "Allow",
+              "Principal": { "Service":"cloudtrail.amazonaws.com"},
+              "Action": "s3:PutObject",
+              "Resource": { "Fn::Sub" : "arn:aws:s3:::${LogStoreS3Location}/AWSLogs/${AWS::AccountId}/*"},
+              "Condition": {
+                "StringEquals": {
+                  "s3:x-amz-acl": "bucket-owner-full-control"
+                }
+              }
+            }                                    
           ]
         }
       }
