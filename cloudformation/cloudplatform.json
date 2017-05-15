@@ -3681,6 +3681,7 @@
 
     "LogStreamerRole": {
       "Type": "AWS::IAM::Role",
+      "Condition": "cEnableES",
       "Properties": {
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
@@ -3703,6 +3704,7 @@
 
     "LogStreamerRolePolicies": {
       "Type": "AWS::IAM::Policy",
+      "Condition": "cEnableES",
       "Metadata": {
         "Comment": "IAM Policy attached to the LogStreamerRole."
       },
@@ -3734,6 +3736,7 @@
 
     "applogLogStreamerInvokePermission": {
       "Type": "AWS::Lambda::Permission",
+      "Condition": "cEnableES",
       "Properties": {
         "FunctionName" : { "Fn::GetAtt" : ["LogStreamer", "Arn"] },
         "Action": "lambda:InvokeFunction",
@@ -3749,6 +3752,7 @@
 
     "syslogLogStreamerInvokePermission": {
       "Type": "AWS::Lambda::Permission",
+      "Condition": "cEnableES",
       "Properties": {
         "FunctionName" : { "Fn::GetAtt" : ["LogStreamer", "Arn"] },
         "Action": "lambda:InvokeFunction",
@@ -3764,6 +3768,7 @@
 
     "elblogLogStreamerInvokePermission": {
       "Type": "AWS::Lambda::Permission",
+      "Condition": "cEnableES",
       "Properties": {
         "FunctionName" : { "Fn::GetAtt" : ["LogStreamer", "Arn"] },
         "Action": "lambda:InvokeFunction",
@@ -3779,6 +3784,7 @@
 
     "LogStreamerLogGroup":{
       "Type" : "AWS::Logs::LogGroup",
+      "Condition": "cEnableES",
       "DeletionPolicy" : "Delete",
       "Properties" : {
         "LogGroupName" :{ "Fn::Sub": "/aws/lambda/${AWS::StackName}-LogStreamer" },
@@ -3787,6 +3793,8 @@
     },
 
     "LogStreamer": {
+      "Type": "AWS::Lambda::Function",
+      "Condition": "cEnableES",
       "Properties": {
         "FunctionName": {
           "Fn::Sub": "${AWS::StackName}-LogStreamer"
@@ -3803,11 +3811,11 @@
         },
         "Runtime": "nodejs4.3",
         "Timeout": "300"
-      },
-      "Type": "AWS::Lambda::Function"
+      }
     },
 
     "applogSubscriptionFilter": {
+      "Condition": "cEnableES",
       "Type": "AWS::Logs::SubscriptionFilter",
       "DependsOn": "applogLogStreamerInvokePermission",
       "Properties": {
@@ -3822,6 +3830,7 @@
     "syslogSubscriptionFilter": {
       "Type": "AWS::Logs::SubscriptionFilter",
       "DependsOn": "syslogLogStreamerInvokePermission",
+      "Condition": "cEnableES",
       "Properties": {
         "DestinationArn": {
           "Fn::GetAtt" : [ "LogStreamer", "Arn" ]
@@ -3834,6 +3843,7 @@
     "elblogSubscriptionFilter": {
       "Type": "AWS::Logs::SubscriptionFilter",
       "DependsOn": "elblogLogStreamerInvokePermission",
+      "Condition": "cEnableES",
       "Properties": {
         "DestinationArn": {
           "Fn::GetAtt" : [ "LogStreamer", "Arn" ]
