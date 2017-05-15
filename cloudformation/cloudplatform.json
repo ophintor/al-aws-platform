@@ -68,7 +68,10 @@
             "default": "Logging: "
           },
           "Parameters":[
-            "LogCloudTrail"
+            "LogCloudTrail",
+            "DeployESCluster",
+            "ClusterSize",
+            "IPAccess"
           ]
         }
       ],
@@ -96,6 +99,12 @@
         },
         "DeployESCluster": {
           "default": "Deploy Elasticsearch"
+        },
+        "ClusterSize": {
+          "default": "Size of Elasticsearch cluster"
+        },
+        "IPAccess": {
+          "default": "Allowed IPs for Elasticsearch"
         },
         "LogCloudTrail": {
           "default": "Enable CloudTrail Logging"
@@ -282,7 +291,7 @@
     "IPAccess": {
         "AllowedPattern": "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})",
         "ConstraintDescription": "must be a valid IP CIDR range of the form x.x.x.x/x.",
-        "Description": "IP address range that can access the Nginx proxy server",
+        "Description": "IP address range that can access Elasticsearch",
         "Default": "0.0.0.0/0",
         "MaxLength": "18",
         "MinLength": "9",
