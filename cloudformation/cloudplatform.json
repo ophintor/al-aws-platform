@@ -3809,6 +3809,7 @@
 
     "applogSubscriptionFilter": {
       "Type": "AWS::Logs::SubscriptionFilter",
+      "DependsOn": "applogLogStreamerInvokePermission",
       "Properties": {
         "DestinationArn": {
           "Fn::GetAtt" : [ "LogStreamer", "Arn" ]
@@ -3820,6 +3821,7 @@
 
     "syslogSubscriptionFilter": {
       "Type": "AWS::Logs::SubscriptionFilter",
+      "DependsOn": "syslogLogStreamerInvokePermission",
       "Properties": {
         "DestinationArn": {
           "Fn::GetAtt" : [ "LogStreamer", "Arn" ]
@@ -3831,6 +3833,7 @@
 
     "elblogSubscriptionFilter": {
       "Type": "AWS::Logs::SubscriptionFilter",
+      "DependsOn": "elblogLogStreamerInvokePermission",
       "Properties": {
         "DestinationArn": {
           "Fn::GetAtt" : [ "LogStreamer", "Arn" ]
