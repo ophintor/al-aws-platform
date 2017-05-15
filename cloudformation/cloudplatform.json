@@ -68,7 +68,10 @@
             "default": "Logging: "
           },
           "Parameters":[
-            "LogCloudTrail"
+            "LogCloudTrail",
+            "DeployESCluster",
+            "ClusterSize",
+            "IPAccess"
           ]
         }
       ],
@@ -93,6 +96,15 @@
         },
         "UseHTTPS": {
           "default": "Use HTTPS"
+        },
+        "DeployESCluster": {
+          "default": "Deploy Elasticsearch"
+        },
+        "ClusterSize": {
+          "default": "Size of Elasticsearch cluster"
+        },
+        "IPAccess": {
+          "default": "Allowed IPs for Elasticsearch"
         },
         "LogCloudTrail": {
           "default": "Enable CloudTrail Logging"
@@ -256,6 +268,35 @@
       "Default": "Disable",
       "Type": "String"
     },
+    "DeployESCluster": {
+      "Description": "Deploy Elasticsearch and Kibana to store logs and metrics. If you leave this disabled you will be stable to watch your logs and metrics in CloudWatch.",
+      "AllowedValues": [
+        "True",
+        "False"
+      ],
+      "Default": "False",
+      "Type": "String"
+    },
+    "ClusterSize": {
+        "AllowedValues": [
+            "Tiny",
+            "Small",
+            "Medium",
+            "Large"
+        ],
+        "Default": "Small",
+        "Description": "Amazon ES cluster size: small (2 data nodes), medium (4 data nodes), large (6 data nodes)",
+        "Type": "String"
+    },
+    "IPAccess": {
+        "AllowedPattern": "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})",
+        "ConstraintDescription": "must be a valid IP CIDR range of the form x.x.x.x/x.",
+        "Description": "IP address range that can access Elasticsearch",
+        "Default": "0.0.0.0/0",
+        "MaxLength": "18",
+        "MinLength": "9",
+        "Type": "String"
+    },
     "LogCloudTrail": {
       "Description": "Enable / Disable CloudTrail Logging.",
       "AllowedValues": [
@@ -310,6 +351,30 @@
       "sa-east-1": {
         "Ubuntu": "ami-7379e31f"
       }
+    },
+    "MasterSizing": {
+        "elasticsearch": {
+            "Large": "m3.medium.elasticsearch",
+            "Medium": "m3.medium.elasticsearch",
+            "Small": "t2.small.elasticsearch",
+            "Tiny": "t2.small.elasticsearch"
+        }
+    },
+    "instanceCount": {
+        "elasticsearch": {
+            "Large": "10",
+            "Medium": "4",
+            "Small": "2",
+            "Tiny": "2"
+        }
+    },
+    "instanceSizing": {
+        "elasticsearch": {
+            "Large": "r3.8xlarge.elasticsearch",
+            "Medium": "r3.2xlarge.elasticsearch",
+            "Small": "m3.large.elasticsearch",
+            "Tiny": "t2.medium.elasticsearch"
+        }
     }
   },
   "Conditions": {
@@ -320,6 +385,46 @@
         },
         "Enable"
       ]
+    },
+    "cEnableES": {
+      "Fn::Equals": [
+        {
+          "Ref": "DeployESCluster"
+        },
+        "True"
+      ]
+    },
+    "SizeLarge": {
+        "Fn::Equals": [
+            {
+                "Ref": "ClusterSize"
+            },
+            "Large"
+        ]
+    },
+    "SizeMedium": {
+        "Fn::Equals": [
+            {
+                "Ref": "ClusterSize"
+            },
+            "Medium"
+        ]
+    },
+    "SizeSmall": {
+        "Fn::Equals": [
+            {
+                "Ref": "ClusterSize"
+            },
+            "Small"
+        ]
+    },
+    "SizeTiny": {
+        "Fn::Equals": [
+            {
+                "Ref": "ClusterSize"
+            },
+            "Tiny"
+        ]
     },
     "cEnableCloudTrail": {
       "Fn::Equals": [
@@ -372,7 +477,7 @@
               ]
             }
           }
-        ],       
+        ],
         "Path": "/"
       },
       "Condition" : "cEnableCloudTrail"
@@ -387,7 +492,7 @@
         "EnableLogFileValidation" : false,
         "IncludeGlobalServiceEvents" : true,
         "IsLogging" : true,
-        "IsMultiRegionTrail" : false,        
+        "IsMultiRegionTrail" : false,
         "S3BucketName" : {"Ref":"LogStoreS3Location"}
       },
       "Condition" : "cEnableCloudTrail"
@@ -1234,7 +1339,7 @@
         "LogGroupName" :{ "Fn::Sub": "/aws/lambda/${AWS::StackName}-ELBLogsToCWLambda" },
         "RetentionInDays" : 1
       }
-    },    
+    },
     "ELBLogsToCWLambda": {
       "Type": "AWS::Lambda::Function",
       "DependsOn": "ELBLogLambdaRolePolicies",
@@ -1375,7 +1480,7 @@
         "LogGroupName" : { "Fn::Sub":"${AWS::StackName}-apperr"},
         "RetentionInDays" : 7
       }
-    }, 
+    },
     "LogGroupCloudInit":{
       "Type" : "AWS::Logs::LogGroup",
       "DeletionPolicy" : "Delete",
@@ -1399,8 +1504,8 @@
         "LogGroupName" : { "Fn::Sub":"${AWS::StackName}-cloutrail"},
         "RetentionInDays" : 7
       },
-      "Condition" : "cEnableCloudTrail"      
-    },             
+      "Condition" : "cEnableCloudTrail"
+    },
     "LogStoreS3Location": {
       "Type": "AWS::S3::Bucket",
       "DeletionPolicy" : "Retain",
@@ -1410,21 +1515,21 @@
         },
         "LifecycleConfiguration":{
           "Rules":[
-            {              
+            {
               "ExpirationInDays" : 90,
               "Id" : {
                 "Fn::Sub": "${AWS::StackName}-LogMigrationLifecycleRule"
-              },              
-              "Status" : "Enabled",              
-              "Transitions" : [ 
+              },
+              "Status" : "Enabled",
+              "Transitions" : [
                 {
-                  "StorageClass" : "STANDARD_IA",                  
+                  "StorageClass" : "STANDARD_IA",
                   "TransitionInDays" : 30
                 },
                 {
                   "StorageClass" : "GLACIER",
                   "TransitionInDays" : 60
-                }                
+                }
                ]
             }
           ]
@@ -1488,7 +1593,7 @@
                   "s3:x-amz-acl": "bucket-owner-full-control"
                 }
               }
-            }                                    
+            }
           ]
         }
       }
@@ -1538,7 +1643,7 @@
                 "logs:PutLogEvents"
               ],
               "Resource": { "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}-LogMigrationLambda:*" }
-            },            
+            },
             {
               "Effect":"Allow",
               "Action": [
@@ -1587,7 +1692,7 @@
         "LogGroupName" :{ "Fn::Sub": "/aws/lambda/${AWS::StackName}-LogMigrationLambda" },
         "RetentionInDays" : 1
       }
-    },    
+    },
     "LogMigrationLambda" : {
       "Type": "AWS::Lambda::Function",
       "Properties": {
@@ -1611,23 +1716,23 @@
               "console.log('Log Migrate Action Called with Params : ' +JSON.stringify(params));\n",
               "cloudwatchlogs.createExportTask(params, function(err, data) {\n",
                   "if (err){\n",
-                      "console.log('Error : '+ err, err.stack); // an error occurred\n",                              
+                      "console.log('Error : '+ err, err.stack); // an error occurred\n",
                   "}\n",
                   "else{\n",
-                      "console.log('Success : ' + data);     // successful response\n",                              
+                      "console.log('Success : ' + data);     // successful response\n",
                   "}\n",
               "});\n",
             "}\n",
             "catch (err) {\n",
                 "console.log('General Error.');\n",
-                "console.log(err);\n",                      
+                "console.log(err);\n",
             "}\n",
           "};"
           ]]}
         },
         "Runtime": "nodejs6.10",
         "Timeout": "300"
-      }      
+      }
     },
     "AppRestartMetricFilter": {
       "Type": "AWS::Logs::MetricFilter",
@@ -2128,7 +2233,7 @@
         "EvaluationPeriods" : "1",
         "Period" : "300",
         "Statistic" : "Sum",
-        "Threshold" : "1"            
+        "Threshold" : "1"
       },
       "Condition" : "cEnableCloudTrail"
     },
@@ -2162,7 +2267,7 @@
         "Threshold" : "1"
       },
       "Condition" : "cEnableCloudTrail"
-    },    
+    },
     "LaunchConfig": {
       "Type": "AWS::AutoScaling::LaunchConfiguration",
       "Metadata": {
@@ -3110,7 +3215,7 @@
         "LogGroupName" :{ "Fn::Sub": "/aws/codebuild/${AWS::StackName}-application" },
         "RetentionInDays" : 1
       }
-    },     
+    },
     "CodeBuild": {
       "Type": "AWS::CodeBuild::Project",
       "DependsOn": [
@@ -3478,7 +3583,285 @@
           }
         }
       }
+    },
+    "ElasticsearchAWSLogs": {
+        "Properties": {
+            "AccessPolicies": {
+                "Statement": [
+                    {
+                        "Action": "es:*",
+                        "Condition": {
+                            "IpAddress": {
+                                "aws:SourceIp": [
+                                    {
+                                        "Ref": "IPAccess"
+                                    }
+                                ]
+                            }
+                        },
+                        "Effect": "Allow",
+                        "Principal": {
+                            "AWS": "*"
+                        },
+                        "Resource": "*"
+                    }
+                ],
+                "Version": "2012-10-17"
+            },
+            "AdvancedOptions": {
+                "rest.action.multi.allow_explicit_index": "true"
+            },
+            "DomainName": {
+                "Fn::Sub": "logs-${AWS::StackName}"
+            },
+            "EBSOptions": {
+                "Fn::If": [
+                    "SizeTiny",
+                    {
+                        "EBSEnabled": true,
+                        "Iops": 0,
+                        "VolumeSize": 10,
+                        "VolumeType": "gp2"
+                    },
+                    {
+                        "Fn::If": [
+                            "SizeSmall",
+                            {
+                                "EBSEnabled": true,
+                                "Iops": 0,
+                                "VolumeSize": 50,
+                                "VolumeType": "gp2"
+                            },
+                            {
+                                "Fn::If": [
+                                    "SizeMedium",
+                                    {
+                                        "EBSEnabled": false
+                                    },
+                                    {
+                                        "EBSEnabled": false
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            },
+            "ElasticsearchClusterConfig": {
+                "DedicatedMasterCount": "3",
+                "DedicatedMasterEnabled": "true",
+                "DedicatedMasterType": {
+                    "Fn::FindInMap": [
+                        "MasterSizing",
+                        "elasticsearch",
+                        {
+                            "Ref": "ClusterSize"
+                        }
+                    ]
+                },
+                "InstanceCount": {
+                    "Fn::FindInMap": [
+                        "instanceCount",
+                        "elasticsearch",
+                        {
+                            "Ref": "ClusterSize"
+                        }
+                    ]
+                },
+                "InstanceType": {
+                    "Fn::FindInMap": [
+                        "instanceSizing",
+                        "elasticsearch",
+                        {
+                            "Ref": "ClusterSize"
+                        }
+                    ]
+                },
+                "ZoneAwarenessEnabled": "true"
+            },
+            "ElasticsearchVersion": "5.1",
+            "SnapshotOptions": {
+                "AutomatedSnapshotStartHour": "1"
+            }
+        },
+        "Type": "AWS::Elasticsearch::Domain",
+        "Condition": "cEnableES"
+    },
+
+    "LogStreamerRole": {
+      "Type": "AWS::IAM::Role",
+      "Condition": "cEnableES",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": [
+                  "lambda.amazonaws.com"
+                ]
+              },
+              "Action": [
+                "sts:AssumeRole"
+              ]
+            }
+          ]
+        }
+      }
+    },
+
+    "LogStreamerRolePolicies": {
+      "Type": "AWS::IAM::Policy",
+      "Condition": "cEnableES",
+      "Metadata": {
+        "Comment": "IAM Policy attached to the LogStreamerRole."
+      },
+      "Properties": {
+        "PolicyName": "LogStreamerRolePolicy",
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": [
+                "logs:*"
+              ],
+              "Resource": "*"
+            },
+            {
+              "Effect": "Allow",
+              "Action": [
+                "es:*"
+              ],
+              "Resource": "*"
+            }
+          ]
+        },
+        "Roles": [ {
+          "Ref": "LogStreamerRole"
+        } ]
+      }
+    },
+
+    "applogLogStreamerInvokePermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Condition": "cEnableES",
+      "Properties": {
+        "FunctionName" : { "Fn::GetAtt" : ["LogStreamer", "Arn"] },
+        "Action": "lambda:InvokeFunction",
+        "Principal": {
+          "Fn::Sub": "logs.${AWS::Region}.amazonaws.com"
+        },
+        "SourceAccount": { "Ref" : "AWS::AccountId" },
+        "SourceArn": {
+          "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${AWS::StackName}-applog:*"
+        }
+      }
+    },
+
+    "syslogLogStreamerInvokePermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Condition": "cEnableES",
+      "Properties": {
+        "FunctionName" : { "Fn::GetAtt" : ["LogStreamer", "Arn"] },
+        "Action": "lambda:InvokeFunction",
+        "Principal": {
+          "Fn::Sub": "logs.${AWS::Region}.amazonaws.com"
+        },
+        "SourceAccount": { "Ref" : "AWS::AccountId" },
+        "SourceArn": {
+          "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${AWS::StackName}-syslog:*"
+        }
+      }
+    },
+
+    "elblogLogStreamerInvokePermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Condition": "cEnableES",
+      "Properties": {
+        "FunctionName" : { "Fn::GetAtt" : ["LogStreamer", "Arn"] },
+        "Action": "lambda:InvokeFunction",
+        "Principal": {
+          "Fn::Sub": "logs.${AWS::Region}.amazonaws.com"
+        },
+        "SourceAccount": { "Ref" : "AWS::AccountId" },
+        "SourceArn": {
+          "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${AWS::StackName}-elblog:*"
+        }
+      }
+    },
+
+    "LogStreamerLogGroup":{
+      "Type" : "AWS::Logs::LogGroup",
+      "Condition": "cEnableES",
+      "DeletionPolicy" : "Delete",
+      "Properties" : {
+        "LogGroupName" :{ "Fn::Sub": "/aws/lambda/${AWS::StackName}-LogStreamer" },
+        "RetentionInDays" : 1
+      }
+    },
+
+    "LogStreamer": {
+      "Type": "AWS::Lambda::Function",
+      "Condition": "cEnableES",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "${AWS::StackName}-LogStreamer"
+        },
+        "Code": {
+          "ZipFile": {
+            "Fn::Sub": "var https=require('https');var zlib=require('zlib');var crypto=require('crypto');var endpoint='${ElasticsearchAWSLogs.DomainEndpoint}';exports.handler=function(i,j){var k=new Buffer(i.awslogs.data,'base64');zlib.gunzip(k,function(e,f){if(e){j.fail(e);return}var g=JSON.parse(f.toString('utf8'));var h=transform(g);if(!h){console.log('Received a control message');j.succeed('Control message handled successfully');return}post(h,function(a,b,c,d){console.log('Response: '+JSON.stringify({\"statusCode\":c}));if(a){console.log('Error: '+JSON.stringify(a,null,2));if(d&&d.length>0){console.log(\"Failed Items: \"+JSON.stringify(d,null,2))}j.fail(JSON.stringify(a))}else{console.log('Success: '+JSON.stringify(b));j.succeed('Success')}})})};function transform(f){if(f.messageType==='CONTROL_MESSAGE'){return null}var g='';f.logEvents.forEach(function(a){var b=new Date(1*a.timestamp);var c=['cwl-'+b.getUTCFullYear(),('0'+(b.getUTCMonth()+1)).slice(-2),('0'+b.getUTCDate()).slice(-2)].join('.');var d=buildSource(a.message,a.extractedFields);d['@id']=a.id;d['@timestamp']=new Date(1*a.timestamp).toISOString();d['@message']=a.message;d['@owner']=f.owner;d['@log_group']=f.logGroup;d['@log_stream']=f.logStream;var e={\"index\":{}};e.index._index=c;e.index._type=f.logGroup;e.index._id=a.id;g+=[JSON.stringify(e),JSON.stringify(d),].join('\\n')+'\\n'});return g}function buildSource(a,b){if(b){var c={};for(var d in b){if(b.hasOwnProperty(d)&&b[d]){var e=b[d];if(isNumeric(e)){c[d]=1*e;continue}jsonSubString=extractJson(e);if(jsonSubString!==null){c['$'+d]=JSON.parse(jsonSubString)}c[d]=e}}return c}jsonSubString=extractJson(a);if(jsonSubString!==null){return JSON.parse(jsonSubString)}return{}}function extractJson(a){var b=a.indexOf('{');if(b<0)return null;var c=a.substring(b);return isValidJson(c)?c:null}function isValidJson(a){try{JSON.parse(a)}catch(e){return false}return true}function isNumeric(n){return!isNaN(parseFloat(n))&&isFinite(n)}function post(g,h){var i=buildRequest(endpoint,g);var j=https.request(i,function(e){var f='';e.on('data',function(a){f+=a});e.on('end',function(){var a=JSON.parse(f);var b;var c;if(e.statusCode>=200&&e.statusCode<299){b=a.items.filter(function(x){return x.index.status>=300});c={\"attemptedItems\":a.items.length,\"successfulItems\":a.items.length-b.length,\"failedItems\":b.length}}var d=e.statusCode!==200||a.errors===true?{\"statusCode\":e.statusCode,\"responseBody\":f}:null;h(d,c,e.statusCode,b)})}).on('error',function(e){h(e)});j.end(i.body)}function buildRequest(c,d){var e=c.match(/^([^\\.]+)\\.?([^\\.]*)\\.?([^\\.]*)\\.amazonaws\\.com$/);var f=e[2];var g=e[3];var h=(new Date()).toISOString().replace(/[:\\-]|\\.\\d{3}/g,'');var i=h.substr(0,8);var j=hmac('AWS4'+process.env.AWS_SECRET_ACCESS_KEY,i);var l=hmac(j,f);var m=hmac(l,g);var n=hmac(m,'aws4_request');var o={host:c,method:'POST',path:'/_bulk',body:d,headers:{'Content-Type':'application/json','Host':c,'Content-Length':Buffer.byteLength(d),'X-Amz-Security-Token':process.env.AWS_SESSION_TOKEN,'X-Amz-Date':h}};var p=Object.keys(o.headers).sort(function(a,b){return a.toLowerCase()<b.toLowerCase()?-1:1}).map(function(k){return k.toLowerCase()+':'+o.headers[k]}).join('\\n');var q=Object.keys(o.headers).map(function(k){return k.toLowerCase()}).sort().join(';');var r=[o.method,o.path,'',p,'',q,hash(o.body,'hex'),].join('\\n');var s=[i,f,g,'aws4_request'].join('/');var t=['AWS4-HMAC-SHA256',h,s,hash(r,'hex')].join('\\n');o.headers.Authorization=['AWS4-HMAC-SHA256 Credential='+process.env.AWS_ACCESS_KEY_ID+'/'+s,'SignedHeaders='+q,'Signature='+hmac(n,t,'hex')].join(', ');return o}function hmac(a,b,c){return crypto.createHmac('sha256',a).update(b,'utf8').digest(c)}function hash(a,b){return crypto.createHash('sha256').update(a,'utf8').digest(b)}"
+          }
+        },
+        "Description": "Lambda function for moving log data to Amazon Elasticsearch.",
+        "Handler": "index.handler",
+        "Role": {
+          "Fn::GetAtt": [ "LogStreamerRole", "Arn" ]
+        },
+        "Runtime": "nodejs4.3",
+        "Timeout": "300"
+      }
+    },
+
+    "applogSubscriptionFilter": {
+      "Condition": "cEnableES",
+      "Type": "AWS::Logs::SubscriptionFilter",
+      "DependsOn": "applogLogStreamerInvokePermission",
+      "Properties": {
+        "DestinationArn": {
+          "Fn::GetAtt" : [ "LogStreamer", "Arn" ]
+        },
+        "FilterPattern": "[ip, date, method, request, statuscode, bytes, responsetime, user_agent]",
+        "LogGroupName": { "Fn::Sub":"${AWS::StackName}-applog"}
+      }
+    },
+
+    "syslogSubscriptionFilter": {
+      "Type": "AWS::Logs::SubscriptionFilter",
+      "DependsOn": "syslogLogStreamerInvokePermission",
+      "Condition": "cEnableES",
+      "Properties": {
+        "DestinationArn": {
+          "Fn::GetAtt" : [ "LogStreamer", "Arn" ]
+        },
+        "FilterPattern": "[month, day, hour, host, service, message]",
+        "LogGroupName": { "Fn::Sub":"${AWS::StackName}-syslog"}
+      }
+    },
+
+    "elblogSubscriptionFilter": {
+      "Type": "AWS::Logs::SubscriptionFilter",
+      "DependsOn": "elblogLogStreamerInvokePermission",
+      "Condition": "cEnableES",
+      "Properties": {
+        "DestinationArn": {
+          "Fn::GetAtt" : [ "LogStreamer", "Arn" ]
+        },
+        "FilterPattern": "[type, timestamp, elb, client, target, request_processing_time, target_processing_time, response_processing_time, elb_status_code, target_status_code, received_bytes, sent_bytes, request, user_agent, ssl_cipher, ssl_protocol, target_group_arn, trace_id]",
+        "LogGroupName": { "Fn::Sub":"${AWS::StackName}-elblog"}
+      }
     }
+
   },
   "Outputs": {
     "ServiceRoleName": {
@@ -3526,6 +3909,13 @@
       "Value": {
         "Ref": "ApplicationLoadBalancer"
       }
+    },
+    "KibanaURL": {
+        "Description": "URL of the Kibana dashboard",
+        "Value": {
+            "Fn::Sub": "https://${ElasticsearchAWSLogs.DomainEndpoint}/_plugin/kibana/"
+        },
+        "Condition": "cEnableES"
     }
   }
 }
