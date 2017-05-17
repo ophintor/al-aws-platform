@@ -28,7 +28,7 @@ Options:
   -u | -user
     Username and password for authenticating to Elasticsearch using Basic
     Authentication. The username and password should be separated by a
-    colon (i.e. "admin:secret"). By default no username and password are
+    colon (i.e. 'admin:secret'). By default no username and password are
     used.
   -i | -index
     Kibana index pattern where to save the dashboards, visualizations,
@@ -82,7 +82,7 @@ esac
 shift 2
 done
 
-if [ -z ${SED_STRING} ]; then
+if [ -z "${SED_STRING}" ]; then
   SED_STRING="s/packetbeat-/packetbeat-/g;s/filebeat-/filebeat-/g;s/topbeat-/topbeat-/g;s/winlogonbeat-/winlogonbeat-/g"
 fi
 
@@ -96,10 +96,10 @@ echo
 TMP_SED_FILE="${DIR}/search/tmp_search.json"
 for file in ${DIR}/search/*.json
 do
-    NAME=`basename ${file} .json`
+    NAME=$(basename "${file}" .json)
     echo "Loading search ${NAME}:"
-    sed ${SED_STRING} ${file} > ${TMP_SED_FILE}
-    ${CURL} -XPUT ${ELASTICSEARCH}/${KIBANA_INDEX}/search/${NAME} \
+    sed ${SED_STRING} "${file}" > ${TMP_SED_FILE}
+    ${CURL} -XPUT "${ELASTICSEARCH}"/"${KIBANA_INDEX}"/search/"${NAME}" \
         -d @${TMP_SED_FILE} || exit 1
     echo; echo
 done
@@ -107,32 +107,32 @@ rm ${TMP_SED_FILE}
 
 for file in ${DIR}/visualization/*.json
 do
-    NAME=`basename ${file} .json`
+    NAME=$(basename "${file}" .json)
     echo "Loading visualization ${NAME}:"
-    ${CURL} -XPUT ${ELASTICSEARCH}/${KIBANA_INDEX}/visualization/${NAME} \
-        -d @${file} || exit 1
+    ${CURL} -XPUT "${ELASTICSEARCH}"/"${KIBANA_INDEX}"/visualization/"${NAME}" \
+        -d @"${file}" || exit 1
     echo; echo
 done
 
 for file in ${DIR}/dashboard/*.json
 do
-    NAME=`basename ${file} .json`
+    NAME=$(basename "${file}" .json)
     echo "Loading dashboard ${NAME}:"
-    ${CURL} -XPUT ${ELASTICSEARCH}/${KIBANA_INDEX}/dashboard/${NAME} \
-        -d @${file} || exit 1
+    ${CURL} -XPUT "${ELASTICSEARCH}"/"${KIBANA_INDEX}"/dashboard/"${NAME}" \
+        -d @"${file}" || exit 1
     echo; echo
 done
 
 for file in ${DIR}/index-pattern/*.json
 do
-    NAME=`awk '$1 == "\"title\":" {gsub(/[",]/, "", $2); print $2}' ${file}`
+    NAME=$(awk '$1 == "\"title\":" {gsub(/[",]/, "", $2); print $2}' "${file}")
     echo "Loading index pattern ${NAME}:"
 
-    ${CURL} -XPUT ${ELASTICSEARCH}/${KIBANA_INDEX}/index-pattern/${NAME} \
-        -d @${file} || exit 1
+    ${CURL} -XPUT "${ELASTICSEARCH}"/"${KIBANA_INDEX}"/index-pattern/"${NAME}" \
+        -d @$"{file}" || exit 1
     echo; echo
 done
 
 # Set default index pattern to cwl-*
 echo 'Setting default index pattern:'
-${CURL} -XPUT ${ELASTICSEARCH}/${KIBANA_INDEX}/config/5.1.1 -d '{"defaultIndex" : "cwl-*"}'
+${CURL} -XPUT "${ELASTICSEARCH}"/"${KIBANA_INDEX}"/config/5.1.1 -d '{"defaultIndex" : "cwl-*"}'
