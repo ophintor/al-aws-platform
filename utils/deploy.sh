@@ -6,6 +6,9 @@ STACK_NAME="${STACK_NAME:-presentation}"
 REGION="${REGION:-eu-west-1}"
 
 STACK_FILE="${STACK_FILE:-infrastructure.yaml}"
+PARAMS_FOLDER="${PARAMS_FOLDER:-utils/demo}"
+STACK_PARAMS_FILE="${STACK_FILE%.*}.json"
+
 
 declare -r CF_TEMPLATE="cloudformation/${STACK_FILE}"
 declare -r S3_BUCKET="al-cf-templates-${REGION}"
@@ -61,13 +64,7 @@ aws cloudformation "${action}" \
 	--template-url "${S3_OBJECT_URL}" \
 	--stack-name "${STACK_NAME}" \
 	--capabilities "CAPABILITY_NAMED_IAM" \
-	--parameters \
-		ParameterKey=KeyName,ParameterValue="pmarques@al" \
-		ParameterKey=ElasticsearchStack,ParameterValue="" \
-		ParameterKey=DBName,ParameterValue="todo" \
-		ParameterKey=UseDNS,ParameterValue="Disable" \
-		ParameterKey=UseHTTPS,ParameterValue="Disable" \
-		ParameterKey=DBUsername,ParameterValue="root"
+	--parameters "$(tr '\n\r\t' ' ' < "${PARAMS_FOLDER}/${STACK_PARAMS_FILE}")"
 
 aws cloudformation wait ${wait_action} \
 	--region "${REGION}" \
