@@ -284,7 +284,7 @@
             "Medium",
             "Large"
         ],
-        "Default": "Small",
+        "Default": "Medium",
         "Description": "Amazon ES cluster size: small (2 data nodes), medium (4 data nodes), large (6 data nodes)",
         "Type": "String"
     },
