@@ -92,10 +92,10 @@ aws cloudformation describe-stacks \
 
 # Deploy Kibana dashboards.
 (
-PWD=$(basename "$(pwd)")
-if [ "$PWD" == 'aws-cloud-platform' ]; then
+CWD=$(basename "$(pwd)")
+if [ "$CWD" == 'aws-cloud-platform' ]; then
   cd kibana;
-elif [ "$PWD" == 'utils' ]; then
+elif [ "$CWD" == 'utils' ]; then
   cd ../kibana
 fi
 ES_URL=$(aws --region "${REGION}" cloudformation describe-stacks --stack-name "${STACK_NAME}" --query "Stacks[0].Outputs[?OutputKey=='KibanaURL'].OutputValue" --output text | cut -f 1-3 -d'/')
