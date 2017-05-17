@@ -30,7 +30,7 @@
 	{
 		"ParameterKey": "InstanceMinCount",
 		"ParameterValue": "2"
-	},    
+	},
 	{
 		"ParameterKey": "DBName",
 		"ParameterValue": "todo"
@@ -38,7 +38,7 @@
 	{
 		"ParameterKey": "DBUsername",
 		"ParameterValue": "root"
-	},  
+	},
 	{
 		"ParameterKey": "DBPassword",
 		"ParameterValue": "password"
