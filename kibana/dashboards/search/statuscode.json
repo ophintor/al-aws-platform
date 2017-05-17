@@ -1,0 +1,16 @@
+{
+  "sort": [
+    "@timestamp", 
+    "desc"
+  ], 
+  "hits": 0, 
+  "description": "", 
+  "title": "statuscode", 
+  "version": 1, 
+  "kibanaSavedObjectMeta": {
+    "searchSourceJSON": "{\"index\":\"cwl-*\",\"filter\":[],\"highlight\":{\"pre_tags\":[\"@kibana-highlighted-field@\"],\"post_tags\":[\"@/kibana-highlighted-field@\"],\"fields\":{\"*\":{}},\"require_field_match\":false,\"fragment_size\":2147483647},\"query\":{\"query_string\":{\"query\":\"statuscode:[100 TO 599]\",\"analyze_wildcard\":true}}}"
+  }, 
+  "columns": [
+    "_source"
+  ]
+}
