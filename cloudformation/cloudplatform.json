@@ -1217,6 +1217,27 @@
             "Function": { "Fn::GetAtt" : ["ELBLogsToCWLambda", "Arn"] },
             "Event": "s3:ObjectCreated:*"
           } ]
+        },
+        "LifecycleConfiguration":{
+          "Rules":[
+            {
+              "ExpirationInDays" : 90,
+              "Id" : {
+                "Fn::Sub": "${AWS::StackName}-ELBLogMigrationLifecycleRule"
+              },
+              "Status" : "Enabled",
+              "Transitions" : [
+                {
+                  "StorageClass" : "STANDARD_IA",
+                  "TransitionInDays" : 30
+                },
+                {
+                  "StorageClass" : "GLACIER",
+                  "TransitionInDays" : 60
+                }
+               ]
+            }
+          ]
         }
       }
     },
@@ -3438,7 +3459,18 @@
       "Properties": {
         "BucketName": {
           "Fn::Sub": "${AWS::StackName}-artifacts"
-        }
+        },
+        "LifecycleConfiguration":{
+          "Rules":[
+            {
+              "ExpirationInDays" : 7,
+              "Id" : {
+                "Fn::Sub": "${AWS::StackName}-ArtifactMigrationLifecycleRule"
+              },
+              "Status" : "Enabled"
+            }
+          ]
+        }        
       }
     },
     "ArtifactStoreS3LocationPolicy": {
