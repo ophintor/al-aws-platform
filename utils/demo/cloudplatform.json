@@ -1,0 +1,62 @@
+[
+  {
+		"ParameterKey": "OperatorEMail",
+		"ParameterValue": "xavier.thomas@automationlogic.com"
+	},
+	{
+		"ParameterKey": "UserName",
+		"ParameterValue": "xavier.thomas"
+	},
+	{
+		"ParameterKey": "TagValue",
+		"ParameterValue": "AL Cloud Platform"
+	},
+	{
+		"ParameterKey": "KeyPairName",
+		"ParameterValue": "xavierkey"
+	},
+  {
+		"ParameterKey": "InstanceType",
+		"ParameterValue": "c3.large"
+	},
+	{
+		"ParameterKey": "InstanceCount",
+		"ParameterValue": "2"
+	},
+	{
+		"ParameterKey": "InstanceMaxCount",
+		"ParameterValue": "5"
+	},
+	{
+		"ParameterKey": "InstanceMinCount",
+		"ParameterValue": "2"
+	},
+	{
+		"ParameterKey": "DBName",
+		"ParameterValue": "todo"
+	},
+	{
+		"ParameterKey": "DBUsername",
+		"ParameterValue": "root"
+	},
+	{
+		"ParameterKey": "DBPassword",
+		"ParameterValue": "password"
+	},
+	{
+		"ParameterKey": "UseHTTPS",
+		"ParameterValue": "Disable"
+	},
+  {
+		"ParameterKey": "DeployESCluster",
+		"ParameterValue": "True"
+	},
+	{
+		"ParameterKey": "ClusterSize",
+		"ParameterValue": "Medium"
+	},
+  {
+    "ParameterKey": "LogCloudTrail",
+    "ParameterValue":"Enable"
+  }
+]
