@@ -3241,7 +3241,8 @@
       "Properties" : {
         "LogGroupName" :{ "Fn::Sub": "/aws/codebuild/${AWS::StackName}-application" },
         "RetentionInDays" : 1
-      },
+      }
+    },
     "CodeBuildKibanaLogGroup":{
       "Type" : "AWS::Logs::LogGroup",
       "DeletionPolicy" : "Delete",
