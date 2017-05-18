@@ -3943,11 +3943,11 @@
       }
     },
     "KibanaURL": {
-        "Description": "URL of the Kibana dashboard",
-        "Value": {
-            "Fn::Sub": "https://${ElasticsearchAWSLogs.DomainEndpoint}/_plugin/kibana/"
-        },
-        "Condition": "cEnableES"
+      "Description": "URL of the Kibana dashboard",
+      "Value": {
+        "Fn::Sub": "https://${ElasticsearchAWSLogs.DomainEndpoint}/_plugin/kibana/app/kibana#/dashboard/Main-dashboard?_g=(refreshInterval:(display:%271%20minute%27,value:60000),time:(from:now-24h,to:now))"
+      },
+      "Condition": "cEnableES"
     }
   }
 }
