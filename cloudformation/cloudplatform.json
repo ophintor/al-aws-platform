@@ -3216,6 +3216,12 @@
                       "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-application:log-stream:*"
                     },
                     {
+                      "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-kibana:log-stream"
+                    },
+                    {
+                      "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-kibana:log-stream:*"
+                    },
+                    {
                       "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-application-image:log-stream"
                     },
                     {
@@ -3234,6 +3240,13 @@
       "DeletionPolicy" : "Delete",
       "Properties" : {
         "LogGroupName" :{ "Fn::Sub": "/aws/codebuild/${AWS::StackName}-application" },
+        "RetentionInDays" : 1
+      },
+    "CodeBuildKibanaLogGroup":{
+      "Type" : "AWS::Logs::LogGroup",
+      "DeletionPolicy" : "Delete",
+      "Properties" : {
+        "LogGroupName" :{ "Fn::Sub": "/aws/codebuild/${AWS::StackName}-kibana" },
         "RetentionInDays" : 1
       }
     },
@@ -3575,6 +3588,29 @@
                     "Ref": "CodeBuild"
                   }
                 }
+              },
+	      {
+                "Name": {
+                  "Fn::Sub": "${AWS::StackName}-BuildKibana"
+                },
+                "InputArtifacts": [
+                  {
+                    "Name": {
+                      "Fn::Sub": "${AWS::StackName}-SourceOutput"
+                    }
+                  }
+                ],
+                "ActionTypeId": {
+                  "Category": "Build",
+                  "Owner": "AWS",
+                  "Version": 1,
+                  "Provider": "CodeBuild"
+                },
+                "Configuration": {
+                  "ProjectName": {
+                    "Ref": "CodeBuildKibana"
+                  }
+                }
               }
             ]
           },
@@ -3727,6 +3763,7 @@
         "CodeBuildRole",
 	"ElasticsearchAWSLogs"
       ],
+      "Condition": "cEnableES",
       "Properties": {
         "Name": {
           "Fn::Sub": "${AWS::StackName}-kibana"
@@ -3736,7 +3773,7 @@
           "Fn::GetAtt": "CodeBuildRole.Arn"
         },
         "Artifacts": {
-          "Type": "NO_ARTIFACTS"
+          "Type": "CODEPIPELINE"
         },
         "Environment": {
           "Type": "LINUX_CONTAINER",
@@ -3747,9 +3784,9 @@
           "Location": {
             "Fn::GetAtt": "CodeRepo.CloneUrlHttp"
           },
-          "Type": "CODECOMMIT",
+          "Type": "CODEPIPELINE",
           "BuildSpec": {
-            "Fn::Sub": "version: 0.1\n\nphases:\n  build:\n    commands:\n      - cd kibana; ./load.sh -url ${ElasticsearchAWSLogs.DomainEndpoint}\n\n"
+            "Fn::Sub": "version: 0.1\n\nphases:\n  build:\n    commands:\n      - cd kibana; ./load.sh -url https://${ElasticsearchAWSLogs.DomainEndpoint}\n\n"
           }
         },
         "TimeoutInMinutes": 300
