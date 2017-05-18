@@ -3720,6 +3720,42 @@
         "Condition": "cEnableES"
     },
 
+    "CodeBuildKibana": {
+      "Type": "AWS::CodeBuild::Project",
+      "DependsOn": [
+        "CodeRepo",
+        "CodeBuildRole",
+	"ElasticsearchAWSLogs"
+      ],
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-kibana"
+        },
+        "Description": "This build will deploy your Kibana dashboard.",
+        "ServiceRole": {
+          "Fn::GetAtt": "CodeBuildRole.Arn"
+        },
+        "Artifacts": {
+          "Type": "NO_ARTIFACTS"
+        },
+        "Environment": {
+          "Type": "LINUX_CONTAINER",
+          "ComputeType": "BUILD_GENERAL1_SMALL",
+          "Image": "aws/codebuild/ubuntu-base:14.04"
+        },
+        "Source": {
+          "Location": {
+            "Fn::GetAtt": "CodeRepo.CloneUrlHttp"
+          },
+          "Type": "CODECOMMIT",
+          "BuildSpec": {
+            "Fn::Sub": "version: 0.1\n\nphases:\n  build:\n    commands:\n      - cd kibana; ./load.sh -url ${ElasticsearchAWSLogs.DomainEndpoint}\n\n"
+          }
+        },
+        "TimeoutInMinutes": 300
+      }
+    },
+
     "LogStreamerRole": {
       "Type": "AWS::IAM::Role",
       "Condition": "cEnableES",
