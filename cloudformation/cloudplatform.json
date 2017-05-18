@@ -274,7 +274,7 @@
         "True",
         "False"
       ],
-      "Default": "False",
+      "Default": "True",
       "Type": "String"
     },
     "ClusterSize": {
