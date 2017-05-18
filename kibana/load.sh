@@ -129,7 +129,7 @@ do
     echo "Loading index pattern ${NAME}:"
 
     ${CURL} -XPUT "${ELASTICSEARCH}"/"${KIBANA_INDEX}"/index-pattern/"${NAME}" \
-        -d @$"{file}" || exit 1
+        -d @$"${file}" || exit 1
     echo; echo
 done
 
