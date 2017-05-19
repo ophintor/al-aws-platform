@@ -1,0 +1,13 @@
+{
+  "hits": 0, 
+  "timeRestore": false, 
+  "description": "", 
+  "title": "Main dashboard", 
+  "uiStateJSON": "{\"P-2\":{\"vis\":{\"legendOpen\":true}}}", 
+  "panelsJSON": "[{\"col\":1,\"id\":\"Number-of-HTTP-requests-per-minute\",\"panelIndex\":3,\"row\":1,\"size_x\":3,\"size_y\":3,\"type\":\"visualization\"},{\"col\":5,\"id\":\"Elastic-Load-Balancer-status-codes\",\"panelIndex\":4,\"row\":1,\"size_x\":3,\"size_y\":3,\"type\":\"visualization\"},{\"col\":1,\"columns\":[\"_source\"],\"id\":\"syslog-messages\",\"panelIndex\":5,\"row\":4,\"size_x\":7,\"size_y\":3,\"sort\":[\"@timestamp\",\"desc\"],\"type\":\"search\"}]", 
+  "optionsJSON": "{\"darkTheme\":false}", 
+  "version": 1, 
+  "kibanaSavedObjectMeta": {
+    "searchSourceJSON": "{\"filter\":[{\"query\":{\"query_string\":{\"analyze_wildcard\":true,\"query\":\"*\"}}}]}"
+  }
+}

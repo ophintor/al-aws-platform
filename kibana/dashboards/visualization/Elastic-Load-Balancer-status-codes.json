@@ -1,0 +1,11 @@
+{
+  "visState": "{\"title\":\"Elastic Load Balancer status codes\",\"type\":\"pie\",\"params\":{\"shareYAxis\":true,\"addTooltip\":true,\"addLegend\":true,\"legendPosition\":\"left\",\"isDonut\":false},\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"schema\":\"metric\",\"params\":{}},{\"id\":\"2\",\"enabled\":true,\"type\":\"histogram\",\"schema\":\"segment\",\"params\":{\"field\":\"elb_status_code\",\"interval\":1,\"extended_bounds\":{}}}],\"listeners\":{}}", 
+  "description": "", 
+  "title": "Elastic Load Balancer status codes", 
+  "uiStateJSON": "{\"vis\":{\"legendOpen\":true}}", 
+  "version": 1, 
+  "savedSearchId": "elb_status_code", 
+  "kibanaSavedObjectMeta": {
+    "searchSourceJSON": "{\"filter\":[]}"
+  }
+}

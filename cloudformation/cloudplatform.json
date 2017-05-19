@@ -274,7 +274,7 @@
         "True",
         "False"
       ],
-      "Default": "False",
+      "Default": "True",
       "Type": "String"
     },
     "ClusterSize": {
@@ -284,7 +284,7 @@
             "Medium",
             "Large"
         ],
-        "Default": "Small",
+        "Default": "Medium",
         "Description": "Amazon ES cluster size: small (2 data nodes), medium (4 data nodes), large (6 data nodes)",
         "Type": "String"
     },
@@ -3216,6 +3216,12 @@
                       "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-application:log-stream:*"
                     },
                     {
+                      "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-kibana:log-stream"
+                    },
+                    {
+                      "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-kibana:log-stream:*"
+                    },
+                    {
                       "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-application-image:log-stream"
                     },
                     {
@@ -3234,6 +3240,14 @@
       "DeletionPolicy" : "Delete",
       "Properties" : {
         "LogGroupName" :{ "Fn::Sub": "/aws/codebuild/${AWS::StackName}-application" },
+        "RetentionInDays" : 1
+      }
+    },
+    "CodeBuildKibanaLogGroup":{
+      "Type" : "AWS::Logs::LogGroup",
+      "DeletionPolicy" : "Delete",
+      "Properties" : {
+        "LogGroupName" :{ "Fn::Sub": "/aws/codebuild/${AWS::StackName}-kibana" },
         "RetentionInDays" : 1
       }
     },
@@ -3575,6 +3589,29 @@
                     "Ref": "CodeBuild"
                   }
                 }
+              },
+	      {
+                "Name": {
+                  "Fn::Sub": "${AWS::StackName}-BuildKibana"
+                },
+                "InputArtifacts": [
+                  {
+                    "Name": {
+                      "Fn::Sub": "${AWS::StackName}-SourceOutput"
+                    }
+                  }
+                ],
+                "ActionTypeId": {
+                  "Category": "Build",
+                  "Owner": "AWS",
+                  "Version": 1,
+                  "Provider": "CodeBuild"
+                },
+                "Configuration": {
+                  "ProjectName": {
+                    "Ref": "CodeBuildKibana"
+                  }
+                }
               }
             ]
           },
@@ -3718,6 +3755,43 @@
         },
         "Type": "AWS::Elasticsearch::Domain",
         "Condition": "cEnableES"
+    },
+
+    "CodeBuildKibana": {
+      "Type": "AWS::CodeBuild::Project",
+      "DependsOn": [
+        "CodeRepo",
+        "CodeBuildRole",
+	"ElasticsearchAWSLogs"
+      ],
+      "Condition": "cEnableES",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-kibana"
+        },
+        "Description": "This build will deploy your Kibana dashboard.",
+        "ServiceRole": {
+          "Fn::GetAtt": "CodeBuildRole.Arn"
+        },
+        "Artifacts": {
+          "Type": "CODEPIPELINE"
+        },
+        "Environment": {
+          "Type": "LINUX_CONTAINER",
+          "ComputeType": "BUILD_GENERAL1_SMALL",
+          "Image": "aws/codebuild/ubuntu-base:14.04"
+        },
+        "Source": {
+          "Location": {
+            "Fn::GetAtt": "CodeRepo.CloneUrlHttp"
+          },
+          "Type": "CODEPIPELINE",
+          "BuildSpec": {
+            "Fn::Sub": "version: 0.1\n\nphases:\n  build:\n    commands:\n      - cd kibana; ./load.sh -url https://${ElasticsearchAWSLogs.DomainEndpoint}\n\n"
+          }
+        },
+        "TimeoutInMinutes": 300
+      }
     },
 
     "LogStreamerRole": {
@@ -3943,11 +4017,11 @@
       }
     },
     "KibanaURL": {
-        "Description": "URL of the Kibana dashboard",
-        "Value": {
-            "Fn::Sub": "https://${ElasticsearchAWSLogs.DomainEndpoint}/_plugin/kibana/"
-        },
-        "Condition": "cEnableES"
+      "Description": "URL of the Kibana dashboard",
+      "Value": {
+        "Fn::Sub": "https://${ElasticsearchAWSLogs.DomainEndpoint}/_plugin/kibana/app/kibana#/dashboard/Main-dashboard?_g=(refreshInterval:(display:%271%20minute%27,value:60000),time:(from:now-24h,to:now))"
+      },
+      "Condition": "cEnableES"
     }
   }
 }
