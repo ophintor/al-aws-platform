@@ -1697,7 +1697,7 @@
         }]
       }
     },
-    "PermissionForEventsToInvokeLambda": {
+    "PermissionForEventsToInvokeLogMigrationLambda": {
       "Type": "AWS::Lambda::Permission",
       "Properties": {
         "FunctionName": { "Ref": "LogMigrationLambda" },
@@ -3590,7 +3590,7 @@
                   }
                 }
               },
-	      {
+	            {
                 "Name": {
                   "Fn::Sub": "${AWS::StackName}-BuildKibana"
                 },
@@ -3654,109 +3654,108 @@
       }
     },
     "ElasticsearchAWSLogs": {
-        "Properties": {
-            "AccessPolicies": {
-                "Statement": [
-                    {
-                        "Action": "es:*",
-                        "Condition": {
-                            "IpAddress": {
-                                "aws:SourceIp": [
-                                    {
-                                        "Ref": "IPAccess"
-                                    }
-                                ]
-                            }
-                        },
-                        "Effect": "Allow",
-                        "Principal": {
-                            "AWS": "*"
-                        },
-                        "Resource": "*"
-                    }
-                ],
-                "Version": "2012-10-17"
-            },
-            "AdvancedOptions": {
-                "rest.action.multi.allow_explicit_index": "true"
-            },
-            "DomainName": {
-                "Fn::Sub": "logs-${AWS::StackName}"
-            },
-            "EBSOptions": {
-                "Fn::If": [
-                    "SizeTiny",
-                    {
-                        "EBSEnabled": true,
-                        "Iops": 0,
-                        "VolumeSize": 10,
-                        "VolumeType": "gp2"
+      "Type": "AWS::Elasticsearch::Domain",
+      "Condition": "cEnableES",
+      "Properties": {
+        "AccessPolicies": {
+            "Statement": [
+                {
+                    "Action": "es:*",
+                    "Condition": {
+                        "IpAddress": {
+                            "aws:SourceIp": [
+                                {
+                                    "Ref": "IPAccess"
+                                }
+                            ]
+                        }
                     },
+                    "Effect": "Allow",
+                    "Principal": {
+                        "AWS": "*"
+                    },
+                    "Resource": "*"
+                }
+            ],
+            "Version": "2012-10-17"
+        },
+        "AdvancedOptions": {
+            "rest.action.multi.allow_explicit_index": "true"
+        },
+        "DomainName": {
+            "Fn::Sub": "logs-${AWS::StackName}"
+        },
+        "EBSOptions": {
+            "Fn::If": [
+                "SizeTiny",
+                {
+                    "EBSEnabled": true,
+                    "Iops": 0,
+                    "VolumeSize": 10,
+                    "VolumeType": "gp2"
+                },
+                {
+                    "Fn::If": [
+                        "SizeSmall",
+                        {
+                            "EBSEnabled": true,
+                            "Iops": 0,
+                            "VolumeSize": 50,
+                            "VolumeType": "gp2"
+                        },
+                        {
+                            "Fn::If": [
+                                "SizeMedium",
+                                {
+                                    "EBSEnabled": false
+                                },
+                                {
+                                    "EBSEnabled": false
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        "ElasticsearchClusterConfig": {
+            "DedicatedMasterCount": "3",
+            "DedicatedMasterEnabled": "true",
+            "DedicatedMasterType": {
+                "Fn::FindInMap": [
+                    "MasterSizing",
+                    "elasticsearch",
                     {
-                        "Fn::If": [
-                            "SizeSmall",
-                            {
-                                "EBSEnabled": true,
-                                "Iops": 0,
-                                "VolumeSize": 50,
-                                "VolumeType": "gp2"
-                            },
-                            {
-                                "Fn::If": [
-                                    "SizeMedium",
-                                    {
-                                        "EBSEnabled": false
-                                    },
-                                    {
-                                        "EBSEnabled": false
-                                    }
-                                ]
-                            }
-                        ]
+                        "Ref": "ClusterSize"
                     }
                 ]
             },
-            "ElasticsearchClusterConfig": {
-                "DedicatedMasterCount": "3",
-                "DedicatedMasterEnabled": "true",
-                "DedicatedMasterType": {
-                    "Fn::FindInMap": [
-                        "MasterSizing",
-                        "elasticsearch",
-                        {
-                            "Ref": "ClusterSize"
-                        }
-                    ]
-                },
-                "InstanceCount": {
-                    "Fn::FindInMap": [
-                        "instanceCount",
-                        "elasticsearch",
-                        {
-                            "Ref": "ClusterSize"
-                        }
-                    ]
-                },
-                "InstanceType": {
-                    "Fn::FindInMap": [
-                        "instanceSizing",
-                        "elasticsearch",
-                        {
-                            "Ref": "ClusterSize"
-                        }
-                    ]
-                },
-                "ZoneAwarenessEnabled": "true"
+            "InstanceCount": {
+                "Fn::FindInMap": [
+                    "instanceCount",
+                    "elasticsearch",
+                    {
+                        "Ref": "ClusterSize"
+                    }
+                ]
             },
-            "ElasticsearchVersion": "5.1",
-            "SnapshotOptions": {
-                "AutomatedSnapshotStartHour": "1"
-            }
+            "InstanceType": {
+                "Fn::FindInMap": [
+                    "instanceSizing",
+                    "elasticsearch",
+                    {
+                        "Ref": "ClusterSize"
+                    }
+                ]
+            },
+            "ZoneAwarenessEnabled": "true"
         },
-        "Type": "AWS::Elasticsearch::Domain",
-        "Condition": "cEnableES"
+        "ElasticsearchVersion": "5.1",
+        "SnapshotOptions": {
+            "AutomatedSnapshotStartHour": "1"
+        }
+      }
     },
-
     "CodeBuildKibana": {
       "Type": "AWS::CodeBuild::Project",
       "DependsOn": [
@@ -3793,7 +3792,6 @@
         "TimeoutInMinutes": 300
       }
     },
-
     "LogStreamerRole": {
       "Type": "AWS::IAM::Role",
       "Condition": "cEnableES",
@@ -3816,7 +3814,6 @@
         }
       }
     },
-
     "LogStreamerRolePolicies": {
       "Type": "AWS::IAM::Policy",
       "Condition": "cEnableES",
@@ -3848,7 +3845,6 @@
         } ]
       }
     },
-
     "applogLogStreamerInvokePermission": {
       "Type": "AWS::Lambda::Permission",
       "Condition": "cEnableES",
@@ -3864,7 +3860,6 @@
         }
       }
     },
-
     "syslogLogStreamerInvokePermission": {
       "Type": "AWS::Lambda::Permission",
       "Condition": "cEnableES",
@@ -3880,7 +3875,6 @@
         }
       }
     },
-
     "elblogLogStreamerInvokePermission": {
       "Type": "AWS::Lambda::Permission",
       "Condition": "cEnableES",
@@ -3896,7 +3890,6 @@
         }
       }
     },
-
     "LogStreamerLogGroup":{
       "Type" : "AWS::Logs::LogGroup",
       "Condition": "cEnableES",
@@ -3906,7 +3899,6 @@
         "RetentionInDays" : 1
       }
     },
-
     "LogStreamer": {
       "Type": "AWS::Lambda::Function",
       "Condition": "cEnableES",
@@ -3928,7 +3920,6 @@
         "Timeout": "300"
       }
     },
-
     "applogSubscriptionFilter": {
       "Condition": "cEnableES",
       "Type": "AWS::Logs::SubscriptionFilter",
@@ -3941,7 +3932,6 @@
         "LogGroupName": { "Fn::Sub":"${AWS::StackName}-applog"}
       }
     },
-
     "syslogSubscriptionFilter": {
       "Type": "AWS::Logs::SubscriptionFilter",
       "DependsOn": "syslogLogStreamerInvokePermission",
@@ -3954,7 +3944,6 @@
         "LogGroupName": { "Fn::Sub":"${AWS::StackName}-syslog"}
       }
     },
-
     "elblogSubscriptionFilter": {
       "Type": "AWS::Logs::SubscriptionFilter",
       "DependsOn": "elblogLogStreamerInvokePermission",
@@ -3966,8 +3955,409 @@
         "FilterPattern": "[type, timestamp, elb, client, target, request_processing_time, target_processing_time, response_processing_time, elb_status_code, target_status_code, received_bytes, sent_bytes, request, user_agent, ssl_cipher, ssl_protocol, target_group_arn, trace_id]",
         "LogGroupName": { "Fn::Sub":"${AWS::StackName}-elblog"}
       }
-    }
-
+    },
+    "ElasticSearchSnapshotS3Location": {
+      "Type": "AWS::S3::Bucket",
+      "Condition": "cEnableES",
+      "DeletionPolicy" : "Retain",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "${AWS::StackName}-snapshots"
+        },
+        "LifecycleConfiguration":{
+          "Rules":[
+            {
+              "ExpirationInDays" : 90,
+              "Id" : {
+                "Fn::Sub": "${AWS::StackName}-SnapshotMigrationLifecycleRule"
+              },
+              "Status" : "Enabled",
+              "Transitions" : [
+                {
+                  "StorageClass" : "STANDARD_IA",
+                  "TransitionInDays" : 30
+                },
+                {
+                  "StorageClass" : "GLACIER",
+                  "TransitionInDays" : 60
+                }
+               ]
+            }
+          ]
+        }
+      }
+    },
+    "ElasticSearchSnapshotRole": {
+      "Type": "AWS::IAM::Role",
+      "Condition": "cEnableES",
+      "Metadata": {
+        "Comment": "IAM Role for the Amazon ElasticSearch Service to Store Snapshots in an S3 Bucket"
+      },
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Sid": "",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "es.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "ElasticSearchSnapshotPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Action":[
+                    "s3:ListBucket"
+                  ],
+                  "Effect":"Allow",
+                  "Resource":[
+                    {"Fn::Sub": "arn:aws:s3:::${AWS::StackName}-snapshots"}
+                  ]
+                },
+                {
+                  "Action":[
+                    "s3:GetObject",
+                    "s3:PutObject",
+                    "s3:DeleteObject",
+                    "iam:PassRole"
+                  ],
+                  "Effect":"Allow",
+                  "Resource":[
+                     {"Fn::Sub": "arn:aws:s3:::${AWS::StackName}-snapshots/*"}
+                  ]
+                }
+              ]
+            }
+          }
+        ],
+        "Path": "/"
+      }
+    },
+    "SnapshotRepoCreateLambdaRole": {
+      "Type": "AWS::IAM::Role",
+      "Condition": "cEnableES",
+      "Metadata": {
+        "Comment": "IAM Role for the Lambda to create a Elastic Search Snapshot Repo"
+      },
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Sid": "",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "ElasticSearchSnapshotRepoLambdaPolicy",
+            "PolicyDocument": {
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": { "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}-SnapshotRepoCreateLambda:*" }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "iam:PassRole"
+                  ],
+                  "Resource":"*"
+                }
+              ]
+            }
+          }
+        ],
+        "Path": "/"
+      }
+    },
+    "SnapshotRepoCreateLambdaLogGroup":{
+      "Type" : "AWS::Logs::LogGroup",
+      "Condition": "cEnableES",
+      "DeletionPolicy" : "Delete",
+      "Properties" : {
+        "LogGroupName" :{ "Fn::Sub": "/aws/lambda/${AWS::StackName}-SnapshotRepoCreateLambda" },
+        "RetentionInDays" : 1
+      }
+    },
+    "SnapshotRepoCreateLambda": {
+      "Type": "AWS::Lambda::Function",
+      "Condition": "cEnableES",
+      "DependsOn": [        
+        "ElasticsearchAWSLogs",
+        "ElasticSearchSnapshotS3Location"
+      ],      
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "${AWS::StackName}-SnapshotRepoCreateLambda"
+        },
+        "Code": {
+          "ZipFile": {
+            "Fn::Join": [
+              "\n",
+              [
+                "var https = require('https');",
+                "var crypto = require('crypto');",
+                "var response = require('cfn-response');",
+                {"Fn::Sub": "var endpoint = '${ElasticsearchAWSLogs.DomainEndpoint}';"},
+                "exports.handler = function (event, context) {",
+                "var postObject = {",
+                " type: 's3',",
+                " settings: {",
+                    {"Fn::Sub": "bucket: '${AWS::StackName}-snapshots',"},
+                    {"Fn::Sub": "region: '${AWS::Region}',"},
+                    {"Fn::Sub": "role_arn: '${ElasticSearchSnapshotRole.Arn}'"},
+                  "}",
+                "};",
+                "var postData = JSON.stringify(postObject);",
+                  "if(isValidJson(postData)) {",
+                  "post(postData, function(error, success, statusCode) {",
+                  "console.log('Response: ' + JSON.stringify({",
+                  "'statusCode': statusCode",
+                  "}));",
+                  "if (error) {",
+                  "console.log('postData Error: ' + JSON.stringify(error, null, 2));",
+                  "response.send(event, context, response.FAILED);",
+                  "} else {",
+                  "console.log('Success: ' + JSON.stringify(success));",
+                  " response.send(event, context, response.SUCCESS);",
+                  "}",
+                  "});",
+                  "}else{",
+                  "Console.log('Error: Invalid JSON Body');",
+                  "response.send(event, context, response.FAILED);",
+                  "}",
+                  "};",
+                  "function post(body, callback) {",
+                  "console.log('endpoint:', endpoint);",
+                  "var requestParams = buildRequest(endpoint, body);",
+                  "console.log('requestParams:', requestParams);",
+                  "var request = https.request(requestParams, function(response) {",
+                  "var responseBody = '';",
+                  "response.on('data', function(chunk) {",
+                  "responseBody += chunk;",
+                  "});",
+                  "response.on('end', function() {",
+                  "var info = JSON.parse(responseBody);",
+                  "var success;",
+                  "console.log('post info:', info);",
+                  "var error = response.statusCode !== 200 || info.errors === true ? {",
+                  "'statusCode': response.statusCode,",
+                  "'responseBody': responseBody",
+                  "} : null;",
+                  "console.log('post error:', error);",
+                  "callback(error, success, response.statusCode);",
+                  "});",
+                  "}).on('error', function(e) {",
+                  "callback(e);",
+                  "});",
+                  "request.end(requestParams.body);",
+                  "};",
+                  "function buildRequest(endpoint, body) {",
+                  "var endpointParts = endpoint.match(/^([^\\.]+)\\.?([^\\.]*)\\.?([^\\.]*)\\.amazonaws\\.com$/);",
+                  "var region = endpointParts[2];",
+                  "var service = endpointParts[3];",
+                  "var datetime = (new Date()).toISOString().replace(/[:\\-]|\\.\\d{3}/g, '');",
+                  "var date = datetime.substr(0, 8);",
+                  "var kDate = hmac('AWS4' + process.env.AWS_SECRET_ACCESS_KEY, date);",
+                  "var kRegion = hmac(kDate, region);",
+                  "var kService = hmac(kRegion, service);",
+                  "var kSigning = hmac(kService, 'aws4_request');",
+                  "var request = {",
+                  "host: endpoint,",
+                  "method: 'POST',",
+                  "path: '/_snapshot/backups',",
+                  "body: body,",
+                  "headers: {",
+                  "'Content-Type': 'application/json',",
+                  "'Host': endpoint,",
+                  "'Content-Length': Buffer.byteLength(body),",
+                  "'X-Amz-Security-Token': process.env.AWS_SESSION_TOKEN,",
+                  "'X-Amz-Date': datetime",
+                  "}",
+                  "};",
+                  "var canonicalHeaders = Object.keys(request.headers)",
+                  ".sort(function(a, b) { return a.toLowerCase() < b.toLowerCase() ? -1 : 1; })",
+                  ".map(function(k) { return k.toLowerCase() + ':' + request.headers[k]; })",
+                  ".join('\\n');",
+                  "var signedHeaders = Object.keys(request.headers)",
+                  ".map(function(k) { return k.toLowerCase(); })",
+                  ".sort()",
+                  ".join(';');",
+                  "var canonicalString = [",
+                  "request.method,",
+                  "request.path, '',",
+                  "canonicalHeaders, '',",
+                  "signedHeaders,",
+                  "hash(request.body, 'hex'),",
+                  "].join('\\n');",
+                  "var credentialString = [ date, region, service, 'aws4_request' ].join('/');",
+                  "var stringToSign = [",
+                  "'AWS4-HMAC-SHA256',",
+                  "datetime,",
+                  "credentialString,",
+                  "hash(canonicalString, 'hex')",
+                  "] .join('\\n');",
+                  "request.headers.Authorization = [",
+                  "'AWS4-HMAC-SHA256 Credential=' + process.env.AWS_ACCESS_KEY_ID + '/' + credentialString,",
+                  "'SignedHeaders=' + signedHeaders,",
+                  "'Signature=' + hmac(kSigning, stringToSign, 'hex')",
+                  "].join(', ');",
+                  "return request;",
+                  "};",
+                  "function hmac(key, str, encoding) {",
+                  "return crypto.createHmac('sha256', key).update(str, 'utf8').digest(encoding);",
+                  "};",
+                  "function hash(str, encoding) {",
+                  "return crypto.createHash('sha256').update(str, 'utf8').digest(encoding);",
+                  "};",
+                  "function isValidJson(message) {",
+                  "try {",
+                  "JSON.parse(message);",
+                  "} catch (e) { return false; }",
+                  "return true;",
+                "};"
+              ]
+            ]
+          }
+        },
+        "Description": "Lambda function for Creating a Snapshot Repo on S3 for Amazon Elasticsearch.",
+        "Handler": "index.handler",
+        "Role": {
+          "Fn::GetAtt": [ "SnapshotRepoCreateLambdaRole", "Arn" ]
+        },
+        "Runtime": "nodejs6.10",
+        "Timeout": "300"
+      }
+    },
+    "CreateSnapshotRepo": {
+      "Type": "AWS::CloudFormation::CustomResource",
+      "Version": "1.0",
+      "Condition": "cEnableES",
+      "DependsOn": [
+        "SnapshotRepoCreateLambda",
+        "ElasticsearchAWSLogs",
+        "ElasticSearchSnapshotS3Location"
+      ],
+      "Properties": {
+        "ServiceToken": {
+          "Fn::GetAtt": [
+            "SnapshotRepoCreateLambda",
+            "Arn"
+          ]
+        }
+      }
+    },    
+    "SnapshotCreateLambdaRole": {
+      "Type": "AWS::IAM::Role",
+      "Condition": "cEnableES",
+      "Metadata": {
+        "Comment": "IAM Role for the Lambda to create a Elastic Search Snapshot on the S3 Bucket repo"
+      },
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Sid": "",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "ElasticSearchSnapshotCreateLambdaPolicy",
+            "PolicyDocument": {
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": { "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}-SnapshotRepoCreateLambda:*" }
+                }
+              ]
+            }
+          }
+        ],
+        "Path": "/"
+      }
+    },
+    "SnapshotCreateLambdaLogGroup":{
+      "Type" : "AWS::Logs::LogGroup",
+      "Condition": "cEnableES",
+      "DeletionPolicy" : "Delete",
+      "Properties" : {
+        "LogGroupName" :{ "Fn::Sub": "/aws/lambda/${AWS::StackName}-SnapshotCreateLambda" },
+        "RetentionInDays" : 1
+      }
+    },
+    "SnapshotCreateLambda": {
+      "Type": "AWS::Lambda::Function",
+      "Condition": "cEnableES",
+      "DependsOn": [        
+        "ElasticsearchAWSLogs"
+      ],
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "${AWS::StackName}-SnapshotCreateLambda"
+        },
+        "Code": {
+          "ZipFile": {
+            "Fn::Sub": "var https=require('https');exports.handler=function (event,context){var now=new Date();var postData={};var options={hostname:'${ElasticsearchAWSLogs.DomainEndpoint}',path:'/_snapshot/backups/'+now.getUTCFullYear().toString()+'-'+(now.getUTCMonth() + 1).toString()+'-'+now.getUTCDate().toString(),method:'POST'};options.headers={'Content-Type':'application/json','Content-Length':Buffer.byteLength(JSON.stringify(postData))};console.log('Attempting to Submit Request : ');var postreq=https.request(options, (postres) => {postres.setEncoding('utf8');var responsecontent='';postres.on('data', (chunk) => {responsecontent += chunk;});postres.on('end', () => {console.log('Returned: '+ JSON.stringify(responsecontent));});});postreq.on('error', (e) => {console.log('problem with POST request: '+e.message);});postreq.write(JSON.stringify(postData)); postreq.end();};"
+          }
+        },
+        "Description": "Lambda function for Creating a Snapshot on S3 SnapshotRepo for Amazon Elasticsearch.",
+        "Handler": "index.handler",
+        "Role": {
+          "Fn::GetAtt": [ "SnapshotCreateLambdaRole", "Arn" ]
+        },
+        "Runtime": "nodejs6.10",
+        "Timeout": "300"
+      }
+    },
+    "SnapshotCreateScheduledRule": {
+      "Type": "AWS::Events::Rule",
+      "Condition": "cEnableES",
+      "Properties": {
+        "Description": "ScheduledRule",
+        "ScheduleExpression": "rate(1 day)",
+        "State": "ENABLED",
+        "Targets": [{
+          "Arn": { "Fn::GetAtt": ["SnapshotCreateLambda", "Arn"] },
+          "Id": "TargetFunctionV1"
+        }]
+      }
+    },
+    "PermissionForEventsToInvokeSnapshotCreateLambda": {
+      "Type": "AWS::Lambda::Permission",
+      "Condition": "cEnableES",
+      "Properties": {
+        "FunctionName": { "Ref": "SnapshotCreateLambda" },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "events.amazonaws.com",
+        "SourceArn": { "Fn::GetAtt": ["SnapshotCreateScheduledRule", "Arn"] }
+      }
+    }    
   },
   "Outputs": {
     "ServiceRoleName": {
