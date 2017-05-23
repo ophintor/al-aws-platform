@@ -3246,6 +3246,7 @@
     "CodeBuildKibanaLogGroup":{
       "Type" : "AWS::Logs::LogGroup",
       "DeletionPolicy" : "Delete",
+      "Condition": "cEnableES",
       "Properties" : {
         "LogGroupName" :{ "Fn::Sub": "/aws/codebuild/${AWS::StackName}-kibana" },
         "RetentionInDays" : 1
@@ -3590,28 +3591,32 @@
                   }
                 }
               },
-	            {
-                "Name": {
-                  "Fn::Sub": "${AWS::StackName}-BuildKibana"
-                },
-                "InputArtifacts": [
+              {
+                "Fn::If" : [
+                  "cEnableES",
                   {
                     "Name": {
-                      "Fn::Sub": "${AWS::StackName}-SourceOutput"
+                      "Fn::Sub": "${AWS::StackName}-BuildKibana"
+                    },
+                    "InputArtifacts": [
+                      {
+                        "Name": {
+                          "Fn::Sub": "${AWS::StackName}-SourceOutput"
+                        }
+                      }
+                    ],
+                    "ActionTypeId": {
+                      "Category": "Build",
+                      "Owner": "AWS",
+                      "Version": 1,
+                      "Provider": "CodeBuild"
+                    },
+                    "Configuration": {
+                      "ProjectName": {"Ref": "CodeBuildKibana"}
                     }
-                  }
-                ],
-                "ActionTypeId": {
-                  "Category": "Build",
-                  "Owner": "AWS",
-                  "Version": 1,
-                  "Provider": "CodeBuild"
-                },
-                "Configuration": {
-                  "ProjectName": {
-                    "Ref": "CodeBuildKibana"
-                  }
-                }
+                  },
+                  {"Ref": "AWS::NoValue"}
+                ]                    
               }
             ]
           },
@@ -3761,7 +3766,7 @@
       "DependsOn": [
         "CodeRepo",
         "CodeBuildRole",
-	"ElasticsearchAWSLogs"
+        "ElasticsearchAWSLogs"
       ],
       "Condition": "cEnableES",
       "Properties": {
