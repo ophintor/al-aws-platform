@@ -569,7 +569,11 @@
                 "cloudformation:Describe*",
                 "cloudformation:GetTemplate",
                 "rds:DescribeDBInstances",
-                "s3:Get*"
+                "s3:Get*",
+                "cloudwatch:PutMetricData",
+                "cloudwatch:GetMetricStatistics",
+                "cloudwatch:ListMetrics",
+                "ec2:DescribeTags"
               ],
               "Resource": "*"
             },
@@ -2297,7 +2301,10 @@
           "config": {
             "packages": {
               "apt": {
-                "mysql-client": []
+                "mysql-client": [],
+                "unzip":[],
+                "libwww-perl":[],
+                "libdatetime-perl": []
               }
             },
             "files": {
@@ -2367,6 +2374,22 @@
                       "",
                       "[Install]",
                       "WantedBy=multi-user.target"
+                    ]
+                  ]
+                },
+                "mode": "000400",
+                "owner": "root",
+                "group": "root"
+              },
+              "/tmp/aws_monitoring.sh" : {
+                "content": {
+                  "Fn::Join": [
+                    "\n",
+                    [
+                      "#!/usr/bin/env bash",
+                      "set -xu",
+                      "cd /home/ubuntu/aws-scripts-mon",
+                      "(crontab -l 2>/dev/null; echo '*/1 * * * * /home/ubuntu/aws-scripts-mon/mon-put-instance-data.pl --mem-util --disk-space-util --disk-path=/ --auto-scaling=only --from-cron') | crontab - "
                     ]
                   ]
                 },
@@ -2464,6 +2487,13 @@
                 "#Start the Cloudwatch logs agent service using the SYSTEMD Unit file created by cloudformation Init. \n",
                 "systemctl enable awslogs.service \n",
                 "systemctl start awslogs.service \n",
+                "#Download and Install the CloudWatch monitoring Script \n",
+                "curl http://aws-cloudwatch.s3.amazonaws.com/downloads/CloudWatchMonitoringScripts-1.2.1.zip -O || error_exit \n",
+                "unzip CloudWatchMonitoringScripts-1.2.1.zip || error_exit \n",
+                "rm CloudWatchMonitoringScripts-1.2.1.zip || error_exit \n",
+                "cd /tmp/ || error_exit \n",
+                "chmod +x aws_monitoring.sh || error_exit \n",
+                "sudo ./aws_monitoring.sh || error_exit \n",
                 "# All is well, so signal success.\n",
                 "cfn-signal -e 0 -r \"AWS CodeDeploy Agent setup complete.\" '",
                 {
