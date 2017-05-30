@@ -3,7 +3,7 @@
 set -exu
 
 # shellcheck disable=SC2155
-declare -r BASEDIR="$(dirname "$(perl -e 'use Cwd qw/abs_path/; print abs_path($ARGV[0]);' "$0")")/../"
+declare -r BASEDIR="$(dirname "$(perl -e 'use Cwd qw/realpath/; print realpath($ARGV[0]."/../");' "$0")")"
 
 STACK_NAME="${STACK_NAME:-presentation}"
 REGION="${REGION:-eu-west-1}"
@@ -29,11 +29,6 @@ aws s3 cp \
 	--region "${REGION}" \
 	"${CF_TEMPLATE}" \
 	"${CF_S3_OBJECT}"
-
-# # Wait if any update running
-# aws cloudformation wait stack-update-complete \
-# 	--region "${REGION}" \
-# 	--stack-name "${STACK_NAME}" || true # We don't care here
 
 STACK_STATUS=$(aws cloudformation describe-stacks \
 	--region "${REGION}" \
@@ -84,7 +79,7 @@ git remote rm codecommit &>/dev/null || true
 
 git remote add codecommit "${GIT_REMOTE}"
 # Push the current commit to codecommit master branch
-git push codecommit HEAD:master
+git push codecommit HEAD:refs/heads/master
 
 # Dump outputs from CF Stack
 aws cloudformation describe-stacks \
@@ -94,13 +89,9 @@ aws cloudformation describe-stacks \
 	--output table
 
 # Deploy Kibana dashboards.
-(
-CWD=$(basename "$(pwd)")
-if [ "$CWD" == 'aws-cloud-platform' ]; then
-  cd kibana;
-elif [ "$CWD" == 'utils' ]; then
-  cd ../kibana
-fi
 ES_URL=$(aws --region "${REGION}" cloudformation describe-stacks --stack-name "${STACK_NAME}" --query "Stacks[0].Outputs[?OutputKey=='KibanaURL'].OutputValue" --output text | cut -f 1-3 -d'/')
-./load.sh -url "$ES_URL"
-)
+if [ -z "${ES_URL}" ]; then
+	echo "No Kibana URL found, skipt Kibana dashboards deploy"
+else
+	"${BASEDIR}/kibana/load.sh" -url "$ES_URL"
+fi
