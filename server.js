@@ -22,46 +22,9 @@ var connection = mysql.createConnection({
   database : process.env.DB_NAME || 'todo'
 });
 
-function getTodos(res, next) {
-    connection.query('SELECT * FROM todo', (error, results, fields) => {
-        if (error) {
-            next(error);
-            return
-        }
-        res.json(results);
-    });
-};
+var AppRouter = require('./lib/api')
 
-app.get('/api/todos', (req, res, next) => {
-    getTodos(res, next);
-});
-
-// create todo and send back all todos after creation
-app.post('/api/todos', (req, res, next) => {
-    var post  = {
-        text: req.body.text,
-    };
-    var query = connection.query('INSERT INTO todo SET ?', post, (error, results, fields) => {
-        if (error) {
-            next(error);
-            return
-        }
-        getTodos(res, next);
-    });    
-});
-
-app.delete('/api/todos/:todo_id', (req, res, next) => {
-    var post  = {
-        _id: req.params.todo_id,
-    };
-    var query = connection.query('DELETE FROM todo WHERE ?', post, (error, results, fields) => {
-        if (error) {
-            next(error);
-            return
-        }
-        getTodos(res, next);
-    });
-});
+app.use('/api/', AppRouter(connection))
 
 app.get('*', (req, res) => {
     res.sendFile(__dirname + '/public/index.html');
