@@ -1190,6 +1190,66 @@
         ]
       }
     },
+    "LogGroupVPCFlowLog": {
+      "Type" : "AWS::Logs::LogGroup",
+      "DeletionPolicy" : "Delete",
+      "Properties" : {
+        "LogGroupName" : { "Fn::Sub":"${AWS::StackName}-vpcflowlog"},
+        "RetentionInDays" : 7
+      }
+    },
+    "VPCFlowLogRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+        "Version": "2012-10-17",
+        "Statement":
+          [{
+            "Effect": "Allow",
+            "Principal": {
+              "Service": "vpc-flow-logs.amazonaws.com"
+            },
+            "Action": [ "sts:AssumeRole"]
+          }]
+        }
+      }
+    },
+    "VPCFLowLogRolePolicy": {
+      "Type": "AWS::IAM::Policy",
+      "Properties": {
+        "PolicyName": "VPCFLowLogRolePolicy",
+        "PolicyDocument": {
+          "Statement":[
+            {
+              "Effect":"Allow",
+              "Action": [
+                "logs:CreateLogGroup",
+                "logs:CreateLogStream",
+                "logs:PutLogEvents",
+                "logs:DescribeLogGroups",
+                "logs:DescribeLogStreams"
+              ],
+              "Resource": "*"
+            }
+          ]
+        },
+        "Roles": [
+          {
+            "Ref": "VPCFlowLogRole"
+          }
+        ]
+      }
+    },
+    "VPCFlowLog": {
+      "Type": "AWS::EC2::FlowLog",
+      "Properties": {
+        "DeliverLogsPermissionArn": { "Fn::GetAtt" : ["VPCFlowLogRole", "Arn"] },
+        "LogGroupName": { "Ref": "LogGroupVPCFlowLog" },
+        "ResourceId": { "Ref": "VPC" },
+        "ResourceType" : "VPC",
+        "TrafficType" : "ALL"
+      }
+    },
     "SSLCertificate": {
       "Type": "AWS::CertificateManager::Certificate",
       "DeletionPolicy": "Retain",
@@ -3925,6 +3985,21 @@
         }
       }
     },
+    "vpcflowlogStreamerInvokePermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Condition": "cEnableES",
+      "Properties": {
+        "FunctionName" : { "Fn::GetAtt" : ["LogStreamer", "Arn"] },
+        "Action": "lambda:InvokeFunction",
+        "Principal": {
+          "Fn::Sub": "logs.${AWS::Region}.amazonaws.com"
+        },
+        "SourceAccount": { "Ref" : "AWS::AccountId" },
+        "SourceArn": {
+          "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${AWS::StackName}-vpcflowlog:*"
+        }
+      }
+    },
     "LogStreamerLogGroup":{
       "Type" : "AWS::Logs::LogGroup",
       "Condition": "cEnableES",
@@ -3989,6 +4064,18 @@
         },
         "FilterPattern": "[type, timestamp, elb, client, target, request_processing_time, target_processing_time, response_processing_time, elb_status_code, target_status_code, received_bytes, sent_bytes, request, user_agent, ssl_cipher, ssl_protocol, target_group_arn, trace_id]",
         "LogGroupName": { "Fn::Sub":"${AWS::StackName}-elblog"}
+      }
+    },
+    "vpcflowlogSubscriptionFilter": {
+      "Type": "AWS::Logs::SubscriptionFilter",
+      "DependsOn": "vpcflowlogStreamerInvokePermission",
+      "Condition": "cEnableES",
+      "Properties": {
+        "DestinationArn": {
+          "Fn::GetAtt" : [ "LogStreamer", "Arn" ]
+        },
+        "FilterPattern": "[version, account_id, interface_id, srcaddr, dstaddr, srcport, dstport, protocol, packets, bytes, start, end, action, log_status]",
+        "LogGroupName": { "Fn::Sub":"${AWS::StackName}-vpcflowlog"}
       }
     },
     "ElasticSearchSnapshotS3Location": {
