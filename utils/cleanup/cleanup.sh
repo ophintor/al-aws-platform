@@ -46,6 +46,7 @@ declare -a LOG_GROUPS=(
 	"/aws/codebuild/${STACK_NAME}-myapp-image"
 	"/aws/codebuild/${STACK_NAME}-application"
 	"/aws/codebuild/${STACK_NAME}-kibana"
+	"/aws/lambda/${STACK_NAME}-es-snapshots"
 	"/aws/lambda/${STACK_NAME}-set-param-store"
 	"/aws/lambda/${STACK_NAME}-LogMigrationLambda"
 	"/aws/lambda/${STACK_NAME}-LogStreamer"
@@ -76,6 +77,7 @@ declare -a S3_BUCKETS=(
 	"${STACK_NAME}-codepipeline-artifacts"
 	"${STACK_NAME}-artifacts"
 	"${STACK_NAME}-elb-logs"
+	"${STACK_NAME}-es-snapshots"
 	"${STACK_NAME}-logs"
 	"${STACK_NAME}-snapshots"
 )
