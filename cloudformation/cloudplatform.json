@@ -1224,11 +1224,11 @@
               "Effect":"Allow",
               "Action": [
                 "logs:CreateLogStream",
-                "logs:PutLogEvents",
-                "logs:DescribeLogGroups",
-                "logs:DescribeLogStreams"
+                "logs:PutLogEvents"
               ],
-              "Resource": "*"
+              "Resource": {
+                "Fn::GetAtt": [ "LogGroupVPCFlowLog", "Arn" ]
+              }
             }
           ]
         },
