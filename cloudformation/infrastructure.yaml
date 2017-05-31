@@ -301,7 +301,7 @@ Resources:
       AliasName: !Sub 'alias/${AWS::StackName}-masterkey'
       TargetKeyId: !Ref 'MyKey'
 
-  # Crate Log Group to setup the Retentio time of Lambda Logs
+  # Create Log Group to setup the Retention time of Lambda Logs
   EncryptLambdaLogsGroup:
     Type: AWS::Logs::LogGroup
     Properties:
