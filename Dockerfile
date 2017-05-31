@@ -14,7 +14,7 @@ WORKDIR /app
 
 # Install app dependencies
 COPY package.json /app/
-RUN npm install --color=false
+RUN npm install --color=false --only=prod
 
 # Bundle app source
 COPY . /app

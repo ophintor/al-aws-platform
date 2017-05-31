@@ -18,6 +18,7 @@ phases:
     commands:
       - echo Build completed on `date`
       - echo Pushing the Docker image...
+      - docker run $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME:$(cat /tmp/build_tag) bash -c "npm install --only=dev ; npm test"
       - docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME:$(cat /tmp/build_tag)
 
 artifacts:
