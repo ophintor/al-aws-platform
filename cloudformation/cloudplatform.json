@@ -340,7 +340,7 @@
         "Ubuntu": "ami-eb49358c"
       },
       "ap-northeast-2": {
-        "Ubuntu": "ami-93d600fd,"
+        "Ubuntu": "ami-93d600fd"
       },
       "ap-south-1": {
         "Ubuntu": "ami-dd3442b2"
