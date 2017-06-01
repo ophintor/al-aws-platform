@@ -66,10 +66,10 @@ describe('TodoApp', () => {
                 _id: 1,
             };
 
-            mysqlConnection.query.withArgs('DELETE FROM todo WHERE ?', 1)
+            mysqlConnection.query.withArgs('DELETE FROM todo WHERE ?', {_id: 1})
                 .callsArgWith(2, null, null)
 
-            todo.delete(1, (err, data) => {
+            todo.delete(task, (err, data) => {
                 should.not.exist(err)
                 should.not.exist(data)
 
