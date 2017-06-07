@@ -142,17 +142,12 @@
     "HostedZoneID": {
       "Description": "Name of an existing Amazon Route53 HostedZone ID. Defaults to al-labs.co.uk.",
       "Type": "AWS::Route53::HostedZone::Id",
-      "MinLength": "1",
-      "MaxLength": "32",
       "Default": "Z2KFA2A6JE8TAK"
     },
     "KeyPairName": {
       "Description": "Name of an existing Amazon EC2 key pair to enable SSH or RDP access to the instances.",
       "Type": "AWS::EC2::KeyPair::KeyName",
-      "MinLength": "1",
-      "MaxLength": "255",
       "Default": "xavierkey",
-      "AllowedPattern": "[\\x20-\\x7E]*",
       "ConstraintDescription": "KeyPairName is a required Field and can contain only ASCII characters."
     },
     "InstanceType": {
