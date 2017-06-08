@@ -588,8 +588,9 @@ Resources:
     DependsOn: [EcsSecurityGroup, EC2InstanceProfile]
     Properties:
       # AMI list: http://docs.aws.amazon.com/AmazonECS/latest/developerguide/launch_container_instance.html
-      InstanceType: t2.micro
+      InstanceType: !Ref InstanceType
       ImageId: !FindInMap [AWSRegionECSAMI, !Ref 'AWS::Region', 'ecs']
+      SpotPrice: !If [cEnableSpotInstances, '0.05', !Ref 'AWS::NoValue']
       KeyName: !Ref KeyName
       SecurityGroups: [!Ref EcsSecurityGroup]
       IamInstanceProfile: !Ref EC2InstanceProfile
