@@ -48,13 +48,19 @@ Mappings:
 Outputs:
   WebsiteURLCodeDeployLB:
     Description: Website
-    Value: !Sub "http://${CodeDeployALB.DNSName}/"
+    Value: !Join ["", [
+      !If [cEnableHTTPS, "https", "http"],
+      !If [cEnableDNS, !Sub "ec2.${AWS::StackName}.al-labs.co.uk", !Sub "${CodeDeployALB.DNSName}"]]
+    ]
   RepoURL:
     Description: Git Repository
     Value: !GetAtt CodeRepo.CloneUrlSsh
   ServiceURL:
     Description: ECS LB URL
-    Value: !Sub "http://${ECSALB.DNSName}/"
+    Value: !Join ["", [
+      !If [cEnableHTTPS, "https", "http"],
+      !If [cEnableDNS, !Sub "ecs.${AWS::StackName}.al-labs.co.uk", !Sub "${CodeDeployALB.DNSName}"]]
+    ]
   PipelineUrl:
     Value: !Sub https://console.aws.amazon.com/codepipeline/home?region=${AWS::Region}#/view/${MyAppPipeline}
 # These exported values are sent in every request by the lambda function, not sure where they get included
