@@ -85,14 +85,14 @@ describe('TodoApp HTTP', () => {
                 _id: 1,
             };
 
-            mysqlConnection.query.withArgs('DELETE FROM todo WHERE ?', 1)
+            mysqlConnection.query.withArgs('DELETE FROM todo WHERE ?', {_id: 1})
                 .callsArgWith(2, null, null)
 
             mysqlConnection.query.withArgs('SELECT * FROM todo')
                 .callsArgWith(1, null, rows)
 
             request(app)
-                .get('/todos')
+                .delete('/todos/1')
                 .expect(200)
                 .end((err, res) => {
                     data = res.body;
