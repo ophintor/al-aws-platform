@@ -46,7 +46,7 @@ Outputs:
   WebsiteURLCodeDeployLB:
     Description: Website
     Value: !Join ["", [
-      !If [cEnableHTTPS, "https", "http"],
+      !If [cEnableHTTPS, "https://", "http://"],
       !If [cEnableDNS, !Sub "ec2.${AWS::StackName}.al-labs.co.uk", !Sub "${CodeDeployALB.DNSName}"]]
     ]
   RepoURL:
@@ -55,7 +55,7 @@ Outputs:
   ServiceURL:
     Description: ECS LB URL
     Value: !Join ["", [
-      !If [cEnableHTTPS, "https", "http"],
+      !If [cEnableHTTPS, "https://", "http://"],
       !If [cEnableDNS, !Sub "ecs.${AWS::StackName}.al-labs.co.uk", !Sub "${CodeDeployALB.DNSName}"]]
     ]
   PipelineUrl:
