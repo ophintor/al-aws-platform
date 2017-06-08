@@ -174,12 +174,26 @@ Parameters:
       - Disable
     Default: Enable
     Type: String
+  EmailApprovals:
+    Description: Email used to send approval notifications
+    Default: ""
+    Type: String
+  SlackApprovalsWebhook:
+    Description: |
+      Slack channel incoming webhook to send approval notifications, check
+      https://api.slack.com/incoming-webhooks
+      If no URL is set, slack notificaitons will be disabled/not provisioned
+    Default: ""
+    NoEcho: True
+    Type: String
 
 Conditions:
   cEnableDNS: !Equals [!Ref UseDNS, 'Enable']
   cEnableHTTPS: !Equals [!Ref UseHTTPS, 'Enable']
   cEnableElasticSearchLogs: !Equals [!Ref ElasticsearchLogs, 'Enable']
   cEnableSpotInstances: !Equals [!Ref UseSpotInstances, 'Enable']
+  cEnableApprovalEmails: !Not [!Equals [!Ref EmailApprovals, '']]
+  cEnableSlackApprovals: !Not [!Equals [!Ref SlackApprovalsWebhook, '']]
 
 # Resources documentation
 # http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-template-resource-type-ref.html
@@ -374,6 +388,7 @@ Resources:
                   - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}.db.*'
                   # Used on AWS console to test the function ^.^
                   - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}.fn.test'
+                  - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}.slack.*'
   EncryptLambda:
     Type: AWS::Lambda::Function
     DependsOn: MyKeyAlias
@@ -816,6 +831,19 @@ Resources:
                   - codecommit:GitPull
                 Resource:
                   - !Sub "arn:aws:codecommit:${AWS::Region}:${AWS::AccountId}:${AWS::StackName}-myapp"
+              - Effect: Allow
+                Action:
+                  - "codepipeline:GetPipeline"
+                  - "codepipeline:GetPipelineState"
+                  - "codepipeline:GetPipelineExecution"
+                Resource:
+                  # - !Sub "arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId):*"
+                  - !Sub "arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}"
+              - Effect: Allow
+                Action:
+                  - "codepipeline:PutApprovalResult"
+                Resource:
+                  - !Sub "arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:pm-MyApp/ApprovalProduction/QAApproval"
   DevGroup:
     Type: "AWS::IAM::Group"
     Properties:
@@ -1276,6 +1304,36 @@ Resources:
                   - ecs:*
                   - ecr:*
                   - iam:*
+  ApprovalTopic:
+    Type: "AWS::SNS::Topic"
+    Properties:
+      DisplayName: !Sub '${AWS::StackName}-approvals'
+      TopicName: !Sub '${AWS::StackName}-approvals'
+  ApprovalTopicPolicy:
+    Type: "AWS::SNS::TopicPolicy"
+    Properties:
+      # http://docs.aws.amazon.com/sns/latest/dg/AccessPolicyLanguage_SpecialInfo.html
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          # Allow Pipeline to publish into approvals topic
+          - Effect: Allow
+            Principal: # "*"
+              AWS:
+                - !Sub '${CodePipelineServiceRole.Arn}'
+            Action:
+              - "sns:Publish"
+            Resource:
+              - !Ref ApprovalTopic
+      Topics:
+        - !Ref ApprovalTopic
+  QAEmailGroup:
+    Type: AWS::SNS::Subscription
+    Condition: cEnableApprovalEmails
+    Properties:
+      Endpoint: !Sub "${EmailApprovals}"
+      Protocol: email
+      TopicArn: !Ref 'ApprovalTopic'
   MyAppPipeline:
     Type: "AWS::CodePipeline::Pipeline"
     DependsOn:
@@ -1391,6 +1449,17 @@ Resources:
               InputArtifacts:
                 - Name: DockerImageOutput
                 - Name: SourceOutput
+        - Name: ApprovalProduction
+          Actions:
+            - Name: QAApproval
+              ActionTypeId:
+                Category: Approval
+                Owner: AWS
+                Version: 1
+                Provider: Manual
+              Configuration:
+                NotificationArn: !Ref ApprovalTopic
+                CustomData: !Sub "Approval or Reject this change after running Exploratory Tests: http://${CodeDeployALB.DNSName}/"
       ArtifactStore:
         Type: S3
         Location: !Ref ArtifactStoreS3Location
@@ -1699,3 +1768,211 @@ Resources:
 ###########################################
 # End of Elasticsearch logging domain
 ###########################################
+  SlackLambdaLogsGroup:
+    Type: AWS::Logs::LogGroup
+    Condition: cEnableSlackApprovals
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${AWS::StackName}-slack-notifications
+      RetentionInDays: 1
+  SlackLambdaRole:
+    Type: AWS::IAM::Role
+    Condition: cEnableSlackApprovals
+    Properties:
+      RoleName: !Sub ${AWS::StackName}-slack-notifications
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Statement:
+              # Allow lambda to create log group
+              - Effect: "Allow"
+                Action:
+                  - logs:CreateLogGroup
+                Resource:
+                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+              # Create Log streams and write on it
+              - Effect: "Allow"
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource:
+                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}-slack-notifications"
+                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}-slack-notifications:*"
+              # Allow lambda to use KMS to decrypt Env Vars
+              - Effect: "Allow"
+                Action:
+                  - kms:Decrypt
+                Resource: "*"
+              - Effect: "Allow"
+                Action:
+                  - ssm:GetParameters
+                Resource:
+                  - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}.slack.*'
+  StoreEncryptedSlackWebhook:
+    Type: 'Custom::SetParameterStore'
+    Condition: cEnableSlackApprovals
+    Properties:
+      ServiceToken: !GetAtt 'EncryptLambda.Arn'
+      # KeyId: !Ref 'MyKey'
+      KeyId: !Sub "alias/${AWS::StackName}-masterkey"
+      ParameterStoreName: !Sub '${AWS::StackName}.slack.webhooks'
+      Value: !Ref SlackApprovalsWebhook
+      Description: "Webhook URL for approvals notifications"
+      Type: 'SecureString'
+      Overwrite: True
+  SlackNotificationsLambda:
+    Type: AWS::Lambda::Function
+    DependsOn: MyKeyAlias
+    Condition: cEnableSlackApprovals
+    Properties:
+      FunctionName: !Sub ${AWS::StackName}-slack-notifications
+      Description: |
+        Lambda Function to send approvals notifications to slcak channel
+      Handler: index.handler
+      Role: !GetAtt 'SlackLambdaRole.Arn'
+      Code:
+        ZipFile: |
+          'use strict';
+          const AWS = require('aws-sdk');
+          const url = require('url');
+          const https = require('https');
+
+          // The base-64 encoded, encrypted key (CiphertextBlob) stored in the kmsEncryptedHookUrl environment variable
+          const kmsEncryptedHookUrl = process.env.kmsEncryptedHookUrl;
+          // The Slack channel to send a message to stored in the slackChannel environment variable
+          const slackChannel = process.env.slackChannel;
+          let hookUrl;
+
+
+          function postMessage(message, callback) {
+          	const body = JSON.stringify(message);
+          	const options = url.parse(hookUrl);
+          	options.method = 'POST';
+          	options.headers = {
+          		'Content-Type': 'application/json',
+          		'Content-Length': Buffer.byteLength(body),
+          	};
+
+          	const postReq = https.request(options, (res) => {
+          		const chunks = [];
+          		res.setEncoding('utf8');
+          		res.on('data', (chunk) => chunks.push(chunk));
+          		res.on('end', () => {
+          			if (callback) {
+          				callback({
+          					body: chunks.join(''),
+          					statusCode: res.statusCode,
+          					statusMessage: res.statusMessage,
+          				});
+          			}
+          		});
+          		return res;
+          	});
+
+          	postReq.write(body);
+          	postReq.end();
+          }
+
+          function processEvent(event, callback) {
+          	const message = JSON.parse(event.Records[0].Sns.Message);
+
+          	const alarmName = message.AlarmName;
+          	//var oldState = message.OldStateValue;
+          	const newState = message.NewStateValue;
+          	const reason = message.NewStateReason;
+
+          	const slackMessage = {
+          		"text": `Pipeline "${message.approval.pipelineName}" approval required, action "${message.approval.actionName}"`,
+          		"attachments": [
+          		{
+          			"author_name": "Cloud Platform AWS approval",
+          			"author_icon": "https://i0.wp.com/reillytop10.com/wp-content/uploads/2016/12/Screen-Shot-2016-12-12-at-3.42.49-PM.png",
+          			"image_url": [
+          				"https://media.giphy.com/media/3o7abrH8o4HMgEAV9e/giphy.gif",
+          				"https://media.giphy.com/media/UsmcxQeK7BRBK/giphy.gif",
+          				"https://media.giphy.com/media/QynHhYJiwfoJO/giphy.gif",
+          				"https://media.giphy.com/media/Dih5LeyxL8fny/giphy.gif",
+          			][Math.floor((Math.random() * 4))]
+          		},
+          		{
+          			"text": `${message.approval.customData}`,
+          			"fields": [
+          			{
+          				"title": "Approval link",
+          				"value": `${message.approval.approvalReviewLink}`,
+          				"short": true,
+          			},
+          			]
+          		},
+          		{
+          			"fields": [
+          			{
+          				"title": "Pipeline",
+          				"value": `${message.consoleLink}`,
+          				"short": true,
+          			},
+          			]
+          		}
+          		]
+          	}
+
+          	postMessage(slackMessage, (response) => {
+          		if (response.statusCode < 400) {
+          			console.info('Message posted successfully');
+          			callback(null);
+          		} else if (response.statusCode < 500) {
+          			console.error(`Error posting message to Slack API: ${response.statusCode} - ${response.statusMessage}`);
+          			callback(null);  // Don't retry because the error is due to a problem with the request
+          		} else {
+          			// Let Lambda retry
+          			callback(`Server error when processing message: ${response.statusCode} - ${response.statusMessage}`);
+          		}
+          	});
+          }
+
+          exports.handler = (event, context, callback) => {
+          	return new Promise((resolve, reject) => {
+          		if (hookUrl) {
+          			return resolve(hookUrl)
+          		}
+
+          		const ssm = new AWS.SSM()
+          		return ssm.getParameters({
+          			Names: ['pm.slack.webhooks'],
+          			WithDecryption: true
+          		}).promise()
+          		.then((data) => {
+          			hookUrl = data.Parameters[0].Value;
+          		})
+          		.then(resolve)
+          	})
+          	.then(() => {
+          		processEvent(event, callback);
+          	})
+          	.catch(callback)
+          };
+      Runtime: nodejs6.10
+      Timeout: '25'
+  SlackNotificationsLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Condition: cEnableSlackApprovals
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref SlackNotificationsLambda
+      Principal: !Sub "sns.amazonaws.com"
+      SourceArn: !Ref ApprovalTopic
+  SlackNotificationsApprovalSubscription:
+    Type: AWS::SNS::Subscription
+    Condition: cEnableSlackApprovals
+    Properties:
+      Endpoint: !Sub "${SlackNotificationsLambda.Arn}"
+      Protocol: lambda
+      TopicArn: !Ref 'ApprovalTopic'
