@@ -26,6 +26,17 @@ You need also to have an AWS account and configure the [AWS CLI](https://aws.ama
  * AWS CLI installed
  * AWS credentials configured
 
+### Parameters Conditions Explained
+ 
+ * Use DNS -> This option when enabled will map the Elastic Load Balancer to a subdomain in al-labs.co.uk
+ * Use HTTPS -> This option when enabled will create a certificate using the Amazon Certificate Manager and attach it to the Elastic Load Balancer to create a secure HTTPS connection.
+ * Use ElasticsearchLogs -> This option when enabled will stream logs to an Elastic Search instance.
+ * Use Spot Instances -> This option when enabled will use Spot Instances instead of On-Demand Instances.
+   Spot Instances cost far less than On-Demand Instances and can be used in non-critical environments like development.
+   **WARNING: Spot Instances can be auto terminated by AWS when the Spot Price rises above your bid price.**
+   AWS will provide a 2 minute warning and then terminate the instance. 
+   It is possible to fail-over to using On-Demand Instances when this happens, but this feature has not been implemented in this platform yet.
+
 ### Launch the stack
 
 You can use a *deploy* script from *utils/* folder to create the stack.
@@ -34,7 +45,7 @@ You can use a *deploy* script from *utils/* folder to create the stack.
 STACK_NAME=<stack name> REGION=<region> ./utils/deploy.sh
 ```
 
-####Â Manual creation
+#### Manual creation
 
 *Note*: you need to specify your key name on parameters _KeyName_!
 
@@ -65,7 +76,7 @@ You can use a *cleanup* script from *utils/* folder to cleanup the resources cre
 STACK_NAME=<stack name> REGION=<region> ./utils/cleanup.sh
 ```
 
-####Â Manual delete
+#### Manual delete
 To delete all the resources by hand from the demo you should execute this steps sequentially:
 
  1. Delete the [stack name]-Service stack. [AWS console](https://eu-west-1.console.aws.amazon.com/cloudformation/home?region=eu-west-1)

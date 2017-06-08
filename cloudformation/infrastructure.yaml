@@ -2,18 +2,15 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: >
   AWS CloudFormation test EC2 and ECS behind Loadbalancer for a 2-tier applcation using RDS (MySQL)
 Mappings:
-  AWSInstanceType2Arch:
-    t2.micro:
-      Arch: 64HVM
-  AWSRegionArch2AMI:
+  AWSRegion2AMI:
     us-east-1:
-      64HVM: ami-6edd3078
+      Ubuntu16x04: ami-6edd3078
     us-east-2:
-      64HVM: ami-fcc19b99
+      Ubuntu16x04: ami-fcc19b99
     us-west-2:
-      64HVM: ami-7c803d1c
+      Ubuntu16x04: ami-7c803d1c
     eu-west-1:
-      64HVM: ami-405f7226
+      Ubuntu16x04: ami-405f7226
   AWSRegionECSAMI:
     us-east-1:
       ecs: ami-b2df2ca4
@@ -127,10 +124,34 @@ Parameters:
   InstanceType:
     AllowedValues:
       - t2.micro
-      - cc1.4xlarge
+      - m3.medium
+      - m3.large
+      - m3.xlarge
+      - m3.2xlarge
+      - m4.large
+      - m4.xlarge
+      - c3.large
+      - c3.xlarge
+      - c3.2xlarge
+      - c4.large
+      - c4.xlarge
+      - c4.2xlarge
     ConstraintDescription: must be a valid EC2 instance type.
-    Default: t2.micro
+    Default: c3.large
     Description: WebServer EC2 instance type
+    Type: String
+  OperatingSystem:
+    AllowedValues:
+      - Ubuntu16x04
+    Default: Ubuntu16x04
+    Description: Operating System Type
+    Type: String
+  UseSpotInstances:
+    Description: Enable/Disable Spot Instances to lower pricing. Warning t2.micro Instance Type does not work with spot instances.
+    AllowedValues:
+      - Enable
+      - Disable
+    Default: Enable
     Type: String
   KeyName:
     AllowedPattern: '[\x20-\x7E]*'
@@ -158,6 +179,7 @@ Conditions:
   cEnableDNS: !Equals [!Ref UseDNS, 'Enable']
   cEnableHTTPS: !Equals [!Ref UseHTTPS, 'Enable']
   cEnableElasticSearchLogs: !Equals [!Ref ElasticsearchLogs, 'Enable']
+  cEnableSpotInstances: !Equals [!Ref UseSpotInstances, 'Enable']
 
 # Resources documentation
 # http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-template-resource-type-ref.html
@@ -1078,7 +1100,8 @@ Resources:
               enabled: 'true'
               ensureRunning: 'true'
     Properties:
-      ImageId: !FindInMap [AWSRegionArch2AMI, !Ref 'AWS::Region', !FindInMap [AWSInstanceType2Arch, !Ref InstanceType, Arch]]
+      ImageId: !FindInMap [AWSRegion2AMI, !Ref 'AWS::Region', !Ref OperatingSystem]
+      SpotPrice: !If [cEnableSpotInstances, '0.05', !Ref 'AWS::NoValue']
       InstanceType: !Ref InstanceType
       KeyName: !Ref KeyName
       SecurityGroups: [!Ref CodeDeployLinuxEC2SecurityGroup]
