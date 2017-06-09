@@ -772,17 +772,12 @@ Resources:
     Properties:
       Name: !Sub ${AWS::StackName}-ECS-LB
       Scheme: internet-facing
-      LoadBalancerAttributes: !If
-        - cEnableELBLogging
-        - - Key: idle_timeout.timeout_seconds
-            Value: '30'
-          - Key: access_logs.s3.enabled
-            Value: True
-          - Key: access_logs.s3.bucket
-            Value: !Ref ELBAccessLogsBucket
-          - Key: access_logs.s3.prefix
-            Value: "ECS-ELB"
-        - !Ref 'AWS::NoValue'
+      LoadBalancerAttributes:
+        - Key: idle_timeout.timeout_seconds
+          Value: '30'
+        - !If [cEnableELBLogging, {Key: access_logs.s3.enabled, Value: True}, !Ref 'AWS::NoValue']
+        - !If [cEnableELBLogging, {Key: access_logs.s3.bucket, Value: !Ref ELBAccessLogsBucket}, !Ref 'AWS::NoValue']
+        - !If [cEnableELBLogging, {Key: access_logs.s3.prefix, Value: "ECS-ELB"}, !Ref 'AWS::NoValue']
       Subnets: [!Ref publicSubnet01, !Ref publicSubnet02]
       SecurityGroups: [!Ref ECSALBSecurityGroup]
   ECSTGMyApp:
@@ -1300,21 +1295,9 @@ Resources:
       LoadBalancerAttributes:
         - Key: idle_timeout.timeout_seconds
           Value: '30'
-        - !If
-          - cEnableELBLogging
-          - Key: access_logs.s3.enabled
-            Value: True
-          - !Ref 'AWS::NoValue'
-        - !If
-          - cEnableELBLogging
-          - Key: access_logs.s3.bucket
-            Value: !Ref ELBAccessLogsBucket
-          - !Ref 'AWS::NoValue'
-        - !If
-          - cEnableELBLogging
-          - Key: access_logs.s3.prefix
-            Value: "CodeDeploy-ELB"
-          - !Ref 'AWS::NoValue'
+        - !If [cEnableELBLogging, {Key: access_logs.s3.enabled, Value: True}, !Ref 'AWS::NoValue']
+        - !If [cEnableELBLogging, {Key: access_logs.s3.bucket, Value: !Ref ELBAccessLogsBucket}, !Ref 'AWS::NoValue']
+        - !If [cEnableELBLogging, {Key: access_logs.s3.prefix, Value: "CodeDeploy-ELB"}, !Ref 'AWS::NoValue']
       Subnets: [!Ref publicSubnet01, !Ref publicSubnet02]
       SecurityGroups: [!Ref CodeDeployALBSecurityGroup]
   CodeDeployTG:
