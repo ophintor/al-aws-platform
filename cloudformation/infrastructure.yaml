@@ -928,7 +928,7 @@ Resources:
                   - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-myapp-integration-test:log-stream:*"
                   - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-myapp-image:log-stream"
                   - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-myapp-image:log-stream:*"
-  MyAppBuildAartifact:
+  MyAppBuildArtifact:
     Type: AWS::CodeBuild::Project
     DependsOn: [CodeRepo, CodeBuildRole]
     Properties:
@@ -1379,7 +1379,7 @@ Resources:
   MyAppPipeline:
     Type: "AWS::CodePipeline::Pipeline"
     DependsOn:
-      - MyAppBuildAartifact
+      - MyAppBuildArtifact
       - MyAppBuildDockerImage
       - MyAppDeployApplication
       - MyAppDeployApplicationmentGroup
@@ -1418,7 +1418,7 @@ Resources:
               OutputArtifacts:
                 - Name: MyAppBuild
               Configuration:
-                ProjectName: !Ref MyAppBuildAartifact
+                ProjectName: !Ref MyAppBuildArtifact
               RunOrder: 1
             - Name: TestArtifact
               InputArtifacts:
