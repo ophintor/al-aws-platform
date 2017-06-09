@@ -191,6 +191,12 @@ Parameters:
       - Disable
     Default: Enable
     Type: String
+  OperationsEmail:
+    Description: EMail address to notify if there are any scaling operations
+    Type: String
+    AllowedPattern: (^$|([a-zA-Z0-9_\-\.]+)@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.)|(([a-zA-Z0-9\-]+\.)+))([a-zA-Z]{2,4}|[0-9]{1,3})(\]?))
+    ConstraintDescription: Must be a valid email address.
+    Default: ''
   EmailApprovals:
     Description: Email used to send approval notifications
     Default: ""
@@ -212,6 +218,7 @@ Conditions:
   cEnableSpotInstances: !Equals [!Ref UseSpotInstances, 'Enable']
   cEnableApprovalEmails: !Not [!Equals [!Ref EmailApprovals, '']]
   cEnableSlackApprovals: !Not [!Equals [!Ref SlackApprovalsWebhook, '']]
+  cEnableASGNotications: !Not [!Equals [!Ref OperationsEmail, '']]
 
 # Resources documentation
 # http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-template-resource-type-ref.html
@@ -619,6 +626,13 @@ Resources:
     Type: "AWS::ECS::Cluster"
     Properties:
       ClusterName: !Sub "${AWS::StackName}-cluster"
+  ECSAutoScalingNotifications:
+    Type: AWS::SNS::Topic
+    Condition: cEnableASGNotications
+    Properties:
+      Subscription:
+        - Endpoint: !Ref OperationsEmail
+          Protocol: email
   # complete example http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/quickref-ecs.html
   ECSAutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
@@ -637,6 +651,15 @@ Resources:
         - Key: Name
           Value: !Sub ${AWS::StackName}-ECS
           PropagateAtLaunch: True
+      NotificationConfiguration: !If
+        - cEnableASGNotications
+        - TopicARN: !Ref ECSAutoScalingNotifications
+          NotificationTypes:
+            - 'autoscaling:EC2_INSTANCE_LAUNCH'
+            - 'autoscaling:EC2_INSTANCE_LAUNCH_ERROR'
+            - 'autoscaling:EC2_INSTANCE_TERMINATE'
+            - 'autoscaling:EC2_INSTANCE_TERMINATE_ERROR'
+        - !Ref 'AWS::NoValue'
     CreationPolicy:
       ResourceSignal:
         Timeout: PT15M
@@ -866,6 +889,50 @@ Resources:
                   - ssm:PutParameter
                 Resource:
                   - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}.app.*'
+  ECSScaleUpPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref ECSAutoScalingGroup
+      Cooldown: 60
+      ScalingAdjustment: 1
+  ECSScaleDownPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref ECSAutoScalingGroup
+      Cooldown: 60
+      ScalingAdjustment: -1
+  CPUAlarmHigh:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Scale-up ECS cluster if CPU > 90% for 10 minutes
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 90
+      AlarmActions: [!Ref ECSScaleUpPolicy]
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref ECSAutoScalingGroup
+      ComparisonOperator: GreaterThanThreshold
+  CPUAlarmLow:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Scale-down ECS cluster if CPU < 70% for 10 minutes
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 70
+      AlarmActions: [!Ref ECSScaleDownPolicy]
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref ECSAutoScalingGroup
+      ComparisonOperator: LessThanThreshold
   #####################################################################################
   # End of ECS
   #####################################################################################
@@ -1412,6 +1479,9 @@ Resources:
                   - ecs:*
                   - ecr:*
                   - iam:*
+                  - application-autoscaling:*
+                  - cloudwatch:PutMetricAlarm
+                  - cloudwatch:DeleteAlarms
   ApprovalTopic:
     Type: "AWS::SNS::Topic"
     Properties:
