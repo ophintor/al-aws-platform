@@ -1,0 +1,112 @@
+Resources:
+  myVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: '10.250.0.0/16'
+      InstanceTenancy: 'default'
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-VPC'
+  publicSubnet01:
+    Type: AWS::EC2::Subnet
+    DependsOn: [myVPC]
+    Properties:
+      VpcId: !Ref myVPC
+      # TODO: DNS is set to: 10.250.0.2
+      # I wanted to used: 10.250.1.0/24 but then the server don't have access to DNS server :'(
+      # Maybe useful: http://docs.aws.amazon.com/AmazonVPC/latest/UserGuide/VPC_DHCP_Options.html
+      CidrBlock: 10.250.0.0/24
+      # TODO: AvailabilityZone as paramenter!
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: True
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-PublicSubnet01'
+  publicSubnet02:
+    Type: AWS::EC2::Subnet
+    DependsOn: [myVPC]
+    Properties:
+      VpcId: !Ref myVPC
+      CidrBlock: 10.250.2.0/24
+      # TODO: AvailabilityZone as paramenter!
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: True
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-PublicSubnet02'
+  privateSubnet01:
+    Type: AWS::EC2::Subnet
+    DependsOn: [myVPC]
+    Properties:
+      VpcId: !Ref myVPC
+      CidrBlock: 10.250.100.0/24
+      # TODO: AvailabilityZone as paramenter!
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-PrivateSubnet01'
+  privateSubnet02:
+    Type: AWS::EC2::Subnet
+    DependsOn: [myVPC]
+    Properties:
+      VpcId: !Ref myVPC
+      CidrBlock: 10.250.101.0/24
+      # TODO: AvailabilityZone as paramenter!
+      AvailabilityZone: !Select [1, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-PrivateSubnet02'
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    DependsOn: [myVPC]
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-InternetGateway'
+  AttachInternetGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    DependsOn: [myVPC, InternetGateway]
+    Properties:
+      VpcId: !Ref myVPC
+      InternetGatewayId: !Ref InternetGateway
+  ################
+  # Public Route
+  InternetPublicRoutingTable:
+    Type: AWS::EC2::RouteTable
+    DependsOn: [myVPC, AttachInternetGateway]
+    Properties:
+      VpcId: !Ref myVPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-InternetRoutingTable'
+  InternetPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: [InternetPublicRoutingTable]
+    Properties:
+      RouteTableId: !Ref InternetPublicRoutingTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+  PublicSubnet01RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    DependsOn: [publicSubnet01, InternetPublicRoutingTable]
+    Properties:
+      SubnetId: !Ref publicSubnet01
+      RouteTableId: !Ref InternetPublicRoutingTable
+  PublicSubnet02RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    DependsOn: [publicSubnet02, InternetPublicRoutingTable]
+    Properties:
+      SubnetId: !Ref publicSubnet02
+      RouteTableId: !Ref InternetPublicRoutingTable
+
+Outputs:
+  VPCID:
+    Value: !Ref myVPC
+  publicSubnet01ID:
+    Value: !Ref publicSubnet01
+  publicSubnet02ID:
+    Value: !Ref publicSubnet02
+  privateSubnet01ID:
+    Value: !Ref privateSubnet01
+  privateSubnet02ID:
+    Value: !Ref privateSubnet02
