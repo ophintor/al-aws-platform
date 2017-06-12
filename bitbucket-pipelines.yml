@@ -12,9 +12,16 @@ pipelines:
           - apt-get update
           - apt-get install -y shellcheck python-pip
           - pip install yamllint
-          - find . -name "*.sh" | xargs shellcheck
+          - find . -not -path .git -name "*.sh" | xargs shellcheck
           - >-
-            find . . -iregex ".*.ya?ml" |
-            xargs yamllint -d '{"extends": "default", "rules": {"line-length": {"level": "warning"}}}'
+            find . -not -path .git -iregex ".*.ya?ml" |
+            xargs yamllint -d '{
+              "extends": "default",
+              "rules": {
+                "line-length": {
+                  "level": "warning"
+                }
+              }
+            }'
 
 ...
