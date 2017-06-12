@@ -221,112 +221,10 @@ Conditions:
 # Resources documentation
 # http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-template-resource-type-ref.html
 Resources:
-  # TODO: this can be moved to another Cloudformation and use stack exports # http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-cfn-stack-exports.html
-  ####################################################################################
-  # Start of networking
-  ####################################################################################
-  myVPC:
-    Type: AWS::EC2::VPC
+  Networking:
+    Type: AWS::CloudFormation::Stack
     Properties:
-      CidrBlock: '10.250.0.0/16'
-      InstanceTenancy: 'default'
-      Tags:
-        - Key: Name
-          Value: !Sub '${AWS::StackName}-VPC'
-  publicSubnet01:
-    Type: AWS::EC2::Subnet
-    DependsOn: [myVPC]
-    Properties:
-      VpcId: !Ref myVPC
-      # TODO: DNS is set to: 10.250.0.2
-      # I wanted to used: 10.250.1.0/24 but then the server don't have access to DNS server :'(
-      # Maybe useful: http://docs.aws.amazon.com/AmazonVPC/latest/UserGuide/VPC_DHCP_Options.html
-      CidrBlock: 10.250.0.0/24
-      # TODO: AvailabilityZone as paramenter!
-      AvailabilityZone: !Select [0, !GetAZs '']
-      MapPublicIpOnLaunch: True
-      Tags:
-        - Key: Name
-          Value: !Sub '${AWS::StackName}-PublicSubnet01'
-  publicSubnet02:
-    Type: AWS::EC2::Subnet
-    DependsOn: [myVPC]
-    Properties:
-      VpcId: !Ref myVPC
-      CidrBlock: 10.250.2.0/24
-      # TODO: AvailabilityZone as paramenter!
-      AvailabilityZone: !Select [1, !GetAZs '']
-      MapPublicIpOnLaunch: True
-      Tags:
-        - Key: Name
-          Value: !Sub '${AWS::StackName}-PublicSubnet02'
-  privateSubnet01:
-    Type: AWS::EC2::Subnet
-    DependsOn: [myVPC]
-    Properties:
-      VpcId: !Ref myVPC
-      CidrBlock: 10.250.100.0/24
-      # TODO: AvailabilityZone as paramenter!
-      AvailabilityZone: !Select [0, !GetAZs '']
-      Tags:
-        - Key: Name
-          Value: !Sub '${AWS::StackName}-PrivateSubnet01'
-  privateSubnet02:
-    Type: AWS::EC2::Subnet
-    DependsOn: [myVPC]
-    Properties:
-      VpcId: !Ref myVPC
-      CidrBlock: 10.250.101.0/24
-      # TODO: AvailabilityZone as paramenter!
-      AvailabilityZone: !Select [1, !GetAZs '']
-      Tags:
-        - Key: Name
-          Value: !Sub '${AWS::StackName}-PrivateSubnet02'
-  InternetGateway:
-    Type: AWS::EC2::InternetGateway
-    DependsOn: [myVPC]
-    Properties:
-      Tags:
-        - Key: Name
-          Value: !Sub '${AWS::StackName}-InternetGateway'
-  AttachInternetGateway:
-    Type: AWS::EC2::VPCGatewayAttachment
-    DependsOn: [myVPC, InternetGateway]
-    Properties:
-      VpcId: !Ref myVPC
-      InternetGatewayId: !Ref InternetGateway
-  ################
-  # Public Route
-  InternetPublicRoutingTable:
-    Type: AWS::EC2::RouteTable
-    DependsOn: [myVPC, AttachInternetGateway]
-    Properties:
-      VpcId: !Ref myVPC
-      Tags:
-        - Key: Name
-          Value: !Sub '${AWS::StackName}-InternetRoutingTable'
-  InternetPublicRoute:
-    Type: AWS::EC2::Route
-    DependsOn: [InternetPublicRoutingTable]
-    Properties:
-      RouteTableId: !Ref InternetPublicRoutingTable
-      DestinationCidrBlock: 0.0.0.0/0
-      GatewayId: !Ref InternetGateway
-  PublicSubnet01RouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    DependsOn: [publicSubnet01, InternetPublicRoutingTable]
-    Properties:
-      SubnetId: !Ref publicSubnet01
-      RouteTableId: !Ref InternetPublicRoutingTable
-  PublicSubnet02RouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    DependsOn: [publicSubnet02, InternetPublicRoutingTable]
-    Properties:
-      SubnetId: !Ref publicSubnet02
-      RouteTableId: !Ref InternetPublicRoutingTable
-  ####################################################################################
-  # End of networking
-  ####################################################################################
+      TemplateURL: https://s3.amazonaws.com/al-cf-templates-us-east-1/infrastructure-networking.yaml
 
   ####################################################################################
   # Start of Set Parameter Function
@@ -507,15 +405,19 @@ Resources:
   ####################################################################################
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
-    DependsOn: [privateSubnet01, privateSubnet02]
+    DependsOn: Networking
     Properties:
       DBSubnetGroupDescription: RDS Subnet Group
-      SubnetIds: [!Ref privateSubnet01, !Ref privateSubnet02]
+      SubnetIds:
+        - Fn::GetAtt: ['Networking', 'Outputs.privateSubnet01ID']
+        - Fn::GetAtt: ['Networking', 'Outputs.privateSubnet02ID']
   DBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
+    DependsOn: Networking
     Properties:
       GroupDescription: Allow Internal access to RDS Instances
-      VpcId: !Ref myVPC
+      VpcId:
+        Fn::GetAtt: ['Networking', 'Outputs.VPCID']
       SecurityGroupIngress:
         - SourceSecurityGroupId: !Ref EcsSecurityGroup
           FromPort: 3306
@@ -631,9 +533,11 @@ Resources:
   # complete example http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/quickref-ecs.html
   ECSAutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
-    DependsOn: [publicSubnet01, publicSubnet02, AttachInternetGateway]
+    DependsOn: Networking
     Properties:
-      VPCZoneIdentifier: [!Ref publicSubnet01, !Ref publicSubnet02]
+      VPCZoneIdentifier:
+        - Fn::GetAtt: ['Networking', 'Outputs.publicSubnet01ID']
+        - Fn::GetAtt: ['Networking', 'Outputs.publicSubnet02ID']
       LaunchConfigurationName: !Ref ContainerInstances
       MinSize: 2
       MaxSize: 10
@@ -682,7 +586,8 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: ECS Security Group
-      VpcId: !Ref myVPC
+      VpcId:
+        Fn::GetAtt: ['Networking', 'Outputs.VPCID']
       SecurityGroupIngress:
         - CidrIp: 0.0.0.0/0
           IpProtocol: tcp
@@ -699,7 +604,8 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: ECS LB Security Group
-      VpcId: !Ref myVPC
+      VpcId:
+        Fn::GetAtt: ['Networking', 'Outputs.VPCID']
       SecurityGroupIngress:
         - CidrIp: 0.0.0.0/0
           IpProtocol: tcp
@@ -783,7 +689,7 @@ Resources:
                 Resource: '*'
   ECSALB:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
-    DependsOn: [publicSubnet01, publicSubnet02, ECSALBSecurityGroup]
+    DependsOn: [Networking, ECSALBSecurityGroup]
     Properties:
       Name: !Sub '${AWS::StackName}-ECS-LB'
       Scheme: internet-facing
@@ -793,7 +699,9 @@ Resources:
         - !If [cEnableELBLogging, {Key: access_logs.s3.enabled, Value: True}, !Ref 'AWS::NoValue']
         - !If [cEnableELBLogging, {Key: access_logs.s3.bucket, Value: !Ref ELBAccessLogsBucket}, !Ref 'AWS::NoValue']
         - !If [cEnableELBLogging, {Key: access_logs.s3.prefix, Value: 'ECS-ELB'}, !Ref 'AWS::NoValue']
-      Subnets: [!Ref publicSubnet01, !Ref publicSubnet02]
+      Subnets:
+        - Fn::GetAtt: ['Networking', 'Outputs.publicSubnet01ID']
+        - Fn::GetAtt: ['Networking', 'Outputs.publicSubnet02ID']
       SecurityGroups: [!Ref ECSALBSecurityGroup]
   ECSTGMyApp:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
@@ -802,7 +710,8 @@ Resources:
       Name: !Sub '${AWS::StackName}-MyApp'
       Port: 3000
       Protocol: HTTP
-      VpcId: !Ref myVPC
+      VpcId:
+        Fn::GetAtt: [ 'Networking', 'Outputs.VPCID' ]
   ALBListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     DependsOn: [ECSTGMyApp, ECSALB]
@@ -1176,7 +1085,8 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: Enable HTTP access via port 80 and SSH access.
-      VpcId: !Ref myVPC
+      VpcId:
+        Fn::GetAtt: ['Networking', 'Outputs.VPCID']
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 3000
@@ -1258,9 +1168,11 @@ Resources:
       Path: /
   CodeDeployAutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
-    DependsOn: [publicSubnet01, publicSubnet02, CodeDeployInstances, CodeDeployTG]
+    DependsOn: [Networking, CodeDeployInstances, CodeDeployTG]
     Properties:
-      VPCZoneIdentifier: [!Ref publicSubnet01, !Ref publicSubnet02]
+      VPCZoneIdentifier:
+        - Fn::GetAtt: ['Networking', 'Outputs.publicSubnet01ID']
+        - Fn::GetAtt: ['Networking', 'Outputs.publicSubnet02ID']
       LaunchConfigurationName: !Ref CodeDeployInstances
       MinSize: 2
       MaxSize: 10
@@ -1332,7 +1244,8 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: CodeDeploy LB Security Group
-      VpcId: !Ref myVPC
+      VpcId:
+        Fn::GetAtt: ['Networking', 'Outputs.VPCID']
       SecurityGroupIngress:
         - CidrIp: 0.0.0.0/0
           IpProtocol: tcp
@@ -1347,7 +1260,7 @@ Resources:
           Value: !Sub '${AWS::StackName}-CodeDeploy-LB'
   CodeDeployALB:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
-    DependsOn: [publicSubnet01, publicSubnet02, CodeDeployALBSecurityGroup]
+    DependsOn: [Networking, CodeDeployALBSecurityGroup]
     Properties:
       Name: !Sub '${AWS::StackName}-CodeDeploy-LB'
       Scheme: internet-facing
@@ -1357,7 +1270,9 @@ Resources:
         - !If [cEnableELBLogging, {Key: access_logs.s3.enabled, Value: True}, !Ref 'AWS::NoValue']
         - !If [cEnableELBLogging, {Key: access_logs.s3.bucket, Value: !Ref ELBAccessLogsBucket}, !Ref 'AWS::NoValue']
         - !If [cEnableELBLogging, {Key: access_logs.s3.prefix, Value: 'CodeDeploy-ELB'}, !Ref 'AWS::NoValue']
-      Subnets: [!Ref publicSubnet01, !Ref publicSubnet02]
+      Subnets:
+        - Fn::GetAtt: ['Networking', 'Outputs.publicSubnet01ID']
+        - Fn::GetAtt: ['Networking', 'Outputs.publicSubnet02ID']
       SecurityGroups: [!Ref CodeDeployALBSecurityGroup]
   CodeDeployTG:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
@@ -1365,7 +1280,8 @@ Resources:
       Name: !Sub '${AWS::StackName}-CodeDeployTG'
       Port: 3000
       Protocol: HTTP
-      VpcId: !Ref myVPC
+      VpcId:
+        Fn::GetAtt: ['Networking', 'Outputs.VPCID']
   CodeDeployALBListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     DependsOn: [CodeDeployTG, CodeDeployALB]
@@ -1901,7 +1817,8 @@ Resources:
     Properties:
       DeliverLogsPermissionArn: !GetAtt 'flowlogsRole.Arn'
       LogGroupName: !Ref VPCFlowLogsLogGroup
-      ResourceId: !Ref myVPC
+      ResourceId:
+        Fn::GetAtt: [ 'Networking', 'Outputs.VPCID' ]
       ResourceType: VPC
       TrafficType: ALL
     Type: AWS::EC2::FlowLog
