@@ -711,7 +711,7 @@ Resources:
       Port: 3000
       Protocol: HTTP
       VpcId:
-        Fn::GetAtt: [ 'Networking', 'Outputs.VPCID' ]
+        Fn::GetAtt: ['Networking', 'Outputs.VPCID']
   ALBListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     DependsOn: [ECSTGMyApp, ECSALB]
@@ -1818,7 +1818,7 @@ Resources:
       DeliverLogsPermissionArn: !GetAtt 'flowlogsRole.Arn'
       LogGroupName: !Ref VPCFlowLogsLogGroup
       ResourceId:
-        Fn::GetAtt: [ 'Networking', 'Outputs.VPCID' ]
+        Fn::GetAtt: ['Networking', 'Outputs.VPCID']
       ResourceType: VPC
       TrafficType: ALL
     Type: AWS::EC2::FlowLog
