@@ -55,28 +55,29 @@ Mappings:
 Outputs:
   WebsiteURLCodeDeployLB:
     Description: Website
-    Value: !Join ["", [
-      !If [cEnableHTTPS, "https://", "http://"],
-      !If [cEnableDNS, !Sub "ec2.${AWS::StackName}.al-labs.co.uk", !Sub "${CodeDeployALB.DNSName}"]]
+    Value: !Join ['', [
+      !If [cEnableHTTPS, 'https://', 'http://'],
+      !If [cEnableDNS, !Sub 'ec2.${AWS::StackName}.al-labs.co.uk', !Sub '${CodeDeployALB.DNSName}']]
     ]
   RepoURL:
     Description: Git Repository
-    Value: !GetAtt CodeRepo.CloneUrlSsh
+    Value: !GetAtt 'CodeRepo.CloneUrlSsh'
   ServiceURL:
     Description: ECS LB URL
-    Value: !Join ["", [
-      !If [cEnableHTTPS, "https://", "http://"],
-      !If [cEnableDNS, !Sub "ecs.${AWS::StackName}.al-labs.co.uk", !Sub "${CodeDeployALB.DNSName}"]]
+    Value: !Join ['', [
+      !If [cEnableHTTPS, 'https://', 'http://'],
+      !If [cEnableDNS, !Sub 'ecs.${AWS::StackName}.al-labs.co.uk', !Sub '${CodeDeployALB.DNSName}']]
     ]
   PipelineUrl:
-    Value: !Sub https://console.aws.amazon.com/codepipeline/home?region=${AWS::Region}#/view/${MyAppPipeline}
+    Value: !Sub 'https://console.aws.amazon.com/codepipeline/home?region=${AWS::Region}#/view/${MyAppPipeline}'
 # These exported values are sent in every request by the lambda function, not sure where they get included
 # This value below is already exported but not being picked up by the lambda function
   DomainEndpoint:
     Condition: cEnableElasticSearchLogs
     Value:
       Fn::ImportValue:
-        !Sub ${ElasticsearchStack}-DomainEndpointES
+        !Sub '${ElasticsearchStack}-DomainEndpointES'
+
 Parameters:
   DBAllocatedStorage:
     ConstraintDescription: must be between 5 and 1024Gb.
@@ -98,26 +99,26 @@ Parameters:
     ConstraintDescription: must begin with a letter and contain only alphanumeric characters.
     Default: todo
     Description: The database name
-    MaxLength: '64'
-    MinLength: '1'
+    MaxLength: 64
+    MinLength: 1
     Type: String
   DBPassword:
     AllowedPattern: '[a-zA-Z0-9]*'
     ConstraintDescription: must contain only alphanumeric characters.
     Default: password
     Description: The database admin account password
-    MaxLength: '41'
-    MinLength: '8'
-    NoEcho: 'true'
+    MaxLength: 41
+    MinLength: 8
+    NoEcho: True
     Type: String
   DBUsername:
     AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
     ConstraintDescription: must begin with a letter and contain only alphanumeric characters.
     Default: root
     Description: The database admin account username
-    MaxLength: '16'
-    MinLength: '1'
-    NoEcho: 'true'
+    MaxLength: 16
+    MinLength: 1
+    NoEcho: True
     Type: String
   ElasticsearchLogs:
     Description: Enable/Disable Elasticsearch
@@ -128,8 +129,8 @@ Parameters:
     Type: String
   ElasticsearchStack:
     Description: Elasticstack to extend
-    MaxLength: '64'
-    MinLength: '0'
+    MaxLength: 64
+    MinLength: 0
     Type: String
   InstanceType:
     AllowedValues:
@@ -171,12 +172,9 @@ Parameters:
     Default: Enable
     Type: String
   KeyName:
-    AllowedPattern: '[\x20-\x7E]*'
     ConstraintDescription: can contain only ASCII characters.
     Description: Name of an existing EC2 KeyPair to enable SSH access to the instances
-    MaxLength: '255'
-    MinLength: '1'
-    Type: "AWS::EC2::KeyPair::KeyName"
+    Type: AWS::EC2::KeyPair::KeyName
   UseDNS:
     Description: Enable/Disable DNS configurations
     AllowedValues:
@@ -199,14 +197,14 @@ Parameters:
     Default: ''
   EmailApprovals:
     Description: Email used to send approval notifications
-    Default: ""
+    Default: ''
     Type: String
   SlackApprovalsWebhook:
     Description: |
       Slack channel incoming webhook to send approval notifications, check
       https://api.slack.com/incoming-webhooks
       If no URL is set, slack notificaitons will be disabled/not provisioned
-    Default: ""
+    Default: ''
     NoEcho: True
     Type: String
 
@@ -228,13 +226,13 @@ Resources:
   # Start of networking
   ####################################################################################
   myVPC:
-    Type: "AWS::EC2::VPC"
+    Type: AWS::EC2::VPC
     Properties:
-      CidrBlock: "10.250.0.0/16"
-      InstanceTenancy: "default"
+      CidrBlock: '10.250.0.0/16'
+      InstanceTenancy: 'default'
       Tags:
         - Key: Name
-          Value: !Sub "${AWS::StackName}-VPC"
+          Value: !Sub '${AWS::StackName}-VPC'
   publicSubnet01:
     Type: AWS::EC2::Subnet
     DependsOn: [myVPC]
@@ -245,11 +243,11 @@ Resources:
       # Maybe useful: http://docs.aws.amazon.com/AmazonVPC/latest/UserGuide/VPC_DHCP_Options.html
       CidrBlock: 10.250.0.0/24
       # TODO: AvailabilityZone as paramenter!
-      AvailabilityZone: !Select [0, !GetAZs ""]
-      MapPublicIpOnLaunch: true
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: True
       Tags:
         - Key: Name
-          Value: !Sub "${AWS::StackName}-PublicSubnet01"
+          Value: !Sub '${AWS::StackName}-PublicSubnet01'
   publicSubnet02:
     Type: AWS::EC2::Subnet
     DependsOn: [myVPC]
@@ -257,11 +255,11 @@ Resources:
       VpcId: !Ref myVPC
       CidrBlock: 10.250.2.0/24
       # TODO: AvailabilityZone as paramenter!
-      AvailabilityZone: !Select [1, !GetAZs ""]
-      MapPublicIpOnLaunch: true
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: True
       Tags:
         - Key: Name
-          Value: !Sub "${AWS::StackName}-PublicSubnet02"
+          Value: !Sub '${AWS::StackName}-PublicSubnet02'
   privateSubnet01:
     Type: AWS::EC2::Subnet
     DependsOn: [myVPC]
@@ -269,10 +267,10 @@ Resources:
       VpcId: !Ref myVPC
       CidrBlock: 10.250.100.0/24
       # TODO: AvailabilityZone as paramenter!
-      AvailabilityZone: !Select [0, !GetAZs ""]
+      AvailabilityZone: !Select [0, !GetAZs '']
       Tags:
         - Key: Name
-          Value: !Sub "${AWS::StackName}-PrivateSubnet01"
+          Value: !Sub '${AWS::StackName}-PrivateSubnet01'
   privateSubnet02:
     Type: AWS::EC2::Subnet
     DependsOn: [myVPC]
@@ -280,17 +278,17 @@ Resources:
       VpcId: !Ref myVPC
       CidrBlock: 10.250.101.0/24
       # TODO: AvailabilityZone as paramenter!
-      AvailabilityZone: !Select [1, !GetAZs ""]
+      AvailabilityZone: !Select [1, !GetAZs '']
       Tags:
         - Key: Name
-          Value: !Sub "${AWS::StackName}-PrivateSubnet02"
+          Value: !Sub '${AWS::StackName}-PrivateSubnet02'
   InternetGateway:
     Type: AWS::EC2::InternetGateway
     DependsOn: [myVPC]
     Properties:
       Tags:
         - Key: Name
-          Value: !Sub "${AWS::StackName}-InternetGateway"
+          Value: !Sub '${AWS::StackName}-InternetGateway'
   AttachInternetGateway:
     Type: AWS::EC2::VPCGatewayAttachment
     DependsOn: [myVPC, InternetGateway]
@@ -300,13 +298,13 @@ Resources:
   ################
   # Public Route
   InternetPublicRoutingTable:
-    Type: "AWS::EC2::RouteTable"
+    Type: AWS::EC2::RouteTable
     DependsOn: [myVPC, AttachInternetGateway]
     Properties:
       VpcId: !Ref myVPC
       Tags:
         - Key: Name
-          Value: !Sub "${AWS::StackName}-InternetRoutingTable"
+          Value: !Sub '${AWS::StackName}-InternetRoutingTable'
   InternetPublicRoute:
     Type: AWS::EC2::Route
     DependsOn: [InternetPublicRoutingTable]
@@ -343,41 +341,41 @@ Resources:
           - Sid: Allow administration of the key
             Effect: Allow
             Principal:
-              AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
-            Action: "*"
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: '*'
             Resource: '*'
           # Allow EncryptLambda function to use the key
           - Effect: Allow
             Action:
               - kms:Encrypt
             Principal:
-              AWS: !GetAtt LambdaRole.Arn
-            Resource: "*"
+              AWS: !GetAtt 'LambdaRole.Arn'
+            Resource: '*'
           # TODO: This can be set in the key! but we don't have it here
           - Effect: Allow
             Action:
               - kms:Decrypt
             Principal:
               AWS:
-                - !GetAtt CodeDeployLinuxEC2InstanceRole.Arn
-                - !GetAtt TaskRole.Arn
-            Resource: "*"
+                - !GetAtt 'CodeDeployLinuxEC2InstanceRole.Arn'
+                - !GetAtt 'TaskRole.Arn'
+            Resource: '*'
   MyKeyAlias:
     Type: AWS::KMS::Alias
     Properties:
       AliasName: !Sub 'alias/${AWS::StackName}-masterkey'
-      TargetKeyId: !Ref 'MyKey'
+      TargetKeyId: !Ref MyKey
 
   # Create Log Group to setup the Retention time of Lambda Logs
   EncryptLambdaLogsGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub /aws/lambda/${AWS::StackName}-set-param-store
+      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-set-param-store'
       RetentionInDays: 1
   LambdaRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub ${AWS::StackName}-Lambda-SetParamStore
+      RoleName: !Sub '${AWS::StackName}-Lambda-SetParamStore'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -392,21 +390,21 @@ Resources:
           PolicyDocument:
             Statement:
               # Allow lambda to create log group
-              - Effect: "Allow"
+              - Effect: Allow
                 Action:
                   - logs:CreateLogGroup
                 Resource:
-                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*'
               # Create Log streams and write on it
-              - Effect: "Allow"
+              - Effect: Allow
                 Action:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                 Resource:
-                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}-set-param-store"
-                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}-set-param-store:*"
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}-set-param-store'
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}-set-param-store:*'
               # Allow Lambda Function to set values into Parameters Store in a specific name space
-              - Effect: "Allow"
+              - Effect: Allow
                 Action:
                   - ssm:PutParameter
                 Resource:
@@ -418,7 +416,7 @@ Resources:
     Type: AWS::Lambda::Function
     DependsOn: MyKeyAlias
     Properties:
-      FunctionName: !Sub ${AWS::StackName}-set-param-store
+      FunctionName: !Sub '${AWS::StackName}-set-param-store'
       Handler: index.lambda_handler
       Role: !GetAtt 'LambdaRole.Arn'
       Code:
@@ -491,14 +489,13 @@ Resources:
       Runtime: python2.7
       Timeout: '25'
   StoreEncryptedDBPassword:
-    Type: 'Custom::SetParameterStore'
+    Type: Custom::SetParameterStore
     Properties:
       ServiceToken: !GetAtt 'EncryptLambda.Arn'
-      # KeyId: !Ref 'MyKey'
-      KeyId: !Sub "alias/${AWS::StackName}-masterkey"
+      KeyId: !Sub 'alias/${AWS::StackName}-masterkey'
       ParameterStoreName: !Sub '${AWS::StackName}.db.password'
       Value: !Ref DBPassword
-      Description: "DataBase password"
+      Description: DataBase password
       Type: 'SecureString'
       Overwrite: True
   ####################################################################################
@@ -509,29 +506,28 @@ Resources:
   # Start of RDS
   ####################################################################################
   DBSubnetGroup:
-    Type: "AWS::RDS::DBSubnetGroup"
+    Type: AWS::RDS::DBSubnetGroup
     DependsOn: [privateSubnet01, privateSubnet02]
     Properties:
-      DBSubnetGroupDescription: "RDS Subnet Group"
+      DBSubnetGroupDescription: RDS Subnet Group
       SubnetIds: [!Ref privateSubnet01, !Ref privateSubnet02]
   DBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
-    DependsOn: [EcsSecurityGroup, CodeDeployLinuxEC2SecurityGroup]
     Properties:
       GroupDescription: Allow Internal access to RDS Instances
       VpcId: !Ref myVPC
       SecurityGroupIngress:
         - SourceSecurityGroupId: !Ref EcsSecurityGroup
-          FromPort: '3306'
-          ToPort: '3306'
+          FromPort: 3306
+          ToPort: 3306
           IpProtocol: tcp
         - SourceSecurityGroupId: !Ref CodeDeployLinuxEC2SecurityGroup
-          FromPort: '3306'
-          ToPort: '3306'
+          FromPort: 3306
+          ToPort: 3306
           IpProtocol: tcp
       Tags:
         - Key: Name
-          Value: !Sub "${AWS::StackName}-DB"
+          Value: !Sub '${AWS::StackName}-DB'
   DBInstance:
     Type: AWS::RDS::DBInstance
     DependsOn: [DBSecurityGroup, DBSubnetGroup]
@@ -546,31 +542,30 @@ Resources:
       BackupRetentionPeriod: 0 # NOTE: This disables backups and speedups the provisioning tests...!
       DBSubnetGroupName: !Ref DBSubnetGroup
   StoreDBAddress:
-    Type: 'Custom::SetParameterStore'
+    Type: Custom::SetParameterStore
     Properties:
       ServiceToken: !GetAtt 'EncryptLambda.Arn'
       ParameterStoreName: !Sub '${AWS::StackName}.db.connectionstring'
-      Value: !GetAtt DBInstance.Endpoint.Address
-      Description: "DataBase Address"
+      Value: !GetAtt 'DBInstance.Endpoint.Address'
+      Description: DataBase Address
       Type: 'String'
       Overwrite: True
   StoreDBUsername:
-    Type: 'Custom::SetParameterStore'
+    Type: Custom::SetParameterStore
     Properties:
       ServiceToken: !GetAtt 'EncryptLambda.Arn'
-      # KeyId: !Ref 'MyKey'
       ParameterStoreName: !Sub '${AWS::StackName}.db.username'
       Value: !Ref DBUsername
-      Description: "DataBase username"
+      Description: DataBase username
       Type: 'String'
       Overwrite: True
   StoreDBName:
-    Type: 'Custom::SetParameterStore'
+    Type: Custom::SetParameterStore
     Properties:
       ServiceToken: !GetAtt 'EncryptLambda.Arn'
       ParameterStoreName: !Sub '${AWS::StackName}.db.name'
       Value: !Ref DBName
-      Description: "DataBase Name"
+      Description: DataBase Name
       Type: 'String'
       Overwrite: True
   ####################################################################################
@@ -585,16 +580,16 @@ Resources:
     DeletionPolicy: Retain
     Condition: cEnableELBLogging
     Properties:
-      BucketName: !Sub "${AWS::StackName}-elb-logs"
+      BucketName: !Sub '${AWS::StackName}-elb-logs'
       LifecycleConfiguration:
         Rules:
-          - Id: !Sub "${AWS::StackName}-elb-logs-lifecycle"
+          - Id: !Sub '${AWS::StackName}-elb-logs-lifecycle'
             ExpirationInDays: 90
-            Status: "Enabled"
+            Status: Enabled
             Transitions:
-              - StorageClass: "STANDARD_IA"
+              - StorageClass: STANDARD_IA
                 TransitionInDays: 30
-              - StorageClass: "GLACIER"
+              - StorageClass: GLACIER
                 TransitionInDays: 60
   ELBAccessLogsBucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -607,12 +602,12 @@ Resources:
           - Sid: ELBAccessLogsBucket
             Effect: Allow
             Resource:
-              - !Sub "arn:aws:s3:::${ELBAccessLogsBucket}/ECS-ELB/AWSLogs/${AWS::AccountId}/*"
-              - !Sub "arn:aws:s3:::${ELBAccessLogsBucket}/CodeDeploy-ELB/AWSLogs/${AWS::AccountId}/*"
+              - !Sub 'arn:aws:s3:::${ELBAccessLogsBucket}/ECS-ELB/AWSLogs/${AWS::AccountId}/*'
+              - !Sub 'arn:aws:s3:::${ELBAccessLogsBucket}/CodeDeploy-ELB/AWSLogs/${AWS::AccountId}/*'
             Principal:
               AWS:
                 - !FindInMap [AWSELBAccountID, !Ref 'AWS::Region', id]
-                - !Sub "arn:aws:iam::${AWS::AccountId}:root"
+                - !Sub 'arn:aws:iam::${AWS::AccountId}:root'
             Action:
               - s3:PutObject
   ####################################################################################
@@ -623,9 +618,9 @@ Resources:
   # Start of ECS
   #####################################################################################
   ContainerCluster:
-    Type: "AWS::ECS::Cluster"
+    Type: AWS::ECS::Cluster
     Properties:
-      ClusterName: !Sub "${AWS::StackName}-cluster"
+      ClusterName: !Sub '${AWS::StackName}-cluster'
   ECSAutoScalingNotifications:
     Type: AWS::SNS::Topic
     Condition: cEnableASGNotications
@@ -644,12 +639,12 @@ Resources:
       MaxSize: 10
       DesiredCapacity: 3
       MetricsCollection:
-        - Granularity: "1Minute"
+        - Granularity: 1Minute
           # No metrics specified, send all!
           # http://docs.aws.amazon.com/AutoScaling/latest/APIReference/API_EnableMetricsCollection.html
       Tags:
         - Key: Name
-          Value: !Sub ${AWS::StackName}-ECS
+          Value: !Sub '${AWS::StackName}-ECS'
           PropagateAtLaunch: True
       NotificationConfiguration: !If
         - cEnableASGNotications
@@ -665,10 +660,9 @@ Resources:
         Timeout: PT15M
     UpdatePolicy:
       AutoScalingReplacingUpdate:
-        WillReplace: 'true'
+        WillReplace: True
   ContainerInstances:
     Type: AWS::AutoScaling::LaunchConfiguration
-    DependsOn: [EcsSecurityGroup, EC2InstanceProfile]
     Properties:
       # AMI list: http://docs.aws.amazon.com/AmazonECS/latest/developerguide/launch_container_instance.html
       InstanceType: !Ref InstanceType
@@ -686,40 +680,38 @@ Resources:
           /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource ECSAutoScalingGroup --region ${AWS::Region}
   EcsSecurityGroup:
     Type: AWS::EC2::SecurityGroup
-    DependsOn: [myVPC]
     Properties:
       GroupDescription: ECS Security Group
       VpcId: !Ref myVPC
       SecurityGroupIngress:
         - CidrIp: 0.0.0.0/0
           IpProtocol: tcp
-          FromPort: '31000'
-          ToPort: '61000'
+          FromPort: 31000
+          ToPort: 61000
         - CidrIp: 0.0.0.0/0
           IpProtocol: tcp
-          FromPort: '22'
-          ToPort: '22'
+          FromPort: 22
+          ToPort: 22
       Tags:
         - Key: Name
-          Value: !Sub ${AWS::StackName}-ECS
+          Value: !Sub '${AWS::StackName}-ECS'
   ECSALBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
-    DependsOn: [myVPC]
     Properties:
       GroupDescription: ECS LB Security Group
       VpcId: !Ref myVPC
       SecurityGroupIngress:
         - CidrIp: 0.0.0.0/0
           IpProtocol: tcp
-          FromPort: '80'
-          ToPort: '80'
+          FromPort: 80
+          ToPort: 80
         - CidrIp: 0.0.0.0/0
           IpProtocol: tcp
-          FromPort: '443'
-          ToPort: '443'
+          FromPort: 443
+          ToPort: 443
       Tags:
         - Key: Name
-          Value: !Sub ${AWS::StackName}-ECS-LB
+          Value: !Sub '${AWS::StackName}-ECS-LB'
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     DependsOn: [EC2Role]
@@ -729,7 +721,7 @@ Resources:
   EC2Role:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub ${AWS::StackName}-ECS-EC2
+      RoleName: !Sub '${AWS::StackName}-ECS-EC2'
       AssumeRolePolicyDocument:
         Statement:
           - Effect: Allow
@@ -767,7 +759,7 @@ Resources:
   ECSServiceRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub ${AWS::StackName}-ECS-Service
+      RoleName: !Sub '${AWS::StackName}-ECS-Service'
       AssumeRolePolicyDocument:
         Statement:
           - Effect: Allow
@@ -793,22 +785,21 @@ Resources:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     DependsOn: [publicSubnet01, publicSubnet02, ECSALBSecurityGroup]
     Properties:
-      Name: !Sub ${AWS::StackName}-ECS-LB
+      Name: !Sub '${AWS::StackName}-ECS-LB'
       Scheme: internet-facing
       LoadBalancerAttributes:
         - Key: idle_timeout.timeout_seconds
           Value: '30'
         - !If [cEnableELBLogging, {Key: access_logs.s3.enabled, Value: True}, !Ref 'AWS::NoValue']
         - !If [cEnableELBLogging, {Key: access_logs.s3.bucket, Value: !Ref ELBAccessLogsBucket}, !Ref 'AWS::NoValue']
-        - !If [cEnableELBLogging, {Key: access_logs.s3.prefix, Value: "ECS-ELB"}, !Ref 'AWS::NoValue']
+        - !If [cEnableELBLogging, {Key: access_logs.s3.prefix, Value: 'ECS-ELB'}, !Ref 'AWS::NoValue']
       Subnets: [!Ref publicSubnet01, !Ref publicSubnet02]
       SecurityGroups: [!Ref ECSALBSecurityGroup]
   ECSTGMyApp:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
-    DependsOn: [myVPC]
     Properties:
       HealthCheckPath: /
-      Name: !Sub ${AWS::StackName}-MyApp
+      Name: !Sub '${AWS::StackName}-MyApp'
       Port: 3000
       Protocol: HTTP
       VpcId: !Ref myVPC
@@ -820,12 +811,12 @@ Resources:
         - Type: forward
           TargetGroupArn: !Ref ECSTGMyApp
       LoadBalancerArn: !Ref ECSALB
-      Port: '80'
+      Port: 80
       Protocol: HTTP
   MyRepository:
     Type: AWS::ECR::Repository
     Properties:
-      RepositoryName: !Sub ${AWS::StackName}-myapp
+      RepositoryName: !Sub '${AWS::StackName}-myapp'
       RepositoryPolicyText:
         Version: '2012-10-17'
         Statement:
@@ -833,7 +824,7 @@ Resources:
             Effect: Allow
             Principal:
               AWS:
-                - !Sub arn:aws:iam::${AWS::AccountId}:root
+                - !Sub 'arn:aws:iam::${AWS::AccountId}:root'
             Action:
               - ecr:GetDownloadUrlForLayer
               - ecr:BatchGetImage
@@ -846,12 +837,12 @@ Resources:
   ECSTasksLogsGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub ${AWS::StackName}-ecs
+      LogGroupName: !Sub '${AWS::StackName}-ecs'
       RetentionInDays: 1
   TaskRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub ${AWS::StackName}-myapp-task-role
+      RoleName: !Sub '${AWS::StackName}-myapp-task-role'
       AssumeRolePolicyDocument:
         Statement:
           - Sid: '1'
@@ -941,56 +932,56 @@ Resources:
   # Start of CI/CD
   #####################################################################################
   QAGroup:
-    Type: "AWS::IAM::Group"
+    Type: AWS::IAM::Group
     Properties:
-      GroupName: !Sub ${AWS::StackName}-QA
-      ManagedPolicyArns: ["arn:aws:iam::aws:policy/IAMReadOnlyAccess", "arn:aws:iam::aws:policy/IAMUserSSHKeys"]
+      GroupName: !Sub '${AWS::StackName}-QA'
+      ManagedPolicyArns: ['arn:aws:iam::aws:policy/IAMReadOnlyAccess', 'arn:aws:iam::aws:policy/IAMUserSSHKeys']
       Policies:
         - PolicyName: root
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
               # Pull repo
-              - Effect: "Allow"
+              - Effect: Allow
                 Action:
                   - codecommit:BatchGetRepositories
                   - codecommit:List*
-                Resource: "*"
+                Resource: '*'
               - Effect: Allow
                 Action:
                   - codecommit:Get*
                   - codecommit:GitPull
                 Resource:
-                  - !Sub "arn:aws:codecommit:${AWS::Region}:${AWS::AccountId}:${AWS::StackName}-myapp"
+                  - !Sub 'arn:aws:codecommit:${AWS::Region}:${AWS::AccountId}:${AWS::StackName}-myapp'
               - Effect: Allow
                 Action:
-                  - "codepipeline:GetPipeline"
-                  - "codepipeline:GetPipelineState"
-                  - "codepipeline:GetPipelineExecution"
+                  - 'codepipeline:GetPipeline'
+                  - 'codepipeline:GetPipelineState'
+                  - 'codepipeline:GetPipelineExecution'
                 Resource:
-                  # - !Sub "arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId):*"
-                  - !Sub "arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}"
+                  # - !Sub 'arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId):*'
+                  - !Sub 'arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}'
               - Effect: Allow
                 Action:
-                  - "codepipeline:PutApprovalResult"
+                  - 'codepipeline:PutApprovalResult'
                 Resource:
-                  - !Sub "arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:pm-MyApp/ApprovalProduction/QAApproval"
+                  - !Sub 'arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:pm-MyApp/ApprovalProduction/QAApproval'
   DevGroup:
-    Type: "AWS::IAM::Group"
+    Type: AWS::IAM::Group
     Properties:
-      GroupName: !Sub ${AWS::StackName}-Dev
-      ManagedPolicyArns: ["arn:aws:iam::aws:policy/IAMReadOnlyAccess", "arn:aws:iam::aws:policy/IAMUserSSHKeys"]
+      GroupName: !Sub '${AWS::StackName}-Dev'
+      ManagedPolicyArns: ['arn:aws:iam::aws:policy/IAMReadOnlyAccess', 'arn:aws:iam::aws:policy/IAMUserSSHKeys']
       Policies:
         - PolicyName: root
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
               # List repo
-              - Effect: "Allow"
+              - Effect: Allow
                 Action:
                   - codecommit:BatchGetRepositories
                   - codecommit:List*
-                Resource: "*"
+                Resource: '*'
               # Pull repo
               - Effect: Allow
                 Action:
@@ -998,18 +989,18 @@ Resources:
                   - codecommit:GitPull
                   - codecommit:GitPush
                 Resource:
-                  - !Sub "arn:aws:codecommit:${AWS::Region}:${AWS::AccountId}:${AWS::StackName}-myapp"
+                  - !Sub 'arn:aws:codecommit:${AWS::Region}:${AWS::AccountId}:${AWS::StackName}-myapp'
   CodeRepo:
     Type: AWS::CodeCommit::Repository
     Properties:
-      RepositoryName: !Sub ${AWS::StackName}-myapp
+      RepositoryName: !Sub '${AWS::StackName}-myapp'
       RepositoryDescription: A code repo for the app...
   CodeBuildRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub ${AWS::StackName}-CodeBuild
+      RoleName: !Sub '${AWS::StackName}-CodeBuild'
       AssumeRolePolicyDocument:
-        Version: "2012-10-17"
+        Version: '2012-10-17'
         Statement:
           - Effect: Allow
             Principal:
@@ -1020,12 +1011,12 @@ Resources:
           PolicyDocument:
             Statement:
               # Login to ECR
-              - Effect: "Allow"
+              - Effect: Allow
                 Action:
                   - ecr:GetAuthorizationToken
-                Resource: "*"
+                Resource: '*'
               # Publish to ECR
-              - Effect: "Allow"
+              - Effect: Allow
                 Action:
                   - ecr:BatchCheckLayerAvailability
                   - ecr:CompleteLayerUpload
@@ -1034,37 +1025,37 @@ Resources:
                   - ecr:UploadLayerPart
                 Resource:
                   # TODO: paramenterize pm=test => ImageName
-                  - !Sub "arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/${AWS::StackName}-myapp"
+                  - !Sub 'arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/${AWS::StackName}-myapp'
               # Pull repo
-              - Effect: "Allow"
+              - Effect: Allow
                 Action:
                   - codecommit:GitPull
                 Resource:
                   # TODO: paramenterize pm=test => RepositoryName
-                  - !Sub "arn:aws:codecommit:${AWS::Region}:${AWS::AccountId}:${AWS::StackName}-myapp"
+                  - !Sub 'arn:aws:codecommit:${AWS::Region}:${AWS::AccountId}:${AWS::StackName}-myapp'
               # Write build logs
-              - Effect: "Allow"
+              - Effect: Allow
                 Action:
                   - logs:CreateLogGroup
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                 Resource:
                   # TODO: paramenterize pm=test => ProjectName
-                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-myapp:log-stream"
-                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-myapp:log-stream:*"
-                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-myapp-test:log-stream"
-                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-myapp-test:log-stream:*"
-                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-myapp-integration-test:log-stream"
-                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-myapp-integration-test:log-stream:*"
-                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-myapp-image:log-stream"
-                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-myapp-image:log-stream:*"
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-myapp:log-stream'
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-myapp:log-stream:*'
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-myapp-test:log-stream'
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-myapp-test:log-stream:*'
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-myapp-integration-test:log-stream'
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-myapp-integration-test:log-stream:*'
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-myapp-image:log-stream'
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-myapp-image:log-stream:*'
   MyAppBuildArtifact:
     Type: AWS::CodeBuild::Project
     DependsOn: [CodeRepo, CodeBuildRole]
     Properties:
-      Name: !Sub ${AWS::StackName}-myapp
+      Name: !Sub '${AWS::StackName}-myapp'
       Description: A description about my project
-      ServiceRole: !GetAtt CodeBuildRole.Arn
+      ServiceRole: !GetAtt 'CodeBuildRole.Arn'
       Artifacts:
         Type: CODEPIPELINE
       Environment:
@@ -1075,7 +1066,7 @@ Resources:
         # http://docs.aws.amazon.com/codebuild/latest/userguide/build-env-ref.html
         Image: aws/codebuild/nodejs:7.0.0
       Source:
-        Location: !GetAtt CodeRepo.CloneUrlHttp
+        Location: !GetAtt 'CodeRepo.CloneUrlHttp'
         Type: CODEPIPELINE
         BuildSpec: !Sub |
           version: 0.1
@@ -1086,15 +1077,15 @@ Resources:
                 - npm install --only=prod
           artifacts:
             files:
-              - "**/*" # All files recursively
+              - '**/*' # All files recursively
       TimeoutInMinutes: 300 # 5min
   MyAppTestAartifact:
     Type: AWS::CodeBuild::Project
     DependsOn: [CodeRepo, CodeBuildRole]
     Properties:
-      Name: !Sub ${AWS::StackName}-myapp-test
+      Name: !Sub '${AWS::StackName}-myapp-test'
       Description: A description about my project
-      ServiceRole: !GetAtt CodeBuildRole.Arn
+      ServiceRole: !GetAtt 'CodeBuildRole.Arn'
       Artifacts:
         Type: CODEPIPELINE
       Environment:
@@ -1105,7 +1096,7 @@ Resources:
         # http://docs.aws.amazon.com/codebuild/latest/userguide/build-env-ref.html
         Image: aws/codebuild/nodejs:7.0.0
       Source:
-        Location: !GetAtt CodeRepo.CloneUrlHttp
+        Location: !GetAtt 'CodeRepo.CloneUrlHttp'
         Type: CODEPIPELINE
         BuildSpec: !Sub |
           version: 0.1
@@ -1120,9 +1111,9 @@ Resources:
     Type: AWS::CodeBuild::Project
     DependsOn: [CodeRepo, CodeBuildRole]
     Properties:
-      Name: !Sub ${AWS::StackName}-myapp-integration-test
+      Name: !Sub '${AWS::StackName}-myapp-integration-test'
       Description: A description about my project
-      ServiceRole: !GetAtt CodeBuildRole.Arn
+      ServiceRole: !GetAtt 'CodeBuildRole.Arn'
       Artifacts:
         Type: CODEPIPELINE
       Environment:
@@ -1134,7 +1125,7 @@ Resources:
         Image: aws/codebuild/nodejs:7.0.0
         EnvironmentVariables:
           - Name: API_URL
-            Value: !Sub "http://${ECSALB.DNSName}/api"
+            Value: !Sub 'http://${ECSALB.DNSName}/api'
           - Name: DB_CONNECTIONSTRING
             Value: !Sub '${DBInstance.Endpoint.Address}'
           - Name: DB_USERNAME
@@ -1144,7 +1135,7 @@ Resources:
           - Name: DB_NAME
             Value: !Sub '${DBName}'
       Source:
-        Location: !GetAtt CodeRepo.CloneUrlHttp
+        Location: !GetAtt 'CodeRepo.CloneUrlHttp'
         Type: CODEPIPELINE
         BuildSpec: !Sub |
           version: 0.1
@@ -1159,9 +1150,9 @@ Resources:
     Type: AWS::CodeBuild::Project
     DependsOn: [CodeRepo, CodeBuildRole]
     Properties:
-      Name: !Sub ${AWS::StackName}-myapp-image
+      Name: !Sub '${AWS::StackName}-myapp-image'
       Description: A description about my project
-      ServiceRole: !GetAtt CodeBuildRole.Arn
+      ServiceRole: !GetAtt 'CodeBuildRole.Arn'
       Artifacts:
         Type: CODEPIPELINE
       Environment:
@@ -1174,16 +1165,15 @@ Resources:
           - Name: AWS_DEFAULT_REGION
             Value: !Ref AWS::Region
           - Name: IMAGE_REPO_NAME
-            Value: !Sub ${AWS::StackName}-myapp
+            Value: !Sub '${AWS::StackName}-myapp'
           - Name: AWS_ACCOUNT_ID
             Value: !Ref AWS::AccountId
       Source:
-        Location: !GetAtt CodeRepo.CloneUrlHttp
+        Location: !GetAtt 'CodeRepo.CloneUrlHttp'
         Type: CODEPIPELINE
       TimeoutInMinutes: 300 # 5min
   CodeDeployLinuxEC2SecurityGroup:
     Type: AWS::EC2::SecurityGroup
-    DependsOn: [myVPC]
     Properties:
       GroupDescription: Enable HTTP access via port 80 and SSH access.
       VpcId: !Ref myVPC
@@ -1198,11 +1188,11 @@ Resources:
           CidrIp: 0.0.0.0/0
       Tags:
         - Key: Name
-          Value: !Sub ${AWS::StackName}-CodeDeploy
+          Value: !Sub '${AWS::StackName}-CodeDeploy'
   CodeDeployLinuxEC2InstanceRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub ${AWS::StackName}-CodeDeploy-EC2
+      RoleName: !Sub '${AWS::StackName}-CodeDeploy-EC2'
       AssumeRolePolicyDocument:
         Statement:
           - Effect: Allow
@@ -1225,13 +1215,13 @@ Resources:
                   - rds:DescribeDBInstances
                 Resource: '*'
               # Allow fetch from Parameters Store in a specific name space
-              - Effect: "Allow"
+              - Effect: Allow
                 Action:
                   - ssm:GetParameters
                 Resource:
                   - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}.db.*'
               # Allow describe parameters to automate config process
-              - Effect: "Allow"
+              - Effect: Allow
                 Action:
                   - ssm:DescribeParameters
                 Resource:
@@ -1246,7 +1236,7 @@ Resources:
   CodeDeployTrustRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub ${AWS::StackName}-CodeDeploy
+      RoleName: !Sub '${AWS::StackName}-CodeDeploy'
       AssumeRolePolicyDocument:
         Statement:
           - Sid: '1'
@@ -1255,7 +1245,7 @@ Resources:
               Service: [codedeploy.amazonaws.com]
             Action: ['sts:AssumeRole']
       Policies:
-        - PolicyName: !Sub ${AWS::StackName}-CodeDeploy-policy
+        - PolicyName: !Sub '${AWS::StackName}-CodeDeploy-policy'
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
@@ -1264,7 +1254,7 @@ Resources:
                 Action:
                   - ec2:*
                   - autoscaling:* # something is required for CodeDeployDefault.AllAtOnce
-                Resource: "*"
+                Resource: '*'
       Path: /
   CodeDeployAutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
@@ -1277,19 +1267,19 @@ Resources:
       DesiredCapacity: 3
       TargetGroupARNs: [!Ref CodeDeployTG]
       MetricsCollection:
-        - Granularity: "1Minute"
+        - Granularity: 1Minute
           # No metrics specified, send all!
           # http://docs.aws.amazon.com/AutoScaling/latest/APIReference/API_EnableMetricsCollection.html
       Tags:
         - Key: Name
-          Value: !Sub ${AWS::StackName}-CodeDeploy
+          Value: !Sub '${AWS::StackName}-CodeDeploy'
           PropagateAtLaunch: True
     CreationPolicy:
       ResourceSignal:
         Timeout: PT15M
     UpdatePolicy:
       AutoScalingReplacingUpdate:
-        WillReplace: 'true'
+        WillReplace: True
   CodeDeployInstances:
     Type: AWS::AutoScaling::LaunchConfiguration
     Metadata:
@@ -1297,8 +1287,8 @@ Resources:
         services:
           sysvint:
             codedeploy-agent:
-              enabled: 'true'
-              ensureRunning: 'true'
+              enabled: True
+              ensureRunning: True
     Properties:
       ImageId: !FindInMap [AWSRegion2AMI, !Ref 'AWS::Region', !Ref OperatingSystem]
       SpotPrice: !If [cEnableSpotInstances, '0.05', !Ref 'AWS::NoValue']
@@ -1340,38 +1330,39 @@ Resources:
           $(which cfn-signal) -e 0 --stack ${AWS::StackName} --resource CodeDeployAutoScalingGroup --region ${AWS::Region}
   CodeDeployALBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
-    DependsOn: [myVPC]
     Properties:
       GroupDescription: CodeDeploy LB Security Group
       VpcId: !Ref myVPC
       SecurityGroupIngress:
         - CidrIp: 0.0.0.0/0
           IpProtocol: tcp
-          FromPort: '80'
-          ToPort: '80'
+          FromPort: 80
+          ToPort: 80
         - CidrIp: 0.0.0.0/0
           IpProtocol: tcp
-          FromPort: '443'
-          ToPort: '443'
+          FromPort: 443
+          ToPort: 443
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-CodeDeploy-LB'
   CodeDeployALB:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     DependsOn: [publicSubnet01, publicSubnet02, CodeDeployALBSecurityGroup]
     Properties:
-      Name: !Sub ${AWS::StackName}-CodeDeploy-LB
+      Name: !Sub '${AWS::StackName}-CodeDeploy-LB'
       Scheme: internet-facing
       LoadBalancerAttributes:
         - Key: idle_timeout.timeout_seconds
           Value: '30'
         - !If [cEnableELBLogging, {Key: access_logs.s3.enabled, Value: True}, !Ref 'AWS::NoValue']
         - !If [cEnableELBLogging, {Key: access_logs.s3.bucket, Value: !Ref ELBAccessLogsBucket}, !Ref 'AWS::NoValue']
-        - !If [cEnableELBLogging, {Key: access_logs.s3.prefix, Value: "CodeDeploy-ELB"}, !Ref 'AWS::NoValue']
+        - !If [cEnableELBLogging, {Key: access_logs.s3.prefix, Value: 'CodeDeploy-ELB'}, !Ref 'AWS::NoValue']
       Subnets: [!Ref publicSubnet01, !Ref publicSubnet02]
       SecurityGroups: [!Ref CodeDeployALBSecurityGroup]
   CodeDeployTG:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
-    DependsOn: [myVPC]
     Properties:
-      Name: !Sub ${AWS::StackName}-CodeDeployTG
+      Name: !Sub '${AWS::StackName}-CodeDeployTG'
       Port: 3000
       Protocol: HTTP
       VpcId: !Ref myVPC
@@ -1383,24 +1374,24 @@ Resources:
         - Type: forward
           TargetGroupArn: !Ref CodeDeployTG
       LoadBalancerArn: !Ref CodeDeployALB
-      Port: '80'
+      Port: 80
       Protocol: HTTP
   MyAppDeployApplication:
-    Type: "AWS::CodeDeploy::Application"
+    Type: AWS::CodeDeploy::Application
   MyAppDeployApplicationmentGroup:
-    Type: "AWS::CodeDeploy::DeploymentGroup"
+    Type: AWS::CodeDeploy::DeploymentGroup
     DependsOn: [MyAppDeployApplication, CodeDeployAutoScalingGroup, CodeDeployTrustRole]
     Properties:
       ApplicationName: !Ref MyAppDeployApplication
-      DeploymentConfigName: "CodeDeployDefault.HalfAtATime"
+      DeploymentConfigName: 'CodeDeployDefault.HalfAtATime'
       AutoScalingGroups: [!Ref CodeDeployAutoScalingGroup]
-      ServiceRoleArn: !GetAtt CodeDeployTrustRole.Arn
+      ServiceRoleArn: !GetAtt 'CodeDeployTrustRole.Arn'
   CodePipelineServiceRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub ${AWS::StackName}-CodePipelineServiceRole
+      RoleName: !Sub '${AWS::StackName}-CodePipelineServiceRole'
       AssumeRolePolicyDocument:
-        Version: "2012-10-17"
+        Version: '2012-10-17'
         Statement:
           - Effect: Allow
             Principal:
@@ -1412,7 +1403,7 @@ Resources:
             Version: '2012-10-17'
             Statement:
               # Pull repo
-              - Effect: "Allow"
+              - Effect: Allow
                 Action:
                   - codecommit:BatchGetRepositories
                   - codecommit:Get*
@@ -1421,46 +1412,46 @@ Resources:
                   - codecommit:UploadArchive
                 Resource:
                   # TODO: paramenterize pm=test => RepositoryName
-                  - !Sub "arn:aws:codecommit:${AWS::Region}:${AWS::AccountId}:${AWS::StackName}-myapp"
+                  - !Sub 'arn:aws:codecommit:${AWS::Region}:${AWS::AccountId}:${AWS::StackName}-myapp'
               - Effect: Allow
                 Action:
                   - ecr:BatchGetImage
                 Resource:
-                  - !Sub "arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/${AWS::StackName}-myapp"
+                  - !Sub 'arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/${AWS::StackName}-myapp'
               - Effect: Allow
                 Action:
                   - codebuild:StartBuild
                   - codebuild:BatchGetBuilds
                   - cloudformation:*
                   - iam:PassRole
-                Resource: "*"
+                Resource: '*'
               - Effect: Allow
                 Action:
                   - codedeploy:*
-                Resource: "*"
+                Resource: '*'
   ArtifactStoreS3Location:
     Type: AWS::S3::Bucket
     DeletionPolicy: Retain
     Properties:
-      BucketName: !Sub ${AWS::StackName}-codepipeline-artifacts
+      BucketName: !Sub '${AWS::StackName}-codepipeline-artifacts'
   ArtifactStoreS3LocationPolicy:
-    Type: "AWS::S3::BucketPolicy"
+    Type: AWS::S3::BucketPolicy
     DependsOn: [ArtifactStoreS3Location]
     Properties:
       Bucket: !Ref ArtifactStoreS3Location
       PolicyDocument:
         Statement:
-          - Effect: "Allow"
+          - Effect: Allow
             Action:
               - s3:*
             Resource:
-              - !Sub "arn:aws:s3:::${AWS::StackName}-codepipeline-artifacts"
-              - !Sub "arn:aws:s3:::${AWS::StackName}-codepipeline-artifacts/*"
-            Principal: "*"
+              - !Sub 'arn:aws:s3:::${AWS::StackName}-codepipeline-artifacts'
+              - !Sub 'arn:aws:s3:::${AWS::StackName}-codepipeline-artifacts/*'
+            Principal: '*'
   CloudFormationExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub ${AWS::StackName}-CloudFormationExecutionRole
+      RoleName: !Sub '${AWS::StackName}-CloudFormationExecutionRole'
       AssumeRolePolicyDocument:
         Statement:
           - Sid: '1'
@@ -1473,7 +1464,7 @@ Resources:
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
-              - Resource: "*"
+              - Resource: '*'
                 Effect: Allow
                 Action:
                   - ecs:*
@@ -1483,12 +1474,12 @@ Resources:
                   - cloudwatch:PutMetricAlarm
                   - cloudwatch:DeleteAlarms
   ApprovalTopic:
-    Type: "AWS::SNS::Topic"
+    Type: AWS::SNS::Topic
     Properties:
       DisplayName: !Sub '${AWS::StackName}-approvals'
       TopicName: !Sub '${AWS::StackName}-approvals'
   ApprovalTopicPolicy:
-    Type: "AWS::SNS::TopicPolicy"
+    Type: AWS::SNS::TopicPolicy
     Properties:
       # http://docs.aws.amazon.com/sns/latest/dg/AccessPolicyLanguage_SpecialInfo.html
       PolicyDocument:
@@ -1496,11 +1487,11 @@ Resources:
         Statement:
           # Allow Pipeline to publish into approvals topic
           - Effect: Allow
-            Principal: # "*"
+            Principal: # '*'
               AWS:
                 - !Sub '${CodePipelineServiceRole.Arn}'
             Action:
-              - "sns:Publish"
+              - 'sns:Publish'
             Resource:
               - !Ref ApprovalTopic
       Topics:
@@ -1509,11 +1500,11 @@ Resources:
     Type: AWS::SNS::Subscription
     Condition: cEnableApprovalEmails
     Properties:
-      Endpoint: !Sub "${EmailApprovals}"
+      Endpoint: !Sub '${EmailApprovals}'
       Protocol: email
-      TopicArn: !Ref 'ApprovalTopic'
+      TopicArn: !Ref ApprovalTopic
   MyAppPipeline:
-    Type: "AWS::CodePipeline::Pipeline"
+    Type: AWS::CodePipeline::Pipeline
     DependsOn:
       - MyAppBuildArtifact
       - MyAppBuildDockerImage
@@ -1525,8 +1516,8 @@ Resources:
       - DBInstance
       - ArtifactStoreS3Location
     Properties:
-      Name: !Sub ${AWS::StackName}-MyApp
-      RoleArn: !GetAtt CodePipelineServiceRole.Arn
+      Name: !Sub '${AWS::StackName}-MyApp'
+      RoleArn: !GetAtt 'CodePipelineServiceRole.Arn'
       Stages:
         - Name: Source
           Actions:
@@ -1539,7 +1530,7 @@ Resources:
               OutputArtifacts:
                 - Name: SourceOutput
               Configuration:
-                RepositoryName: !GetAtt CodeRepo.Name
+                RepositoryName: !GetAtt 'CodeRepo.Name'
                 BranchName: master
         - Name: Build
           Actions:
@@ -1602,16 +1593,16 @@ Resources:
                 ChangeSetName: Deploy
                 ActionMode: CREATE_UPDATE
                 # StackName: !Ref StackName
-                StackName: !Sub ${AWS::StackName}-MyApp-Service
+                StackName: !Sub '${AWS::StackName}-MyApp-Service'
                 Capabilities: CAPABILITY_NAMED_IAM
                 # TemplatePath: Template::cloudformation.template.myapp.yaml
                 TemplatePath: SourceOutput::cloudformation/myapp.template.yaml
-                RoleArn: !GetAtt CloudFormationExecutionRole.Arn
+                RoleArn: !GetAtt 'CloudFormationExecutionRole.Arn'
                 # Can't be a YAML object:  Value of property Configuration must be an object with String (or simple type) properties
                 # ParameterOverrides
                 #   ECSTGMyApp: !Ref ECSTGMyApp
                 #   ECSServiceRole: !Ref ECSServiceRole
-                #   DBAddress: !GetAtt DBInstance.Endpoint.Address
+                #   DBAddress: !GetAtt 'DBInstance.Endpoint.Address'
                 ParameterOverrides: !Sub |
                   {
                     "ParamsPrefix": "${AWS::StackName}",
@@ -1651,7 +1642,7 @@ Resources:
                 Provider: Manual
               Configuration:
                 NotificationArn: !Ref ApprovalTopic
-                CustomData: !Sub "Approval or Reject this change after running Exploratory Tests: http://${CodeDeployALB.DNSName}/"
+                CustomData: !Sub 'Approval or Reject this change after running Exploratory Tests: http://${CodeDeployALB.DNSName}/'
       ArtifactStore:
         Type: S3
         Location: !Ref ArtifactStoreS3Location
@@ -1665,41 +1656,39 @@ Resources:
   CodeDeployLBCertifcate:
     Type: AWS::CertificateManager::Certificate
     Properties:
-      DomainName: !Sub "ec2.${AWS::StackName}.al-labs.co.uk"
+      DomainName: !Sub 'ec2.${AWS::StackName}.al-labs.co.uk'
       DomainValidationOptions:
-        - DomainName: !Sub "ec2.${AWS::StackName}.al-labs.co.uk"
-          ValidationDomain: "al-labs.co.uk"
+        - DomainName: !Sub 'ec2.${AWS::StackName}.al-labs.co.uk'
+          ValidationDomain: 'al-labs.co.uk'
     Condition: cEnableHTTPS
   ECSLBCertifcate:
     Type: AWS::CertificateManager::Certificate
     Properties:
-      DomainName: !Sub "ecs.${AWS::StackName}.al-labs.co.uk"
+      DomainName: !Sub 'ecs.${AWS::StackName}.al-labs.co.uk'
       DomainValidationOptions:
-        - DomainName: !Sub "ecs.${AWS::StackName}.al-labs.co.uk"
-          ValidationDomain: "al-labs.co.uk"
+        - DomainName: !Sub 'ecs.${AWS::StackName}.al-labs.co.uk'
+          ValidationDomain: 'al-labs.co.uk'
     Condition: cEnableHTTPS
   CodeDeployALBHTTPSListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
-    DependsOn: [CodeDeployTG, CodeDeployALB, CodeDeployLBCertifcate]
     Properties:
       DefaultActions:
         - Type: forward
           TargetGroupArn: !Ref CodeDeployTG
       LoadBalancerArn: !Ref CodeDeployALB
-      Port: '443'
+      Port: 443
       Protocol: HTTPS
       Certificates:
         - CertificateArn: !Ref CodeDeployLBCertifcate
     Condition: cEnableHTTPS
   ALBHTTPSListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
-    DependsOn: [ECSTGMyApp, ECSALB, ECSLBCertifcate]
     Properties:
       DefaultActions:
         - Type: forward
           TargetGroupArn: !Ref ECSTGMyApp
       LoadBalancerArn: !Ref ECSALB
-      Port: '443'
+      Port: 443
       Protocol: HTTPS
       Certificates:
         - CertificateArn: !Ref ECSLBCertifcate
@@ -1711,16 +1700,16 @@ Resources:
       Comment: Zone apex alias targeted to myELB LoadBalancer.
       RecordSets:
         # One subdoamin for each type
-        - Name: !Sub "ec2.${AWS::StackName}.al-labs.co.uk."
+        - Name: !Sub 'ec2.${AWS::StackName}.al-labs.co.uk.'
           Type: A
           AliasTarget:
-            HostedZoneId: !GetAtt CodeDeployALB.CanonicalHostedZoneID
-            DNSName: !GetAtt CodeDeployALB.DNSName
-        - Name: !Sub "ecs.${AWS::StackName}.al-labs.co.uk."
+            HostedZoneId: !GetAtt 'CodeDeployALB.CanonicalHostedZoneID'
+            DNSName: !GetAtt 'CodeDeployALB.DNSName'
+        - Name: !Sub 'ecs.${AWS::StackName}.al-labs.co.uk.'
           Type: A
           AliasTarget:
-            HostedZoneId: !GetAtt ECSALB.CanonicalHostedZoneID
-            DNSName: !GetAtt ECSALB.DNSName
+            HostedZoneId: !GetAtt 'ECSALB.CanonicalHostedZoneID'
+            DNSName: !GetAtt 'ECSALB.DNSName'
     Condition: cEnableDNS
   #####################################################################################
   # End of Public DNS
@@ -1730,15 +1719,14 @@ Resources:
   #####################################################################################
   # Mapping Log groups to the Lambda that ships them to Elasticsearch
   Trail:
-    DependsOn: TrailBucketPolicy
+    DependsOn: [TrailBucketPolicy]
     Properties:
-      CloudWatchLogsLogGroupArn: !GetAtt TrailLogGroup.Arn
-      CloudWatchLogsRoleArn: !GetAtt TrailLogGroupRole.Arn
-      IncludeGlobalServiceEvents: true
-      IsLogging: true
-      IsMultiRegionTrail: true
-      S3BucketName:
-        Ref: TrailBucket
+      CloudWatchLogsLogGroupArn: !GetAtt 'TrailLogGroup.Arn'
+      CloudWatchLogsRoleArn: !GetAtt 'TrailLogGroupRole.Arn'
+      IncludeGlobalServiceEvents: True
+      IsLogging: True
+      IsMultiRegionTrail: True
+      S3BucketName: !Ref TrailBucket
     Type: AWS::CloudTrail::Trail
   TrailBucket:
     DeletionPolicy: Retain
@@ -1747,8 +1735,7 @@ Resources:
   TrailBucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
-      Bucket:
-        Ref: TrailBucket
+      Bucket: !Ref TrailBucket
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -1756,7 +1743,7 @@ Resources:
             Effect: Allow
             Principal:
               Service: cloudtrail.amazonaws.com
-            Resource: !Sub arn:aws:s3:::${TrailBucket}
+            Resource: !Sub 'arn:aws:s3:::${TrailBucket}'
           - Action: s3:PutObject
             Condition:
               StringEquals:
@@ -1764,10 +1751,10 @@ Resources:
             Effect: Allow
             Principal:
               Service: cloudtrail.amazonaws.com
-            Resource: !Sub arn:aws:s3:::${TrailBucket}/AWSLogs/${AWS::AccountId}/*
+            Resource: !Sub 'arn:aws:s3:::${TrailBucket}/AWSLogs/${AWS::AccountId}/*'
   TrailLogGroup:
     Properties:
-      LogGroupName: !Sub "/aws/cloudtrail/${AWS::StackName}"
+      LogGroupName: !Sub '/aws/cloudtrail/${AWS::StackName}'
       RetentionInDays: '7'
     Type: AWS::Logs::LogGroup
   TrailLogGroupRole:
@@ -1784,11 +1771,11 @@ Resources:
             Statement:
               - Action: logs:CreateLogStream
                 Effect: Allow
-                Resource: !GetAtt TrailLogGroup.Arn
+                Resource: !GetAtt 'TrailLogGroup.Arn'
               - Action:
                   - logs:PutLogEvents
                 Effect: Allow
-                Resource: !GetAtt TrailLogGroup.Arn
+                Resource: !GetAtt 'TrailLogGroup.Arn'
             Version: '2012-10-17'
           PolicyName: cloudtrail-policy
     Type: AWS::IAM::Role
@@ -1803,11 +1790,9 @@ Resources:
     Condition: cEnableElasticSearchLogs
     Properties:
       Action: lambda:InvokeFunction
-      FunctionName:
-        Ref: LogStreamer
-      Principal: !Sub logs.${AWS::Region}.amazonaws.com
-      SourceAccount:
-        Ref: AWS::AccountId
+      FunctionName: !Ref LogStreamer
+      Principal: !Sub 'logs.${AWS::Region}.amazonaws.com'
+      SourceAccount: !Ref AWS::AccountId
     Type: AWS::Lambda::Permission
 
 ## Mapping Log groups to the Lambda that ships them to Elasticsearch
@@ -1815,20 +1800,18 @@ Resources:
     Condition: cEnableElasticSearchLogs
     DependsOn: LambdaInvokePermission
     Properties:
-      DestinationArn: !GetAtt LogStreamer.Arn
+      DestinationArn: !GetAtt 'LogStreamer.Arn'
       FilterPattern: !FindInMap [FilterPatternLookup, CloudTrail, Pattern]
-      LogGroupName:
-        Ref: TrailLogGroup
+      LogGroupName: !Ref TrailLogGroup
     Type: AWS::Logs::SubscriptionFilter
 
   LogGrouptoLambdaMappingFlowLogs:
     Condition: cEnableElasticSearchLogs
     DependsOn: LambdaInvokePermission
     Properties:
-      DestinationArn: !GetAtt LogStreamer.Arn
+      DestinationArn: !GetAtt 'LogStreamer.Arn'
       FilterPattern: !FindInMap [FilterPatternLookup, FlowLogs, Pattern]
-      LogGroupName:
-        Ref: VPCFlowLogsLogGroup
+      LogGroupName: !Ref VPCFlowLogsLogGroup
     Type: AWS::Logs::SubscriptionFilter
 
   LogRole:
@@ -1864,7 +1847,7 @@ Resources:
     Properties:
       Path: /
       Roles:
-        - Ref: LogRole
+        - !Ref LogRole
     Type: AWS::IAM::InstanceProfile
 
   # Exported so service stacks can stream logs to it.
@@ -1872,11 +1855,11 @@ Resources:
     Condition: cEnableElasticSearchLogs
     Properties:
       Code:
-        S3Bucket: !Sub solutions-${AWS::Region}
+        S3Bucket: !Sub 'solutions-${AWS::Region}'
         S3Key: centralized-logging/v1/centralizedLoggingDownload.zip
       Description: Lambda function for moving log data to AES.
       Handler: index.handler
-      Role: !GetAtt LogStreamerRole.Arn
+      Role: !GetAtt 'LogStreamerRole.Arn'
       Runtime: nodejs4.3
       Timeout: '300'
     Type: AWS::Lambda::Function
@@ -1894,7 +1877,7 @@ Resources:
       Policies:
         - PolicyDocument:
             Statement:
-              - Effect: "Allow"
+              - Effect: Allow
                 Action:
                   - logs:CreateLogGroup
                   - logs:CreateLogStream
@@ -1910,17 +1893,15 @@ Resources:
                   - cloudformation:DescribeStacks
                   - Cloudformation:ListStackResources
                 Resource: !Sub 'arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}*'
-            Version: "2012-10-17"
+            Version: '2012-10-17'
           PolicyName: My_Lambda_Function_Permissions
     Type: AWS::IAM::Role
   MyFlowLog:
     Condition: cEnableElasticSearchLogs
     Properties:
-      DeliverLogsPermissionArn: !GetAtt flowlogsRole.Arn
-      LogGroupName:
-        Ref: VPCFlowLogsLogGroup
-      ResourceId:
-        Ref: myVPC
+      DeliverLogsPermissionArn: !GetAtt 'flowlogsRole.Arn'
+      LogGroupName: !Ref VPCFlowLogsLogGroup
+      ResourceId: !Ref myVPC
       ResourceType: VPC
       TrafficType: ALL
     Type: AWS::EC2::FlowLog
@@ -1953,8 +1934,8 @@ Resources:
                   - logs:DescribeLogStreams
                   - logs:PutLogEvents
                 Effect: Allow
-                Resource: "*"
-            Version: "2012-10-17"
+                Resource: '*'
+            Version: '2012-10-17'
           PolicyName: LogRolePolicy
     Type: AWS::IAM::Role
 ###########################################
@@ -1964,13 +1945,13 @@ Resources:
     Type: AWS::Logs::LogGroup
     Condition: cEnableSlackApprovals
     Properties:
-      LogGroupName: !Sub /aws/lambda/${AWS::StackName}-slack-notifications
+      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-slack-notifications'
       RetentionInDays: 1
   SlackLambdaRole:
     Type: AWS::IAM::Role
     Condition: cEnableSlackApprovals
     Properties:
-      RoleName: !Sub ${AWS::StackName}-slack-notifications
+      RoleName: !Sub '${AWS::StackName}-slack-notifications'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -1985,39 +1966,38 @@ Resources:
           PolicyDocument:
             Statement:
               # Allow lambda to create log group
-              - Effect: "Allow"
+              - Effect: Allow
                 Action:
                   - logs:CreateLogGroup
                 Resource:
-                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*'
               # Create Log streams and write on it
-              - Effect: "Allow"
+              - Effect: Allow
                 Action:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                 Resource:
-                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}-slack-notifications"
-                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}-slack-notifications:*"
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}-slack-notifications'
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}-slack-notifications:*'
               # Allow lambda to use KMS to decrypt Env Vars
-              - Effect: "Allow"
+              - Effect: Allow
                 Action:
                   - kms:Decrypt
-                Resource: "*"
-              - Effect: "Allow"
+                Resource: '*'
+              - Effect: Allow
                 Action:
                   - ssm:GetParameters
                 Resource:
                   - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}.slack.*'
   StoreEncryptedSlackWebhook:
-    Type: 'Custom::SetParameterStore'
+    Type: Custom::SetParameterStore
     Condition: cEnableSlackApprovals
     Properties:
       ServiceToken: !GetAtt 'EncryptLambda.Arn'
-      # KeyId: !Ref 'MyKey'
-      KeyId: !Sub "alias/${AWS::StackName}-masterkey"
+      KeyId: !Sub 'alias/${AWS::StackName}-masterkey'
       ParameterStoreName: !Sub '${AWS::StackName}.slack.webhooks'
       Value: !Ref SlackApprovalsWebhook
-      Description: "Webhook URL for approvals notifications"
+      Description: Webhook URL for approvals notifications
       Type: 'SecureString'
       Overwrite: True
   SlackNotificationsLambda:
@@ -2025,7 +2005,7 @@ Resources:
     DependsOn: MyKeyAlias
     Condition: cEnableSlackApprovals
     Properties:
-      FunctionName: !Sub ${AWS::StackName}-slack-notifications
+      FunctionName: !Sub '${AWS::StackName}-slack-notifications'
       Description: |
         Lambda Function to send approvals notifications to slcak channel
       Handler: index.handler
@@ -2159,12 +2139,12 @@ Resources:
     Properties:
       Action: lambda:InvokeFunction
       FunctionName: !Ref SlackNotificationsLambda
-      Principal: !Sub "sns.amazonaws.com"
+      Principal: !Sub 'sns.amazonaws.com'
       SourceArn: !Ref ApprovalTopic
   SlackNotificationsApprovalSubscription:
     Type: AWS::SNS::Subscription
     Condition: cEnableSlackApprovals
     Properties:
-      Endpoint: !Sub "${SlackNotificationsLambda.Arn}"
+      Endpoint: !Sub '${SlackNotificationsLambda.Arn}'
       Protocol: lambda
-      TopicArn: !Ref 'ApprovalTopic'
+      TopicArn: !Ref ApprovalTopic
