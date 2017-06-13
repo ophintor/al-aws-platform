@@ -1,3 +1,7 @@
+Parameters:
+  ParentStackName:
+    Type: 'String'
+
 Resources:
   myVPC:
     Type: AWS::EC2::VPC
@@ -6,7 +10,7 @@ Resources:
       InstanceTenancy: 'default'
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-VPC'
+          Value: !Sub '${ParentStackName}-VPC'
   publicSubnet01:
     Type: AWS::EC2::Subnet
     DependsOn: [myVPC]
@@ -21,7 +25,7 @@ Resources:
       MapPublicIpOnLaunch: True
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-PublicSubnet01'
+          Value: !Sub '${ParentStackName}-PublicSubnet01'
   publicSubnet02:
     Type: AWS::EC2::Subnet
     DependsOn: [myVPC]
@@ -33,7 +37,7 @@ Resources:
       MapPublicIpOnLaunch: True
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-PublicSubnet02'
+          Value: !Sub '${ParentStackName}-PublicSubnet02'
   privateSubnet01:
     Type: AWS::EC2::Subnet
     DependsOn: [myVPC]
@@ -44,7 +48,7 @@ Resources:
       AvailabilityZone: !Select [0, !GetAZs '']
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-PrivateSubnet01'
+          Value: !Sub '${ParentStackName}-PrivateSubnet01'
   privateSubnet02:
     Type: AWS::EC2::Subnet
     DependsOn: [myVPC]
@@ -55,14 +59,14 @@ Resources:
       AvailabilityZone: !Select [1, !GetAZs '']
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-PrivateSubnet02'
+          Value: !Sub '${ParentStackName}-PrivateSubnet02'
   InternetGateway:
     Type: AWS::EC2::InternetGateway
     DependsOn: [myVPC]
     Properties:
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-InternetGateway'
+          Value: !Sub '${ParentStackName}-InternetGateway'
   AttachInternetGateway:
     Type: AWS::EC2::VPCGatewayAttachment
     DependsOn: [myVPC, InternetGateway]
@@ -78,7 +82,7 @@ Resources:
       VpcId: !Ref myVPC
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-InternetRoutingTable'
+          Value: !Sub '${ParentStackName}-InternetRoutingTable'
   InternetPublicRoute:
     Type: AWS::EC2::Route
     DependsOn: [InternetPublicRoutingTable]

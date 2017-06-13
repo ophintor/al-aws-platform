@@ -225,6 +225,8 @@ Resources:
     Type: AWS::CloudFormation::Stack
     Properties:
       TemplateURL: https://s3.amazonaws.com/al-cf-templates-us-east-1/infrastructure-networking.yaml
+      Parameters:
+        ParentStackName: !Sub '${AWS::StackName}'
 
   ####################################################################################
   # Start of Set Parameter Function
