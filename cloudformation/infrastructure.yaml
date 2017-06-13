@@ -76,8 +76,8 @@ Outputs:
     ]
   PipelineUrl:
     Value: !Sub 'https://console.aws.amazon.com/codepipeline/home?region=${AWS::Region}#/view/${MyAppPipeline}'
-# These exported values are sent in every request by the lambda function, not sure where they get included
-# This value below is already exported but not being picked up by the lambda function
+  # These exported values are sent in every request by the lambda function, not sure where they get included
+  # This value below is already exported but not being picked up by the lambda function
   DomainEndpoint:
     Condition: cEnableElasticSearchLogs
     Value:
@@ -213,6 +213,75 @@ Parameters:
     Default: ''
     NoEcho: True
     Type: String
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: 'Domain Name:'
+        Parameters:
+          - UseDNS
+      - Label:
+          default: 'Database Configuration:'
+        Parameters:
+          - DBName
+          - DBUsername
+          - DBPassword
+          - DBClass
+          - DBAllocatedStorage
+      - Label:
+          default: 'Auto-Scaling Web Server Group''s Instance Configuration: '
+        Parameters:
+          - UseSpotInstances
+          - InstanceType
+          - OperatingSystem
+      - Label:
+          default: 'Security: '
+        Parameters:
+          - KeyName
+          - UseHTTPS
+      - Label:
+          default: 'Notification: '
+        Parameters:
+          - OperationsEmail
+          - EmailApprovals
+          - SlackApprovalsWebhook
+      - Label:
+          default: 'Logging: '
+        Parameters:
+          - ELBLogging
+          - ElasticsearchLogs
+          - ElasticsearchStack
+    ParameterLabels:
+      DBName:
+        default: Database Name
+      DBUsername:
+        default: Database User Name
+      DBPassword:
+        default: Database Password
+      DBClass:
+        default: Database Instance Class
+      DBAllocatedStorage:
+        default: Database Storage
+      KeyName:
+        default: Key Pair Name
+      UseHTTPS:
+        default: Use HTTPS
+      UseDNS:
+        default: Use DNS
+      ElasticsearchLogs:
+        default: Deploy Elasticsearch
+      ElasticsearchStack:
+        default: Central Logging Elasticsearch Stack Name
+      ELBLogging:
+        default: Enable ELB Logging
+      UseSpotInstances:
+        default: Use Spot Instances
+      EmailApprovals:
+        default: Approval Email Address
+      OperationsEmail:
+        default: Notification Email Address
+      SlackApprovalsWebhook:
+        default: Slack Channel Webhook
 
 Conditions:
   cEnableDNS: !Equals [!Ref UseDNS, 'Enable']
@@ -2055,7 +2124,7 @@ Resources:
       SourceAccount: !Ref AWS::AccountId
     Type: AWS::Lambda::Permission
 
-## Mapping Log groups to the Lambda that ships them to Elasticsearch
+  ## Mapping Log groups to the Lambda that ships them to Elasticsearch
   LogGrouptoLambdaMappingCloudTrail:
     Condition: cEnableElasticSearchLogs
     DependsOn: LambdaInvokePermission
@@ -2207,9 +2276,9 @@ Resources:
             Version: '2012-10-17'
           PolicyName: LogRolePolicy
     Type: AWS::IAM::Role
-###########################################
-# End of Elasticsearch logging domain
-###########################################
+  ###########################################
+  # End of Elasticsearch logging domain
+  ###########################################
   SlackLambdaLogsGroup:
     Type: AWS::Logs::LogGroup
     Condition: cEnableSlackApprovals
