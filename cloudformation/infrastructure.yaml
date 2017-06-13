@@ -33,6 +33,12 @@ Mappings:
         '[version, account_id, interface_id, srcaddr != "-", dstaddr != "-",
         srcport != "-", dstport != "-", protocol, packets, bytes, start, end,
         action, log_status]'
+    ELBLogs:
+      Pattern:
+        '[type, timestamp, elb, client, target, request_processing_time,
+        target_processing_time, response_processing_time, elb_status_code,
+        target_status_code, received_bytes, sent_bytes, request, user_agent,
+        ssl_cipher, ssl_protocol, target_group_arn, trace_id]'
     Lambda:
       Pattern: '[timestamp=*Z, request_id="*-*", event]'
     Other:
@@ -213,6 +219,7 @@ Conditions:
   cEnableHTTPS: !Equals [!Ref UseHTTPS, 'Enable']
   cEnableElasticSearchLogs: !Equals [!Ref ElasticsearchLogs, 'Enable']
   cEnableELBLogging: !Equals [!Ref ELBLogging, 'Enable']
+  cEnableELBtoElasticSearch: !And [!Condition cEnableElasticSearchLogs, !Condition cEnableELBLogging]
   cEnableSpotInstances: !Equals [!Ref UseSpotInstances, 'Enable']
   cEnableApprovalEmails: !Not [!Equals [!Ref EmailApprovals, '']]
   cEnableSlackApprovals: !Not [!Equals [!Ref SlackApprovalsWebhook, '']]
@@ -581,6 +588,10 @@ Resources:
     Condition: cEnableELBLogging
     Properties:
       BucketName: !Sub '${AWS::StackName}-elb-logs'
+      NotificationConfiguration:
+        LambdaConfigurations:
+          - Function: !GetAtt 'ELBLogsToCWLambda.Arn'
+            Event: s3:ObjectCreated:*
       LifecycleConfiguration:
         Rules:
           - Id: !Sub '${AWS::StackName}-elb-logs-lifecycle'
@@ -610,6 +621,249 @@ Resources:
                 - !Sub 'arn:aws:iam::${AWS::AccountId}:root'
             Action:
               - s3:PutObject
+  LogGroupELBLog:
+    Type: AWS::Logs::LogGroup
+    Condition: cEnableELBLogging
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName: !Sub '${AWS::StackName}-elblog'
+      RetentionInDays: 7
+  ELBLogLambdaRole:
+    Type: AWS::IAM::Role
+    Condition: cEnableELBLogging
+    Metadata:
+      Comment: ELBLogLambdaRole allows Lambda to read from S3 and write to CloudWatch.
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - 'lambda.amazonaws.com'
+            Action:
+              - 'sts:AssumeRole'
+  ELBLogLambdaRolePolicies:
+    Type: AWS::IAM::Policy
+    Condition: cEnableELBLogging
+    Metadata:
+      Comment: IAM Policy attached to the ELBLogLambdaRole.
+    Properties:
+      PolicyName: ELBLogLambdaRolePolicy
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Action:
+              - 'logs:CreateLogStream'
+              - 'logs:PutLogEvents'
+              - 'logs:DescribeLogGroups'
+              - 'logs:DescribeLogStreams'
+            Resource:
+              - !Sub '${LogGroupELBLog.Arn}'
+              - !Sub '${ELBLogsToCWLambdaLogGroup.Arn}'
+          - Effect: Allow
+            Action:
+              - 's3:GetObject'
+            Resource:
+              - !Sub 'arn:aws:s3:::${AWS::StackName}-elb-logs/*'
+      Roles:
+        - !Ref 'ELBLogLambdaRole'
+  ELBLogLambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Condition: cEnableELBLogging
+    Properties:
+      FunctionName: !GetAtt 'ELBLogsToCWLambda.Arn'
+      Action: lambda:InvokeFunction
+      Principal: s3.amazonaws.com
+      SourceAccount: !Ref 'AWS::AccountId'
+  ELBLogsToCWLambdaLogGroup:
+    Type: AWS::Logs::LogGroup
+    Condition: cEnableELBLogging
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-ELBLogsToCWLambda'
+      RetentionInDays: 1
+  ELBLogsToCWLambda:
+    Type: AWS::Lambda::Function
+    Condition: cEnableELBLogging
+    DependsOn: ELBLogLambdaRolePolicies
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-ELBLogsToCWLambda'
+      Description: 'This code will move your ELB logs from S3 to CloudWatch. It is
+        compressed, so quite hard to read. Original: github.com/awslabs/cloudwatch-logs-centralize-logs'
+      Role: !GetAtt 'ELBLogLambdaRole.Arn'
+      Handler: index.handler
+      Code:
+        # Ref: https://github.com/awslabs/cloudwatch-logs-centralize-logs
+        ZipFile: |
+          'use strict';
+          const aws = require('aws-sdk');
+          var zlib = require('zlib');
+          const readline = require('readline');
+          const stream = require('stream');
+
+          const s3 = new aws.S3({ apiVersion: '2006-03-01' });
+          const cloudWatchLogs = new aws.CloudWatchLogs({apiVersion: '2014-03-28'});
+
+          exports.handler = (event, context, cb) => {
+            console.log('S3 object is:', event.Records[0].s3);
+            const bucket = event.Records[0].s3.bucket.name;
+            const key = decodeURIComponent(event.Records[0].s3.object.key.replace(/\+/g, ' '));
+            const params = {
+              Bucket: bucket,
+              Key: key,
+            };
+            s3.getObject(params, (err, data) => {
+              if (err) {
+                return cb(err);
+              }
+
+              //uncompressing the S3 data
+              zlib.gunzip(data.Body, function(err, buffer){
+                if (err) {
+                  console.log('Error uncompressing data', err);
+                  return cb(err);
+                }
+
+                var logData = buffer.toString('ascii');
+                manageLogStreams(logData);
+
+                cb(null, data.ContentType);
+              });
+            });
+
+            function manageLogStreams (logData) {
+              var describeLogStreamsParams = {
+                logGroupName: process.env.LOG_GROUP,
+                logStreamNamePrefix: process.env.LOG_STREAM
+              }
+
+              cloudWatchLogs.describeLogStreams (describeLogStreamsParams, (err, data) => {
+                if (err) {
+                  return cb(err);
+                }
+
+                if (!data.logStreams[0]) {
+                  createLogStream(logData);
+                } else {
+                  putLogEvents(data.logStreams[0].uploadSeqToken, logData);
+                }
+              });
+            }
+
+            function createLogStream (logData) {
+              var logStreamParams = {
+                logGroupName: process.env.LOG_GROUP,
+                logStreamName: process.env.LOG_STREAM
+              };
+
+              cloudWatchLogs.createLogStream(logStreamParams, (err, data) => {
+                if (err) {
+                  return cb(err);
+                }
+
+                putLogEvents(null, logData);
+              });
+            }
+
+            function putLogEvents(seqToken, logData) {
+              const MAX_BATCH_SIZE = 1048576;
+              const MAX_BATCH_COUNT = 10000;
+              const LOG_EVENT_OVERHEAD = 26;
+
+              var batches = [];
+              var batch = [];
+              var batch_size = 0;
+
+              var bufferStream = new stream.PassThrough();
+              bufferStream.end(logData);
+
+              var rl = readline.createInterface({
+                input: bufferStream
+              });
+
+              var line_count = 0;
+
+              rl.on('line', (line) => {
+                ++line_count;
+
+                var ts = line.split(' ', 2)[1];
+                var tval = Date.parse(ts);
+
+                var event_size = line.length + LOG_EVENT_OVERHEAD;
+
+                batch_size += event_size;
+
+                if(batch_size >= MAX_BATCH_SIZE || batch.length >= MAX_BATCH_COUNT) {
+                  // start a new batch
+                  batches.push(batch);
+                  batch = [];
+                  batch_size = event_size;
+                }
+
+                batch.push({
+                  message: line,
+                  timestamp: tval
+                });
+              });
+
+              rl.on('close', () => {
+                // add the final batch
+                batches.push(batch);
+                sendBatches(seqToken, batches);
+              });
+            }
+
+            function sendBatches(seqToken, batches) {
+              var count = 0;
+              var batch_count = 0;
+
+              function sendNextBatch(nextSeqToken) {
+                var batch = batches.shift();
+                if(batch) {
+                  // send this batch
+                  ++batch_count;
+                  count += batch.length;
+                  sendBatch(nextSeqToken, batch, sendNextBatch);
+                } else {
+                  // we are done
+                  let msg = `Successfully put ${count} events in ${batch_count} batches`;
+                  console.log(msg);
+                  cb(null, msg);
+                }
+              }
+
+              sendNextBatch(seqToken);
+            }
+
+            function sendBatch(seqToken, batch, next) {
+              var params = {
+                logEvents: batch,
+                logGroupName: process.env.LOG_GROUP,
+                logStreamName: process.env.LOG_STREAM
+              }
+              if (seqToken) {
+                params['seqToken'] = seqToken;
+              }
+
+              params.logEvents.sort((a, b) => a.timestamp - b.timestamp);
+
+              cloudWatchLogs.putLogEvents(params, (err, data) => {
+                if (err) {
+                  console.log('Error during put log events:', err, err.stack);
+                  return cb(err, null);
+                }
+
+                console.log(`Success in putting ${params.logEvents.length} events`);
+                next(data.nextSeqToken);
+              });
+            }
+          };
+      Environment:
+        Variables:
+          LOG_GROUP: !Sub '${AWS::StackName}-elblog'
+          LOG_STREAM: 'ELB'
+      Runtime: nodejs6.10
   ####################################################################################
   # End of ELB Logging buckets
   ####################################################################################
@@ -795,6 +1049,9 @@ Resources:
         - !If [cEnableELBLogging, {Key: access_logs.s3.prefix, Value: 'ECS-ELB'}, !Ref 'AWS::NoValue']
       Subnets: [!Ref publicSubnet01, !Ref publicSubnet02]
       SecurityGroups: [!Ref ECSALBSecurityGroup]
+      Tags:
+        - Key: custom:cloudformation:depends-on
+          Value: !If [cEnableELBLogging, !Ref ELBAccessLogsBucketPolicy, !Ref 'AWS::NoValue']
   ECSTGMyApp:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
@@ -1359,6 +1616,9 @@ Resources:
         - !If [cEnableELBLogging, {Key: access_logs.s3.prefix, Value: 'CodeDeploy-ELB'}, !Ref 'AWS::NoValue']
       Subnets: [!Ref publicSubnet01, !Ref publicSubnet02]
       SecurityGroups: [!Ref CodeDeployALBSecurityGroup]
+      Tags:
+        - Key: custom:cloudformation:depends-on
+          Value: !If [cEnableELBLogging, !Ref ELBAccessLogsBucketPolicy, !Ref 'AWS::NoValue']
   CodeDeployTG:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
@@ -1813,6 +2073,15 @@ Resources:
       FilterPattern: !FindInMap [FilterPatternLookup, FlowLogs, Pattern]
       LogGroupName: !Ref VPCFlowLogsLogGroup
     Type: AWS::Logs::SubscriptionFilter
+
+  LogGrouptoLambdaMappingELBLogs:
+    Type: AWS::Logs::SubscriptionFilter
+    DependsOn: LambdaInvokePermission
+    Condition: cEnableELBtoElasticSearch
+    Properties:
+      DestinationArn: !GetAtt 'LogStreamer.Arn'
+      FilterPattern: !FindInMap [FilterPatternLookup, ELBLogs, Pattern]
+      LogGroupName: !Sub '${AWS::StackName}-elblog'
 
   LogRole:
     Condition: cEnableElasticSearchLogs
