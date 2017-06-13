@@ -411,15 +411,14 @@ Resources:
     Properties:
       DBSubnetGroupDescription: RDS Subnet Group
       SubnetIds:
-        - Fn::GetAtt: ['Networking', 'Outputs.privateSubnet01ID']
-        - Fn::GetAtt: ['Networking', 'Outputs.privateSubnet02ID']
+        - !GetAtt 'Networking.Outputs.privateSubnet01ID'
+        - !GetAtt 'Networking.Outputs.privateSubnet02ID'
   DBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     DependsOn: Networking
     Properties:
       GroupDescription: Allow Internal access to RDS Instances
-      VpcId:
-        Fn::GetAtt: ['Networking', 'Outputs.VPCID']
+      VpcId: !GetAtt 'Networking.Outputs.VPCID'
       SecurityGroupIngress:
         - SourceSecurityGroupId: !Ref EcsSecurityGroup
           FromPort: 3306
@@ -538,8 +537,8 @@ Resources:
     DependsOn: Networking
     Properties:
       VPCZoneIdentifier:
-        - Fn::GetAtt: ['Networking', 'Outputs.publicSubnet01ID']
-        - Fn::GetAtt: ['Networking', 'Outputs.publicSubnet02ID']
+        - !GetAtt 'Networking.Outputs.publicSubnet01ID'
+        - !GetAtt 'Networking.Outputs.publicSubnet02ID'
       LaunchConfigurationName: !Ref ContainerInstances
       MinSize: 2
       MaxSize: 10
@@ -588,8 +587,7 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: ECS Security Group
-      VpcId:
-        Fn::GetAtt: ['Networking', 'Outputs.VPCID']
+      VpcId: !GetAtt 'Networking.Outputs.VPCID'
       SecurityGroupIngress:
         - CidrIp: 0.0.0.0/0
           IpProtocol: tcp
@@ -606,8 +604,7 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: ECS LB Security Group
-      VpcId:
-        Fn::GetAtt: ['Networking', 'Outputs.VPCID']
+      VpcId: !GetAtt 'Networking.Outputs.VPCID'
       SecurityGroupIngress:
         - CidrIp: 0.0.0.0/0
           IpProtocol: tcp
@@ -702,8 +699,8 @@ Resources:
         - !If [cEnableELBLogging, {Key: access_logs.s3.bucket, Value: !Ref ELBAccessLogsBucket}, !Ref 'AWS::NoValue']
         - !If [cEnableELBLogging, {Key: access_logs.s3.prefix, Value: 'ECS-ELB'}, !Ref 'AWS::NoValue']
       Subnets:
-        - Fn::GetAtt: ['Networking', 'Outputs.publicSubnet01ID']
-        - Fn::GetAtt: ['Networking', 'Outputs.publicSubnet02ID']
+        - !GetAtt 'Networking.Outputs.publicSubnet01ID'
+        - !GetAtt 'Networking.Outputs.publicSubnet02ID'
       SecurityGroups: [!Ref ECSALBSecurityGroup]
   ECSTGMyApp:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
@@ -712,8 +709,7 @@ Resources:
       Name: !Sub '${AWS::StackName}-MyApp'
       Port: 3000
       Protocol: HTTP
-      VpcId:
-        Fn::GetAtt: ['Networking', 'Outputs.VPCID']
+      VpcId: !GetAtt 'Networking.Outputs.VPCID'
   ALBListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     DependsOn: [ECSTGMyApp, ECSALB]
@@ -1087,8 +1083,7 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: Enable HTTP access via port 80 and SSH access.
-      VpcId:
-        Fn::GetAtt: ['Networking', 'Outputs.VPCID']
+      VpcId: !GetAtt 'Networking.Outputs.VPCID'
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 3000
@@ -1173,8 +1168,8 @@ Resources:
     DependsOn: [Networking, CodeDeployInstances, CodeDeployTG]
     Properties:
       VPCZoneIdentifier:
-        - Fn::GetAtt: ['Networking', 'Outputs.publicSubnet01ID']
-        - Fn::GetAtt: ['Networking', 'Outputs.publicSubnet02ID']
+        - !GetAtt 'Networking.Outputs.publicSubnet01ID'
+        - !GetAtt 'Networking.Outputs.publicSubnet02ID'
       LaunchConfigurationName: !Ref CodeDeployInstances
       MinSize: 2
       MaxSize: 10
@@ -1246,8 +1241,7 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: CodeDeploy LB Security Group
-      VpcId:
-        Fn::GetAtt: ['Networking', 'Outputs.VPCID']
+      VpcId: !GetAtt 'Networking.Outputs.VPCID'
       SecurityGroupIngress:
         - CidrIp: 0.0.0.0/0
           IpProtocol: tcp
@@ -1273,8 +1267,8 @@ Resources:
         - !If [cEnableELBLogging, {Key: access_logs.s3.bucket, Value: !Ref ELBAccessLogsBucket}, !Ref 'AWS::NoValue']
         - !If [cEnableELBLogging, {Key: access_logs.s3.prefix, Value: 'CodeDeploy-ELB'}, !Ref 'AWS::NoValue']
       Subnets:
-        - Fn::GetAtt: ['Networking', 'Outputs.publicSubnet01ID']
-        - Fn::GetAtt: ['Networking', 'Outputs.publicSubnet02ID']
+        - !GetAtt 'Networking.Outputs.publicSubnet01ID'
+        - !GetAtt 'Networking.Outputs.publicSubnet02ID'
       SecurityGroups: [!Ref CodeDeployALBSecurityGroup]
   CodeDeployTG:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
@@ -1282,8 +1276,7 @@ Resources:
       Name: !Sub '${AWS::StackName}-CodeDeployTG'
       Port: 3000
       Protocol: HTTP
-      VpcId:
-        Fn::GetAtt: ['Networking', 'Outputs.VPCID']
+      VpcId: !GetAtt 'Networking.Outputs.VPCID'
   CodeDeployALBListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     DependsOn: [CodeDeployTG, CodeDeployALB]
@@ -1819,8 +1812,7 @@ Resources:
     Properties:
       DeliverLogsPermissionArn: !GetAtt 'flowlogsRole.Arn'
       LogGroupName: !Ref VPCFlowLogsLogGroup
-      ResourceId:
-        Fn::GetAtt: ['Networking', 'Outputs.VPCID']
+      ResourceId: !GetAtt 'Networking.Outputs.VPCID'
       ResourceType: VPC
       TrafficType: ALL
     Type: AWS::EC2::FlowLog
