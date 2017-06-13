@@ -16,11 +16,7 @@ Resources:
     DependsOn: [myVPC]
     Properties:
       VpcId: !Ref myVPC
-      # TODO: DNS is set to: 10.250.0.2
-      # I wanted to used: 10.250.1.0/24 but then the server don't have access to DNS server :'(
-      # Maybe useful: http://docs.aws.amazon.com/AmazonVPC/latest/UserGuide/VPC_DHCP_Options.html
       CidrBlock: 10.250.0.0/24
-      # TODO: AvailabilityZone as paramenter!
       AvailabilityZone: !Select [0, !GetAZs '']
       MapPublicIpOnLaunch: True
       Tags:
@@ -32,7 +28,6 @@ Resources:
     Properties:
       VpcId: !Ref myVPC
       CidrBlock: 10.250.2.0/24
-      # TODO: AvailabilityZone as paramenter!
       AvailabilityZone: !Select [1, !GetAZs '']
       MapPublicIpOnLaunch: True
       Tags:
@@ -44,7 +39,6 @@ Resources:
     Properties:
       VpcId: !Ref myVPC
       CidrBlock: 10.250.100.0/24
-      # TODO: AvailabilityZone as paramenter!
       AvailabilityZone: !Select [0, !GetAZs '']
       Tags:
         - Key: Name
@@ -55,7 +49,6 @@ Resources:
     Properties:
       VpcId: !Ref myVPC
       CidrBlock: 10.250.101.0/24
-      # TODO: AvailabilityZone as paramenter!
       AvailabilityZone: !Select [1, !GetAZs '']
       Tags:
         - Key: Name
@@ -73,8 +66,6 @@ Resources:
     Properties:
       VpcId: !Ref myVPC
       InternetGatewayId: !Ref InternetGateway
-  ################
-  # Public Route
   InternetPublicRoutingTable:
     Type: AWS::EC2::RouteTable
     DependsOn: [myVPC, AttachInternetGateway]
