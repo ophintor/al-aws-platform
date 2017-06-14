@@ -483,7 +483,6 @@ Resources:
   ####################################################################################
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
-    DependsOn: Networking
     Properties:
       DBSubnetGroupDescription: RDS Subnet Group
       SubnetIds:
@@ -491,7 +490,6 @@ Resources:
         - !GetAtt 'Networking.Outputs.privateSubnet02ID'
   DBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
-    DependsOn: Networking
     Properties:
       GroupDescription: Allow Internal access to RDS Instances
       VpcId: !GetAtt 'Networking.Outputs.VPCID'
@@ -856,7 +854,6 @@ Resources:
   # complete example http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/quickref-ecs.html
   ECSAutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
-    DependsOn: Networking
     Properties:
       VPCZoneIdentifier:
         - !GetAtt 'Networking.Outputs.publicSubnet01ID'
@@ -1009,7 +1006,6 @@ Resources:
                 Resource: '*'
   ECSALB:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
-    DependsOn: Networking
     Properties:
       Name: !Sub '${AWS::StackName}-ECS-LB'
       Scheme: internet-facing
@@ -1487,7 +1483,6 @@ Resources:
       Path: /
   CodeDeployAutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
-    DependsOn: Networking
     Properties:
       VPCZoneIdentifier:
         - !GetAtt 'Networking.Outputs.publicSubnet01ID'
@@ -1578,7 +1573,6 @@ Resources:
           Value: !Sub '${AWS::StackName}-CodeDeploy-LB'
   CodeDeployALB:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
-    DependsOn: Networking
     Properties:
       Name: !Sub '${AWS::StackName}-CodeDeploy-LB'
       Scheme: internet-facing
