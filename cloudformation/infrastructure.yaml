@@ -509,7 +509,6 @@ Resources:
           Value: !Sub '${AWS::StackName}-DB'
   DBInstance:
     Type: AWS::RDS::DBInstance
-    DependsOn: [DBSecurityGroup, DBSubnetGroup]
     Properties:
       AllocatedStorage: !Ref DBAllocatedStorage
       DBInstanceClass: !Ref DBClass
@@ -942,7 +941,6 @@ Resources:
           Value: !Sub '${AWS::StackName}-ECS-LB'
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
-    DependsOn: [EC2Role]
     Properties:
       Path: /
       Roles: [!Ref EC2Role]
@@ -1011,7 +1009,7 @@ Resources:
                 Resource: '*'
   ECSALB:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
-    DependsOn: [Networking, ECSALBSecurityGroup]
+    DependsOn: Networking
     Properties:
       Name: !Sub '${AWS::StackName}-ECS-LB'
       Scheme: internet-facing
@@ -1038,7 +1036,6 @@ Resources:
       VpcId: !GetAtt 'Networking.Outputs.VPCID'
   ALBListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
-    DependsOn: [ECSTGMyApp, ECSALB]
     Properties:
       DefaultActions:
         - Type: forward
@@ -1462,7 +1459,6 @@ Resources:
       Path: /
   CodeDeployLinuxEC2InstanceRoleInstanceProfile:
     Type: AWS::IAM::InstanceProfile
-    DependsOn: [CodeDeployLinuxEC2InstanceRole]
     Properties:
       Path: /
       Roles: [!Ref CodeDeployLinuxEC2InstanceRole]
@@ -1491,7 +1487,7 @@ Resources:
       Path: /
   CodeDeployAutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
-    DependsOn: [Networking, CodeDeployInstances, CodeDeployTG]
+    DependsOn: Networking
     Properties:
       VPCZoneIdentifier:
         - !GetAtt 'Networking.Outputs.publicSubnet01ID'
@@ -1582,7 +1578,7 @@ Resources:
           Value: !Sub '${AWS::StackName}-CodeDeploy-LB'
   CodeDeployALB:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
-    DependsOn: [Networking, CodeDeployALBSecurityGroup]
+    DependsOn: Networking
     Properties:
       Name: !Sub '${AWS::StackName}-CodeDeploy-LB'
       Scheme: internet-facing
@@ -1608,7 +1604,6 @@ Resources:
       VpcId: !GetAtt 'Networking.Outputs.VPCID'
   CodeDeployALBListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
-    DependsOn: [CodeDeployTG, CodeDeployALB]
     Properties:
       DefaultActions:
         - Type: forward
@@ -1620,7 +1615,6 @@ Resources:
     Type: AWS::CodeDeploy::Application
   MyAppDeployApplicationmentGroup:
     Type: AWS::CodeDeploy::DeploymentGroup
-    DependsOn: [MyAppDeployApplication, CodeDeployAutoScalingGroup, CodeDeployTrustRole]
     Properties:
       ApplicationName: !Ref MyAppDeployApplication
       DeploymentConfigName: 'CodeDeployDefault.HalfAtATime'
@@ -1676,7 +1670,6 @@ Resources:
       BucketName: !Sub '${AWS::StackName}-codepipeline-artifacts'
   ArtifactStoreS3LocationPolicy:
     Type: AWS::S3::BucketPolicy
-    DependsOn: [ArtifactStoreS3Location]
     Properties:
       Bucket: !Ref ArtifactStoreS3Location
       PolicyDocument:
@@ -1746,15 +1739,10 @@ Resources:
   MyAppPipeline:
     Type: AWS::CodePipeline::Pipeline
     DependsOn:
-      - MyAppBuildArtifact
-      - MyAppBuildDockerImage
-      - MyAppDeployApplication
-      - MyAppDeployApplicationmentGroup
       - ContainerCluster
       - ECSTGMyApp
       - ECSServiceRole
       - DBInstance
-      - ArtifactStoreS3Location
     Properties:
       Name: !Sub '${AWS::StackName}-MyApp'
       RoleArn: !GetAtt 'CodePipelineServiceRole.Arn'
@@ -1959,7 +1947,7 @@ Resources:
   #####################################################################################
   # Mapping Log groups to the Lambda that ships them to Elasticsearch
   Trail:
-    DependsOn: [TrailBucketPolicy]
+    DependsOn: TrailBucketPolicy
     Properties:
       CloudWatchLogsLogGroupArn: !GetAtt 'TrailLogGroup.Arn'
       CloudWatchLogsRoleArn: !GetAtt 'TrailLogGroupRole.Arn'
