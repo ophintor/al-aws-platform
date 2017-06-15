@@ -23,5 +23,15 @@ pipelines:
                 }
               }
             }'
+  branches:
+    master:
+      - step:
+          image: python:3.6.1
+          script:
+            - pip install awscli
+            - export BUCKET="al-cf-templates-us-east-1"
+            - aws s3api head-bucket --bucket "${BUCKET}" || aws s3api create-bucket --bucket "${BUCKET}"
+            - aws s3api put-object --bucket "${BUCKET}" --key templates/infrastructure.yaml --body cloudformation/infrastructure.yaml
+            - aws s3api put-object --bucket "${BUCKET}" --key templates/infrastructure-networking.yaml --body cloudformation/infrastructure-networking.yaml
 
 ...

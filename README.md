@@ -39,13 +39,17 @@ You need also to have an AWS account and configure the [AWS CLI](https://aws.ama
 
 ### Launch the stack
 
-You can use a *deploy* script from *utils/* folder to create the stack.
+ * Use AWS console to
+[![Launch Stack](https://s3.amazonaws.com/cloudformation-examples/cloudformation-launch-stack.png)](https://console.aws.amazon.com/cloudformation/home#/stacks/new?region=eu-west-1&stackName=al-example&templateURL=https://s3.amazonaws.com/al-cf-templates-us-east-1/templates/infrastructure.yaml)
+.
+
+ * You can also use a *deploy* script from *utils/* folder to create the stack.
 
 ```
 STACK_NAME=<stack name> REGION=<region> ./utils/deploy.sh
 ```
 
-#### Manual creation
+#### Manual creation
 
 *Note*: you need to specify your key name on parameters _KeyName_!
 
@@ -76,7 +80,7 @@ You can use a *cleanup* script from *utils/* folder to cleanup the resources cre
 STACK_NAME=<stack name> REGION=<region> ./utils/cleanup.sh
 ```
 
-#### Manual delete
+####ï¿½Manual delete
 To delete all the resources by hand from the demo you should execute this steps sequentially:
 
  1. Delete the [stack name]-Service stack. [AWS console](https://eu-west-1.console.aws.amazon.com/cloudformation/home?region=eu-west-1)
