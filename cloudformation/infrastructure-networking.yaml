@@ -13,7 +13,6 @@ Resources:
           Value: !Sub '${ParentStackName}-VPC'
   publicSubnet01:
     Type: AWS::EC2::Subnet
-    DependsOn: [myVPC]
     Properties:
       VpcId: !Ref myVPC
       CidrBlock: 10.250.0.0/24
@@ -24,7 +23,6 @@ Resources:
           Value: !Sub '${ParentStackName}-PublicSubnet01'
   publicSubnet02:
     Type: AWS::EC2::Subnet
-    DependsOn: [myVPC]
     Properties:
       VpcId: !Ref myVPC
       CidrBlock: 10.250.2.0/24
@@ -35,7 +33,6 @@ Resources:
           Value: !Sub '${ParentStackName}-PublicSubnet02'
   privateSubnet01:
     Type: AWS::EC2::Subnet
-    DependsOn: [myVPC]
     Properties:
       VpcId: !Ref myVPC
       CidrBlock: 10.250.100.0/24
@@ -45,7 +42,6 @@ Resources:
           Value: !Sub '${ParentStackName}-PrivateSubnet01'
   privateSubnet02:
     Type: AWS::EC2::Subnet
-    DependsOn: [myVPC]
     Properties:
       VpcId: !Ref myVPC
       CidrBlock: 10.250.101.0/24
@@ -62,13 +58,12 @@ Resources:
           Value: !Sub '${ParentStackName}-InternetGateway'
   AttachInternetGateway:
     Type: AWS::EC2::VPCGatewayAttachment
-    DependsOn: [myVPC, InternetGateway]
     Properties:
       VpcId: !Ref myVPC
       InternetGatewayId: !Ref InternetGateway
   InternetPublicRoutingTable:
     Type: AWS::EC2::RouteTable
-    DependsOn: [myVPC, AttachInternetGateway]
+    DependsOn: AttachInternetGateway
     Properties:
       VpcId: !Ref myVPC
       Tags:
@@ -76,20 +71,17 @@ Resources:
           Value: !Sub '${ParentStackName}-InternetRoutingTable'
   InternetPublicRoute:
     Type: AWS::EC2::Route
-    DependsOn: [InternetPublicRoutingTable]
     Properties:
       RouteTableId: !Ref InternetPublicRoutingTable
       DestinationCidrBlock: 0.0.0.0/0
       GatewayId: !Ref InternetGateway
   PublicSubnet01RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
-    DependsOn: [publicSubnet01, InternetPublicRoutingTable]
     Properties:
       SubnetId: !Ref publicSubnet01
       RouteTableId: !Ref InternetPublicRoutingTable
   PublicSubnet02RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
-    DependsOn: [publicSubnet02, InternetPublicRoutingTable]
     Properties:
       SubnetId: !Ref publicSubnet02
       RouteTableId: !Ref InternetPublicRoutingTable
