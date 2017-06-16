@@ -107,3 +107,9 @@ aws acm delete-certificate --region "eu-west-1" --certificate-arn <certificate A
 ```
 aws logs delete-log-group --region "eu-west-1" --log-group-name <group name>
 ```
+
+## Contributing
+
+This repo has an **.editorconfig** file so you should install EditorConfig in your code editor/IDE to maintain code style consistency. 
+
+E.g. VS Code: EditorConfig for VS Code - https://marketplace.visualstudio.com/items?itemName=EditorConfig.EditorConfig
