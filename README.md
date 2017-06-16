@@ -25,6 +25,9 @@ You need also to have an AWS account and configure the [AWS CLI](https://aws.ama
  * AWS IAM user within product development account
  * AWS CLI installed
  * AWS credentials configured
+ 
+If you intend to use git to push some code to codecommit, please follow the instructions on this page:
+http://docs.aws.amazon.com/codecommit/latest/userguide/setting-up-ssh-unixes.html?icmpid=docs_acc_console_connect
 
 ### Parameters Conditions Explained
  
