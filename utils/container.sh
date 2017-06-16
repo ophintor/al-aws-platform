@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 
-# This scripts accesses the first container it finds in an ECS cluster using
+# This scripts accesses the first container it finds in an ECS cluster using
 # the ECS node public IP
 
 set -eu
 
-# Ignore ssh host fingerprint check, this changes frequently and this is only
-# used for demos we should never work inside a container :)
+# Ignore ssh host fingerprint check, this changes frequently and this is only
+# used for demos we should never work inside a container :)
 readonly UNSAFE_SSH='ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no'
 
 STACK_NAME="${STACK_NAME:-presentation}"
