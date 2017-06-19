@@ -157,6 +157,37 @@ Parameters:
     Default: c4.large
     Description: WebServer EC2 instance type
     Type: String
+  InstanceCount:
+    Description: Number of Amazon EC2 instances to Launch. (Must be a number between
+      1 and 4).
+    Type: Number
+    Default: '2'
+    ConstraintDescription: Must be a number between 1 and 4.
+    MinValue: '1'
+    MaxValue: '4'
+  InstanceMaxCount:
+    Description: Maximum Number of Amazon EC2 instances in an autoscaling group. (Must
+      be a number between 4 and 8)
+    Type: Number
+    Default: '4'
+    ConstraintDescription: Must be a number between 4 and 8.
+    MinValue: '4'
+    MaxValue: '8'
+  InstanceMinCount:
+    Description: Minimum Number of Amazon EC2 instances in an autoscaling group. (Must
+      be a number between 1 and 4).
+    Type: Number
+    Default: '2'
+    ConstraintDescription: Must be a number between 1 and 4.
+    MinValue: '1'
+    MaxValue: '4'
+  SSHLocation:
+    Description: The IP address range that can be used to connect using SSH or RDP
+      to the Amazon EC2 instances.
+    Type: String
+    Default: 0.0.0.0/0
+    AllowedPattern: (\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})
+    ConstraintDescription: Must be a valid IP CIDR range of the form x.x.x.x/x.
   ELBLogging:
     Description: Enable/Disable LoadBalancers logging
     AllowedValues:
@@ -177,7 +208,7 @@ Parameters:
       - Disable
     Default: Enable
     Type: String
-  KeyName:
+  KeyPairName:
     ConstraintDescription: can contain only ASCII characters.
     Description: Name of an existing EC2 KeyPair to enable SSH access to the instances
     Type: AWS::EC2::KeyPair::KeyName
@@ -234,11 +265,15 @@ Metadata:
           - UseSpotInstances
           - InstanceType
           - OperatingSystem
+          - InstanceCount
+          - InstanceMaxCount
+          - InstanceMinCount
       - Label:
           default: 'Security: '
         Parameters:
-          - KeyName
+          - KeyPairName
           - UseHTTPS
+          - SSHLocation
       - Label:
           default: 'Notification: '
         Parameters:
@@ -262,7 +297,7 @@ Metadata:
         default: Database Instance Class
       DBAllocatedStorage:
         default: Database Storage
-      KeyName:
+      KeyPairName:
         default: Key Pair Name
       UseHTTPS:
         default: Use HTTPS
@@ -858,10 +893,10 @@ Resources:
       VPCZoneIdentifier:
         - !GetAtt 'Networking.Outputs.publicSubnet01ID'
         - !GetAtt 'Networking.Outputs.publicSubnet02ID'
-      LaunchConfigurationName: !Ref ContainerInstances
-      MinSize: 2
-      MaxSize: 10
-      DesiredCapacity: 3
+      LaunchConfigurationName: !Ref ECSLaunchConfig
+      MinSize: !Ref 'InstanceMinCount'
+      MaxSize: !Ref 'InstanceMaxCount'
+      DesiredCapacity: !Ref 'InstanceCount'
       MetricsCollection:
         - Granularity: 1Minute
           # No metrics specified, send all!
@@ -885,22 +920,66 @@ Resources:
     UpdatePolicy:
       AutoScalingReplacingUpdate:
         WillReplace: True
-  ContainerInstances:
+  ECSLaunchConfig:
     Type: AWS::AutoScaling::LaunchConfiguration
+    Metadata:
+      AWS::CloudFormation::Init:
+        services:
+          sysvint:
+            awslogs:
+              enabled: True
+              ensureRunning: True
+              files:
+                - "/etc/awslogs/awslogs.conf"
+        config:
+          packages:
+            yum:
+              awslogs: []
+          files:
+            /etc/awslogs/awslogs.conf:
+              content: !Sub |
+                [general]
+                state_file= /var/awslogs/agent-state
+                [cloud-init-outputlog]
+                file = /var/log/cloud-init-output.log
+                log_group_name =  ${LogGroupCloudInit}
+                log_stream_name = ecs.cloudinit.outputlog-{instance_id}
+                datetime_format = %d/%b/%Y:%H:%M:%S
+                [system-log]
+                file = /var/log/syslog
+                log_group_name =  ${LogGroupSysLog}
+                log_stream_name = ecs.syslog-{instance_id}
+                datetime_format = %b %d %H:%M:%S
+              mode: '000400'
+              owner: root
+              group: root
     Properties:
       # AMI list: http://docs.aws.amazon.com/AmazonECS/latest/developerguide/launch_container_instance.html
       InstanceType: !Ref InstanceType
       ImageId: !FindInMap [AWSRegionECSAMI, !Ref 'AWS::Region', 'ecs']
       SpotPrice: !If [cEnableSpotInstances, '0.05', !Ref 'AWS::NoValue']
-      KeyName: !Ref KeyName
+      KeyName: !Ref KeyPairName
       SecurityGroups: [!Ref EcsSecurityGroup]
       IamInstanceProfile: !Ref EC2InstanceProfile
       InstanceMonitoring: True
       UserData:
         Fn::Base64: !Sub |
           #!/bin/bash -xe
+
           echo ECS_CLUSTER=${ContainerCluster} >> /etc/ecs/ecs.config
           yum install -y aws-cfn-bootstrap
+
+          # We can "trap" errors and use cfn-signal to "stop" the deploy
+          function error_exit
+          {
+            /opt/aws/bin/cfn-signal -e 1 --stack ${AWS::StackName} --resource ECSAutoScalingGroup --region ${AWS::Region}
+            exit 1
+          }
+          trap 'error_exit' ERR
+
+          # Call CFN-INIT to process the metadata for CloudFormation Init.
+          /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource ECSLaunchConfig --region ${AWS::Region}
+
           /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource ECSAutoScalingGroup --region ${AWS::Region}
   EcsSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -912,7 +991,7 @@ Resources:
           IpProtocol: tcp
           FromPort: 31000
           ToPort: 61000
-        - CidrIp: 0.0.0.0/0
+        - CidrIp: !Ref 'SSHLocation'
           IpProtocol: tcp
           FromPort: 22
           ToPort: 22
@@ -1411,7 +1490,7 @@ Resources:
         - IpProtocol: tcp
           FromPort: 22
           ToPort: 22
-          CidrIp: 0.0.0.0/0
+          CidrIp: !Ref 'SSHLocation'
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-CodeDeploy'
@@ -1481,16 +1560,16 @@ Resources:
                   - autoscaling:* # something is required for CodeDeployDefault.AllAtOnce
                 Resource: '*'
       Path: /
-  CodeDeployAutoScalingGroup:
+  EC2AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
       VPCZoneIdentifier:
         - !GetAtt 'Networking.Outputs.publicSubnet01ID'
         - !GetAtt 'Networking.Outputs.publicSubnet02ID'
-      LaunchConfigurationName: !Ref CodeDeployInstances
-      MinSize: 2
-      MaxSize: 10
-      DesiredCapacity: 3
+      LaunchConfigurationName: !Ref EC2LaunchConfig
+      MinSize: !Ref 'InstanceMinCount'
+      MaxSize: !Ref 'InstanceMaxCount'
+      DesiredCapacity: !Ref 'InstanceCount'
       TargetGroupARNs: [!Ref CodeDeployTG]
       MetricsCollection:
         - Granularity: 1Minute
@@ -1506,7 +1585,31 @@ Resources:
     UpdatePolicy:
       AutoScalingReplacingUpdate:
         WillReplace: True
-  CodeDeployInstances:
+  LogGroupAppLog:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName: !Sub '${AWS::StackName}-applog'
+      RetentionInDays: 7
+  LogGroupAppErrorLog:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName: !Sub '${AWS::StackName}-apperr'
+      RetentionInDays: 7
+  LogGroupCloudInit:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName: !Sub '${AWS::StackName}-cloudinitoutput'
+      RetentionInDays: 7
+  LogGroupSysLog:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName: !Sub '${AWS::StackName}-syslog'
+      RetentionInDays: 7
+  EC2LaunchConfig:
     Type: AWS::AutoScaling::LaunchConfiguration
     Metadata:
       AWS::CloudFormation::Init:
@@ -1515,11 +1618,68 @@ Resources:
             codedeploy-agent:
               enabled: True
               ensureRunning: True
+        config:
+          packages:
+            apt:
+              mysql-client: []
+              unzip: []
+              libwww-perl: []
+              libdatetime-perl: []
+          files:
+            /tmp/cwlogs/logstreams.conf:
+              content: !Sub |
+                [general]
+                state_file= /var/awslogs/agent-state
+                [nodejs-serverlog]
+                file = /tmp/server.log
+                log_group_name =  ${LogGroupAppLog}
+                log_stream_name = nodejs.serverlog-{instance_id}
+                datetime_format = %d/%b/%Y:%H:%M:%S
+                [nodejs-errorlog]
+                file = /tmp/server.err
+                log_group_name =  ${LogGroupAppErrorLog}
+                log_stream_name = nodejs.errorlog-{instance_id}
+                datetime_format = %d/%b/%Y:%H:%M:%S
+                [cloud-init-outputlog]
+                file = /var/log/cloud-init-output.log
+                log_group_name =  ${LogGroupCloudInit}
+                log_stream_name = cloudinit.outputlog-{instance_id}
+                datetime_format = %d/%b/%Y:%H:%M:%S
+                [system-log]
+                file = /var/log/syslog
+                log_group_name =  ${LogGroupSysLog}
+                log_stream_name = syslog-{instance_id}
+                datetime_format = %b %d %H:%M:%S
+              mode: '000400'
+              owner: root
+              group: root
+            /lib/systemd/system/awslogs.service:
+              content: |
+                [Unit]
+                Description=The CloudWatch Logs agent
+                After=network.target
+                [Service]
+                Restart=always
+                TimeoutSec=infinity
+                ExecStart=/var/awslogs/bin/awslogs-agent-launcher.sh
+                [Install]
+                WantedBy=multi-user.target
+              mode: '000400'
+              owner: root
+              group: root
+            /tmp/aws_monitoring.sh:
+              content: |
+                #!/usr/bin/env bash
+                set -xu
+                (crontab -l 2>/dev/null; echo '*/1 * * * * /home/ubuntu/aws-scripts-mon/mon-put-instance-data.pl --mem-util --disk-space-util --disk-path=/ --auto-scaling=only --from-cron') | crontab -
+              mode: '000500'
+              owner: root
+              group: root
     Properties:
       ImageId: !FindInMap [AWSRegion2AMI, !Ref 'AWS::Region', !Ref OperatingSystem]
       SpotPrice: !If [cEnableSpotInstances, '0.05', !Ref 'AWS::NoValue']
       InstanceType: !Ref InstanceType
-      KeyName: !Ref KeyName
+      KeyName: !Ref KeyPairName
       SecurityGroups: [!Ref CodeDeployLinuxEC2SecurityGroup]
       IamInstanceProfile: !Ref CodeDeployLinuxEC2InstanceRoleInstanceProfile
       InstanceMonitoring: True
@@ -1528,20 +1688,27 @@ Resources:
           #!/bin/bash -ex
 
           # We can "trap" errors and use cfn-signal to "stop" the deploy
+          function error_exit
+          {
+            cfn-signal -e 1 --stack ${AWS::StackName} --resource EC2AutoScalingGroup --region ${AWS::Region}
+            exit 1
+          }
+
+          trap 'error_exit' ERR
+
+          # Update repo and get tool dependencies
+          apt-get update
+          apt-get install -y python-pip ruby
 
           # Intall CloudFormation tools....
-          apt install -y python-setuptools
-          mkdir aws-cfn-bootstrap-latest
-          curl https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz | tar xz -C aws-cfn-bootstrap-latest --strip-components 1
-          easy_install aws-cfn-bootstrap-latest
+          pip install https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz
 
-          apt-get update
-          apt-get install -y python-pip ruby wget
-          # Used to get aws to describe RDS to get conneciton string!
+          # AWS CLI Tools are used to get parameters from parameter store.
           pip install awscli
+          aws configure set region ${AWS::Region}
 
+          # Install the AWS CodeDeploy Agent.
           cd /home/ubuntu
-
           curl -O https://aws-codedeploy-${AWS::Region}.s3.amazonaws.com/latest/install
           chmod +x ./install
           ./install auto
@@ -1550,10 +1717,29 @@ Resources:
           curl -sL https://deb.nodesource.com/setup_7.x | sudo -E bash -
           apt-get install -y nodejs
 
-          apt install -y mysql-client
+          apt install -y
+
+          # Call CFN-INIT to process the metadata for CloudFormation Init. Since ubuntu does not have the tools installed, we install the CFN Bootstrap in the previous step.\n,
+          cfn-init -v --stack ${AWS::StackName} --resource EC2LaunchConfig --region ${AWS::Region}
+
+          #Download and Install the Cloudwatch Logs agent.
+          curl -O https://s3.amazonaws.com/aws-cloudwatch/downloads/latest/awslogs-agent-setup.py
+          python awslogs-agent-setup.py -n -r ${AWS::Region} -c /tmp/cwlogs/logstreams.conf
+
+          #Start the Cloudwatch logs agent service using the SYSTEMD Unit file created by cloudformation Init.
+          systemctl enable awslogs.service
+          systemctl start awslogs.service
+
+          #Download and Install the CloudWatch monitoring Script \n,
+          curl -O http://aws-cloudwatch.s3.amazonaws.com/downloads/CloudWatchMonitoringScripts-1.2.1.zip
+          unzip CloudWatchMonitoringScripts-1.2.1.zip
+          rm CloudWatchMonitoringScripts-1.2.1.zip
+          cd /tmp/
+          sudo ./aws_monitoring.sh
+          rm ./aws_monitoring.sh
 
           # All is well, so signal AutoScalingGroup.
-          $(which cfn-signal) -e 0 --stack ${AWS::StackName} --resource CodeDeployAutoScalingGroup --region ${AWS::Region}
+          $(which cfn-signal) -e 0 --stack ${AWS::StackName} --resource EC2AutoScalingGroup --region ${AWS::Region}
   CodeDeployALBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -1612,7 +1798,7 @@ Resources:
     Properties:
       ApplicationName: !Ref MyAppDeployApplication
       DeploymentConfigName: 'CodeDeployDefault.HalfAtATime'
-      AutoScalingGroups: [!Ref CodeDeployAutoScalingGroup]
+      AutoScalingGroups: [!Ref EC2AutoScalingGroup]
       ServiceRoleArn: !GetAtt 'CodeDeployTrustRole.Arn'
   CodePipelineServiceRole:
     Type: AWS::IAM::Role
