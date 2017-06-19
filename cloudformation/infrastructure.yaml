@@ -94,10 +94,10 @@ Parameters:
     Type: Number
   DBClass:
     AllowedValues:
-      - db.m1.small
-      - db.m1.large
+      - db.t2.large
+      - db.m4.large
     ConstraintDescription: must select a valid database instance type.
-    Default: db.m1.small
+    Default: db.t2.large
     Description: Database instance class
     Type: String
   DBName:
@@ -154,7 +154,7 @@ Parameters:
       - c4.xlarge
       - c4.2xlarge
     ConstraintDescription: must be a valid EC2 instance type.
-    Default: c3.large
+    Default: c4.large
     Description: WebServer EC2 instance type
     Type: String
   ELBLogging:
