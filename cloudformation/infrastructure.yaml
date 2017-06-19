@@ -189,12 +189,19 @@ Parameters:
     AllowedPattern: (\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})
     ConstraintDescription: Must be a valid IP CIDR range of the form x.x.x.x/x.
   ELBLogging:
-    Description: Enable/Disable LoadBalancers logging
+    Description: Enable / Disable LoadBalancers logging
     AllowedValues:
       - Enable
       - Disable
     Default: Disable
     Type: String
+  LogCloudTrail:
+    Type: String
+    Description: Enable / Disable CloudTrail logging
+    AllowedValues:
+      - Enable
+      - Disable
+    Default: Disable
   OperatingSystem:
     AllowedValues:
       - Ubuntu16x04
@@ -286,6 +293,7 @@ Metadata:
           - ELBLogging
           - ElasticsearchLogs
           - ElasticsearchStack
+          - LogCloudTrail
     ParameterLabels:
       DBName:
         default: Database Name
@@ -309,6 +317,8 @@ Metadata:
         default: Central Logging Elasticsearch Stack Name
       ELBLogging:
         default: Enable ELB Logging
+      LogCloudTrail:
+        default: Enable CloudTrail logging
       UseSpotInstances:
         default: Use Spot Instances
       EmailApprovals:
@@ -324,6 +334,7 @@ Conditions:
   cEnableElasticSearchLogs: !Equals [!Ref ElasticsearchLogs, 'Enable']
   cEnableELBLogging: !Equals [!Ref ELBLogging, 'Enable']
   cEnableELBtoElasticSearch: !And [!Condition cEnableElasticSearchLogs, !Condition cEnableELBLogging]
+  cEnableLogCloudTrail: !Equals [!Ref LogCloudTrail, 'Enable']
   cEnableSpotInstances: !Equals [!Ref UseSpotInstances, 'Enable']
   cEnableApprovalEmails: !Not [!Equals [!Ref EmailApprovals, '']]
   cEnableSlackApprovals: !Not [!Equals [!Ref SlackApprovalsWebhook, '']]
@@ -2128,6 +2139,7 @@ Resources:
   # Mapping Log groups to the Lambda that ships them to Elasticsearch
   Trail:
     DependsOn: TrailBucketPolicy
+    Condition: cEnableLogCloudTrail
     Properties:
       CloudWatchLogsLogGroupArn: !GetAtt 'TrailLogGroup.Arn'
       CloudWatchLogsRoleArn: !GetAtt 'TrailLogGroupRole.Arn'
@@ -2138,10 +2150,12 @@ Resources:
     Type: AWS::CloudTrail::Trail
   TrailBucket:
     DeletionPolicy: Retain
+    Condition: cEnableLogCloudTrail
     Properties: {}
     Type: AWS::S3::Bucket
   TrailBucketPolicy:
     Type: AWS::S3::BucketPolicy
+    Condition: cEnableLogCloudTrail
     Properties:
       Bucket: !Ref TrailBucket
       PolicyDocument:
@@ -2165,6 +2179,7 @@ Resources:
       LogGroupName: !Sub '/aws/cloudtrail/${AWS::StackName}'
       RetentionInDays: '7'
     Type: AWS::Logs::LogGroup
+    Condition: cEnableLogCloudTrail
   TrailLogGroupRole:
     Properties:
       AssumeRolePolicyDocument:
@@ -2187,6 +2202,7 @@ Resources:
             Version: '2012-10-17'
           PolicyName: cloudtrail-policy
     Type: AWS::IAM::Role
+    Condition: cEnableLogCloudTrail
   #####################################################################################
   # End of CloudTrail to CloudWatch
   #####################################################################################
