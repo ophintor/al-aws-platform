@@ -11,12 +11,12 @@ REGION="${REGION:-eu-west-1}"
 STACK_FILE="${STACK_FILE:-infrastructure.yaml}"
 PARAMS_FOLDER="${PARAMS_FOLDER:-${BASEDIR}/utils/demo}"
 STACK_PARAMS_FILE="${STACK_FILE%.*}.json"
-
+S3_ENDPOINT="s3$([ "${REGION}" == "us-east-1" ] || echo -n "-${REGION}" ).amazonaws.com"
 
 declare -r CF_TEMPLATE="${BASEDIR}/cloudformation/${STACK_FILE}"
 declare -r S3_BUCKET="al-cf-templates-${REGION}"
 declare -r CF_S3_OBJECT="s3://${S3_BUCKET}/${STACK_FILE}"
-declare -r S3_OBJECT_URL="https://s3-${REGION}.amazonaws.com/${S3_BUCKET}/${STACK_FILE}"
+declare -r S3_OBJECT_URL="https://${S3_ENDPOINT}/${S3_BUCKET}/${STACK_FILE}"
 
 if ! aws s3api head-bucket --region "${REGION}" --bucket "${S3_BUCKET}"; then
 	aws s3api create-bucket \
