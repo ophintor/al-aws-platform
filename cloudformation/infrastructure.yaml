@@ -105,10 +105,10 @@ Outputs:
 Parameters:
   DBAllocatedStorage:
     ConstraintDescription: must be between 5 and 1024Gb.
-    Default: '5'
+    Default: 5
     Description: The size of the database (Gb)
-    MaxValue: '1024'
-    MinValue: '5'
+    MaxValue: 1024
+    MinValue: 5
     Type: Number
   DBClass:
     AllowedValues:
@@ -179,26 +179,26 @@ Parameters:
     Description: Number of Amazon EC2 instances to Launch. (Must be a number between
       1 and 4).
     Type: Number
-    Default: '2'
+    Default: 2
     ConstraintDescription: Must be a number between 1 and 4.
-    MinValue: '1'
-    MaxValue: '4'
+    MinValue: 1
+    MaxValue: 4
   InstanceMaxCount:
     Description: Maximum Number of Amazon EC2 instances in an autoscaling group. (Must
       be a number between 4 and 8)
     Type: Number
-    Default: '4'
+    Default: 4
     ConstraintDescription: Must be a number between 4 and 8.
-    MinValue: '4'
-    MaxValue: '8'
+    MinValue: 4
+    MaxValue: 8
   InstanceMinCount:
     Description: Minimum Number of Amazon EC2 instances in an autoscaling group. (Must
       be a number between 1 and 4).
     Type: Number
-    Default: '2'
+    Default: 1
     ConstraintDescription: Must be a number between 1 and 4.
-    MinValue: '1'
-    MaxValue: '4'
+    MinValue: 1
+    MaxValue: 4
   SSHLocation:
     Description: The IP address range that can be used to connect using SSH or RDP
       to the Amazon EC2 instances.
@@ -233,6 +233,13 @@ Parameters:
       - Disable
     Default: Enable
     Type: String
+  SpotPricing:
+    Description: Price to bid on Spot Instances.
+    Type: Number
+    Default: 0.05
+    ConstraintDescription: Must be a Positive Number between 0 and 1
+    MinValue: 0
+    MaxValue: 1
   KeyPairName:
     ConstraintDescription: can contain only ASCII characters.
     Description: Name of an existing EC2 KeyPair to enable SSH access to the instances
@@ -288,6 +295,7 @@ Metadata:
           default: 'Auto-Scaling Web Server Group''s Instance Configuration: '
         Parameters:
           - UseSpotInstances
+          - SpotPricing
           - InstanceType
           - OperatingSystem
           - InstanceCount
@@ -339,6 +347,8 @@ Metadata:
         default: Enable CloudTrail logging
       UseSpotInstances:
         default: Use Spot Instances
+      SpotPricing:
+        default: Spot Instance Bid Price
       EmailApprovals:
         default: Approval Email Address
       OperationsEmail:
@@ -353,7 +363,8 @@ Conditions:
   cEnableELBLogging: !Equals [!Ref ELBLogging, 'Enable']
   cEnableELBtoElasticSearch: !And [!Condition cEnableElasticSearchLogs, !Condition cEnableELBLogging]
   cEnableLogCloudTrail: !Equals [!Ref LogCloudTrail, 'Enable']
-  cEnableSpotInstances: !Equals [!Ref UseSpotInstances, 'Enable']
+  cSpotPriceGreaterThanZero: !Not [!Equals [!Ref SpotPricing, 0]]
+  cEnableSpotInstances: !And [!Equals [!Ref UseSpotInstances, 'Enable'], !Condition cSpotPriceGreaterThanZero]
   cEnableApprovalEmails: !Not [!Equals [!Ref EmailApprovals, '']]
   cEnableSlackApprovals: !Not [!Equals [!Ref SlackApprovalsWebhook, '']]
   cEnableASGNotications: !Not [!Equals [!Ref OperationsEmail, '']]
@@ -527,7 +538,7 @@ Resources:
 
             cfnresponse.send(event, context, status, data)
       Runtime: python2.7
-      Timeout: '25'
+      Timeout: 25
   StoreEncryptedDBPassword:
     Type: Custom::SetParameterStore
     Properties:
@@ -986,7 +997,7 @@ Resources:
       # AMI list: http://docs.aws.amazon.com/AmazonECS/latest/developerguide/launch_container_instance.html
       InstanceType: !Ref InstanceType
       ImageId: !FindInMap [AWSRegionECSAMI, !Ref 'AWS::Region', 'ecs']
-      SpotPrice: !If [cEnableSpotInstances, '0.05', !Ref 'AWS::NoValue']
+      SpotPrice: !If [cEnableSpotInstances, !Ref SpotPricing, !Ref 'AWS::NoValue']
       KeyName: !Ref KeyPairName
       SecurityGroups: [!Ref EcsSecurityGroup]
       IamInstanceProfile: !Ref EC2InstanceProfile
@@ -1119,7 +1130,7 @@ Resources:
       Scheme: internet-facing
       LoadBalancerAttributes:
         - Key: idle_timeout.timeout_seconds
-          Value: '30'
+          Value: 30
         - !If [cEnableELBLogging, {Key: access_logs.s3.enabled, Value: True}, !Ref 'AWS::NoValue']
         - !If [cEnableELBLogging, {Key: access_logs.s3.bucket, Value: !Ref ELBAccessLogsBucket}, !Ref 'AWS::NoValue']
         - !If [cEnableELBLogging, {Key: access_logs.s3.prefix, Value: 'ECS-ELB'}, !Ref 'AWS::NoValue']
@@ -1706,7 +1717,7 @@ Resources:
               group: root
     Properties:
       ImageId: !FindInMap [AWSRegion2AMI, !Ref 'AWS::Region', !Ref OperatingSystem]
-      SpotPrice: !If [cEnableSpotInstances, '0.05', !Ref 'AWS::NoValue']
+      SpotPrice: !If [cEnableSpotInstances, !Ref SpotPricing, !Ref 'AWS::NoValue']
       InstanceType: !Ref InstanceType
       KeyName: !Ref KeyPairName
       SecurityGroups: [!Ref CodeDeployLinuxEC2SecurityGroup]
@@ -1793,7 +1804,7 @@ Resources:
       Scheme: internet-facing
       LoadBalancerAttributes:
         - Key: idle_timeout.timeout_seconds
-          Value: '30'
+          Value: 30
         - !If [cEnableELBLogging, {Key: access_logs.s3.enabled, Value: True}, !Ref 'AWS::NoValue']
         - !If [cEnableELBLogging, {Key: access_logs.s3.bucket, Value: !Ref ELBAccessLogsBucket}, !Ref 'AWS::NoValue']
         - !If [cEnableELBLogging, {Key: access_logs.s3.prefix, Value: 'CodeDeploy-ELB'}, !Ref 'AWS::NoValue']
@@ -2195,7 +2206,7 @@ Resources:
   TrailLogGroup:
     Properties:
       LogGroupName: !Sub '/aws/cloudtrail/${AWS::StackName}'
-      RetentionInDays: '7'
+      RetentionInDays: 7
     Type: AWS::Logs::LogGroup
     Condition: cEnableLogCloudTrail
   TrailLogGroupRole:
@@ -2312,7 +2323,7 @@ Resources:
       Handler: index.handler
       Role: !GetAtt 'LogStreamerRole.Arn'
       Runtime: nodejs4.3
-      Timeout: '300'
+      Timeout: 300
     Type: AWS::Lambda::Function
   LogStreamerRole:
     Condition: cEnableElasticSearchLogs
@@ -2583,7 +2594,7 @@ Resources:
           	.catch(callback)
           };
       Runtime: nodejs6.10
-      Timeout: '25'
+      Timeout: 25
   SlackNotificationsLambdaPermission:
     Type: AWS::Lambda::Permission
     Condition: cEnableSlackApprovals
