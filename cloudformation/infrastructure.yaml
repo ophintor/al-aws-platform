@@ -364,7 +364,13 @@ Conditions:
   cEnableELBtoElasticSearch: !And [!Condition cEnableElasticSearchLogs, !Condition cEnableELBLogging]
   cEnableLogCloudTrail: !Equals [!Ref LogCloudTrail, 'Enable']
   cSpotPriceGreaterThanZero: !Not [!Equals [!Ref SpotPricing, 0]]
-  cEnableSpotInstances: !And [!Equals [!Ref UseSpotInstances, 'Enable'], !Condition cSpotPriceGreaterThanZero, !Not [!Equals [!Sub '${AWS::Region}', 'eu-central-1']], !Not [!Equals [!Sub '${AWS::Region}', 'ap-southeast-1']], !Not [!Equals [!Sub '${AWS::Region}', 'ap-southeast-2']], !Not [!Equals [!Sub '${AWS::Region}', 'ap-northeast-1']]]
+  cEnableSpotInstances: !And
+    - !Equals [!Ref UseSpotInstances, 'Enable']
+    - !Condition cSpotPriceGreaterThanZero
+    - !Not [!Equals [!Sub '${AWS::Region}', 'eu-central-1']]
+    - !Not [!Equals [!Sub '${AWS::Region}', 'ap-southeast-1']]
+    - !Not [!Equals [!Sub '${AWS::Region}', 'ap-southeast-2']]
+    - !Not [!Equals [!Sub '${AWS::Region}', 'ap-northeast-1']]
   cEnableApprovalEmails: !Not [!Equals [!Ref EmailApprovals, '']]
   cEnableSlackApprovals: !Not [!Equals [!Ref SlackApprovalsWebhook, '']]
   cEnableASGNotications: !Not [!Equals [!Ref OperationsEmail, '']]
