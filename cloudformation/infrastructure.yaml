@@ -3,6 +3,7 @@ Description: >
   AWS CloudFormation test EC2 and ECS behind Loadbalancer for a 2-tier applcation using RDS (MySQL)
 Mappings:
   AWSRegion2AMI:
+# ubuntu/images/hvm-ssd/ubuntu-xenial-16.04-amd64-server-20170113
     us-east-1:
       Ubuntu16x04: ami-6edd3078
     us-east-2:
@@ -11,7 +12,16 @@ Mappings:
       Ubuntu16x04: ami-7c803d1c
     eu-west-1:
       Ubuntu16x04: ami-405f7226
+    eu-central-1:
+      Ubuntu16x04: ami-5aee2235
+    ap-southeast-1:
+      Ubuntu16x04: ami-b1943fd2
+    ap-southeast-2:
+      Ubuntu16x04: ami-fe71759d
+    ap-northeast-1:
+      Ubuntu16x04: ami-eb49358c
   AWSRegionECSAMI:
+# amzn-ami-2016.09.f-amazon-ecs-optimized
     us-east-1:
       ecs: ami-b2df2ca4
     us-east-2:
@@ -20,6 +30,14 @@ Mappings:
       ecs: ami-022b9262
     eu-west-1:
       ecs: ami-a7f2acc1
+    eu-central-1:
+      ecs: ami-ec2be583
+    ap-southeast-1:
+      ecs: ami-a88530cb
+    ap-southeast-2:
+      ecs: ami-8af8ffe9
+    ap-northeast-1:
+      ecs: ami-c393d6a4
   # Elasticsearch
   ## Applied at the point CloudWatch log is sent to the LogStreamer Log Group
   FilterPatternLookup:
@@ -209,7 +227,7 @@ Parameters:
     Description: Operating System Type
     Type: String
   UseSpotInstances:
-    Description: Enable/Disable Spot Instances to lower pricing. Warning t2.micro Instance Type does not work with spot instances.
+    Description: Enable/Disable Spot Instances to lower pricing. Warning t2.micro Instance Type does not work with spot instances; Frankfurt, Singapore, Sydney and Tokio regions currently does not support spot instances.
     AllowedValues:
       - Enable
       - Disable
