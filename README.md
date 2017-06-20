@@ -25,19 +25,19 @@ You need also to have an AWS account and configure the [AWS CLI](https://aws.ama
  * AWS IAM user within product development account
  * AWS CLI installed
  * AWS credentials configured
- 
+
 If you intend to use git to push some code to codecommit, please follow the instructions on this page:
 http://docs.aws.amazon.com/codecommit/latest/userguide/setting-up-ssh-unixes.html?icmpid=docs_acc_console_connect
 
 ### Parameters Conditions Explained
- 
+
  * Use DNS -> This option when enabled will map the Elastic Load Balancer to a subdomain in al-labs.co.uk
  * Use HTTPS -> This option when enabled will create a certificate using the Amazon Certificate Manager and attach it to the Elastic Load Balancer to create a secure HTTPS connection.
  * Use ElasticsearchLogs -> This option when enabled will stream logs to an Elastic Search instance.
  * Use Spot Instances -> This option when enabled will use Spot Instances instead of On-Demand Instances.
    Spot Instances cost far less than On-Demand Instances and can be used in non-critical environments like development.
    **WARNING: Spot Instances can be auto terminated by AWS when the Spot Price rises above your bid price.**
-   AWS will provide a 2 minute warning and then terminate the instance. 
+   AWS will provide a 2 minute warning and then terminate the instance.
    It is possible to fail-over to using On-Demand Instances when this happens, but this feature has not been implemented in this platform yet.
 
 ### Launch the stack
@@ -113,6 +113,7 @@ aws logs delete-log-group --region "eu-west-1" --log-group-name <group name>
 
 ## Contributing
 
-This repo has an **.editorconfig** file so you should install EditorConfig in your code editor/IDE to maintain code style consistency. 
+This repo has an **.editorconfig** file so you should install EditorConfig in your code editor/IDE to maintain code style consistency.
 
-E.g. VS Code: EditorConfig for VS Code - https://marketplace.visualstudio.com/items?itemName=EditorConfig.EditorConfig
+* VS Code - https://marketplace.visualstudio.com/items?itemName=EditorConfig.EditorConfig
+* Atom - https://atom.io/packages/editorconfig
