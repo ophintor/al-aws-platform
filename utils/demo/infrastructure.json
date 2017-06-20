@@ -1,6 +1,6 @@
 [
 	{
-		"ParameterKey": "KeyName",
+		"ParameterKey": "KeyPairName",
 		"ParameterValue": "pmarques@al"
 	},
 	{
