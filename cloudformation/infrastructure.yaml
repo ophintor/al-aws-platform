@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >
-  AWS CloudFormation test EC2 and ECS behind Loadbalancer for a 2-tier applcation using RDS (MySQL)
+  Automation Logic Cloud Platform
 Mappings:
   AWSRegion2AMI:
     us-east-1:
@@ -59,23 +59,23 @@ Mappings:
       id: 156460612806
 
 Outputs:
-  WebsiteURLCodeDeployLB:
+  EC2URL:
     Description: Website
     Value: !Join ['', [
       !If [cEnableHTTPS, 'https://', 'http://'],
-      !If [cEnableDNS, !Sub 'ec2.${AWS::StackName}.al-labs.co.uk', !Sub '${CodeDeployALB.DNSName}']]
+      !If [cEnableDNS, !Sub 'ec2.${AWS::StackName}.al-labs.co.uk', !Sub '${EC2ALB.DNSName}']]
     ]
   RepoURL:
     Description: Git Repository
     Value: !GetAtt 'CodeRepo.CloneUrlSsh'
-  ServiceURL:
+  ECSURL:
     Description: ECS LB URL
     Value: !Join ['', [
       !If [cEnableHTTPS, 'https://', 'http://'],
-      !If [cEnableDNS, !Sub 'ecs.${AWS::StackName}.al-labs.co.uk', !Sub '${CodeDeployALB.DNSName}']]
+      !If [cEnableDNS, !Sub 'ecs.${AWS::StackName}.al-labs.co.uk', !Sub '${EC2ALB.DNSName}']]
     ]
   PipelineUrl:
-    Value: !Sub 'https://console.aws.amazon.com/codepipeline/home?region=${AWS::Region}#/view/${MyAppPipeline}'
+    Value: !Sub 'https://console.aws.amazon.com/codepipeline/home?region=${AWS::Region}#/view/${CodePipeline}'
   # These exported values are sent in every request by the lambda function, not sure where they get included
   # This value below is already exported but not being picked up by the lambda function
   DomainEndpoint:
@@ -238,7 +238,7 @@ Parameters:
     AllowedValues:
       - Enable
       - Disable
-    Default: Enable
+    Default: Disable
     Type: String
   OperationsEmail:
     Description: EMail address to notify if there are any scaling operations
@@ -390,7 +390,7 @@ Resources:
               - kms:Decrypt
             Principal:
               AWS:
-                - !GetAtt 'CodeDeployLinuxEC2InstanceRole.Arn'
+                - !GetAtt 'EC2InstanceRole.Arn'
                 - !GetAtt 'TaskRole.Arn'
             Resource: '*'
   MyKeyAlias:
@@ -555,7 +555,7 @@ Resources:
           FromPort: 3306
           ToPort: 3306
           IpProtocol: tcp
-        - SourceSecurityGroupId: !Ref CodeDeployLinuxEC2SecurityGroup
+        - SourceSecurityGroupId: !Ref EC2SecurityGroup
           FromPort: 3306
           ToPort: 3306
           IpProtocol: tcp
@@ -640,7 +640,7 @@ Resources:
             Effect: Allow
             Resource:
               - !Sub 'arn:aws:s3:::${ELBAccessLogsBucket}/ECS-ELB/AWSLogs/${AWS::AccountId}/*'
-              - !Sub 'arn:aws:s3:::${ELBAccessLogsBucket}/CodeDeploy-ELB/AWSLogs/${AWS::AccountId}/*'
+              - !Sub 'arn:aws:s3:::${ELBAccessLogsBucket}/EC2-ELB/AWSLogs/${AWS::AccountId}/*'
             Principal:
               AWS:
                 - !FindInMap [AWSELBAccountID, !Ref 'AWS::Region', id]
@@ -1123,11 +1123,11 @@ Resources:
       Tags:
         - Key: custom:cloudformation:depends-on
           Value: !If [cEnableELBLogging, !Ref ELBAccessLogsBucketPolicy, !Ref 'AWS::NoValue']
-  ECSTGMyApp:
+  ECSTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
       HealthCheckPath: /
-      Name: !Sub '${AWS::StackName}-MyApp'
+      Name: !Sub '${AWS::StackName}-ECSTargetGroup'
       Port: 3000
       Protocol: HTTP
       VpcId: !GetAtt 'Networking.Outputs.VPCID'
@@ -1136,14 +1136,14 @@ Resources:
     Properties:
       DefaultActions:
         - Type: forward
-          TargetGroupArn: !Ref ECSTGMyApp
+          TargetGroupArn: !Ref ECSTargetGroup
       LoadBalancerArn: !Ref ECSALB
       Port: 80
       Protocol: HTTP
   MyRepository:
     Type: AWS::ECR::Repository
     Properties:
-      RepositoryName: !Sub '${AWS::StackName}-myapp'
+      RepositoryName: !Sub '${AWS::StackName}-containerimage'
       RepositoryPolicyText:
         Version: '2012-10-17'
         Statement:
@@ -1169,7 +1169,7 @@ Resources:
   TaskRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${AWS::StackName}-myapp-task-role'
+      RoleName: !Sub '${AWS::StackName}-ecs-task-role'
       AssumeRolePolicyDocument:
         Statement:
           - Sid: '1'
@@ -1256,250 +1256,9 @@ Resources:
   #####################################################################################
 
   #####################################################################################
-  # Start of CI/CD
+  # Start of EC2 Auto Scaling
   #####################################################################################
-  QAGroup:
-    Type: AWS::IAM::Group
-    Properties:
-      GroupName: !Sub '${AWS::StackName}-QA'
-      ManagedPolicyArns: ['arn:aws:iam::aws:policy/IAMReadOnlyAccess', 'arn:aws:iam::aws:policy/IAMUserSSHKeys']
-      Policies:
-        - PolicyName: root
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              # Pull repo
-              - Effect: Allow
-                Action:
-                  - codecommit:BatchGetRepositories
-                  - codecommit:List*
-                Resource: '*'
-              - Effect: Allow
-                Action:
-                  - codecommit:Get*
-                  - codecommit:GitPull
-                Resource:
-                  - !Sub 'arn:aws:codecommit:${AWS::Region}:${AWS::AccountId}:${AWS::StackName}-myapp'
-              - Effect: Allow
-                Action:
-                  - 'codepipeline:GetPipeline'
-                  - 'codepipeline:GetPipelineState'
-                  - 'codepipeline:GetPipelineExecution'
-                Resource:
-                  # - !Sub 'arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId):*'
-                  - !Sub 'arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}'
-              - Effect: Allow
-                Action:
-                  - 'codepipeline:PutApprovalResult'
-                Resource:
-                  - !Sub 'arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:pm-MyApp/ApprovalProduction/QAApproval'
-  DevGroup:
-    Type: AWS::IAM::Group
-    Properties:
-      GroupName: !Sub '${AWS::StackName}-Dev'
-      ManagedPolicyArns: ['arn:aws:iam::aws:policy/IAMReadOnlyAccess', 'arn:aws:iam::aws:policy/IAMUserSSHKeys']
-      Policies:
-        - PolicyName: root
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              # List repo
-              - Effect: Allow
-                Action:
-                  - codecommit:BatchGetRepositories
-                  - codecommit:List*
-                Resource: '*'
-              # Pull repo
-              - Effect: Allow
-                Action:
-                  - codecommit:Get*
-                  - codecommit:GitPull
-                  - codecommit:GitPush
-                Resource:
-                  - !Sub 'arn:aws:codecommit:${AWS::Region}:${AWS::AccountId}:${AWS::StackName}-myapp'
-  CodeRepo:
-    Type: AWS::CodeCommit::Repository
-    Properties:
-      RepositoryName: !Sub '${AWS::StackName}-myapp'
-      RepositoryDescription: A code repo for the app...
-  CodeBuildRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Sub '${AWS::StackName}-CodeBuild'
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: [codebuild.amazonaws.com]
-            Action: ['sts:AssumeRole']
-      Policies:
-        - PolicyName: root
-          PolicyDocument:
-            Statement:
-              # Login to ECR
-              - Effect: Allow
-                Action:
-                  - ecr:GetAuthorizationToken
-                Resource: '*'
-              # Publish to ECR
-              - Effect: Allow
-                Action:
-                  - ecr:BatchCheckLayerAvailability
-                  - ecr:CompleteLayerUpload
-                  - ecr:InitiateLayerUpload
-                  - ecr:PutImage
-                  - ecr:UploadLayerPart
-                Resource:
-                  # TODO: paramenterize pm=test => ImageName
-                  - !Sub 'arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/${AWS::StackName}-myapp'
-              # Pull repo
-              - Effect: Allow
-                Action:
-                  - codecommit:GitPull
-                Resource:
-                  # TODO: paramenterize pm=test => RepositoryName
-                  - !Sub 'arn:aws:codecommit:${AWS::Region}:${AWS::AccountId}:${AWS::StackName}-myapp'
-              # Write build logs
-              - Effect: Allow
-                Action:
-                  - logs:CreateLogGroup
-                  - logs:CreateLogStream
-                  - logs:PutLogEvents
-                Resource:
-                  # TODO: paramenterize pm=test => ProjectName
-                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-myapp:log-stream'
-                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-myapp:log-stream:*'
-                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-myapp-test:log-stream'
-                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-myapp-test:log-stream:*'
-                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-myapp-integration-test:log-stream'
-                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-myapp-integration-test:log-stream:*'
-                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-myapp-image:log-stream'
-                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-myapp-image:log-stream:*'
-  MyAppBuildArtifact:
-    Type: AWS::CodeBuild::Project
-    DependsOn: [CodeRepo, CodeBuildRole]
-    Properties:
-      Name: !Sub '${AWS::StackName}-myapp'
-      Description: A description about my project
-      ServiceRole: !GetAtt 'CodeBuildRole.Arn'
-      Artifacts:
-        Type: CODEPIPELINE
-      Environment:
-        # Info: http://docs.aws.amazon.com/codebuild/latest/userguide/sample-docker.html
-        Type: LINUX_CONTAINER
-        ComputeType: BUILD_GENERAL1_SMALL
-        # List of Bukd Environments
-        # http://docs.aws.amazon.com/codebuild/latest/userguide/build-env-ref.html
-        Image: aws/codebuild/nodejs:7.0.0
-      Source:
-        Location: !GetAtt 'CodeRepo.CloneUrlHttp'
-        Type: CODEPIPELINE
-        BuildSpec: !Sub |
-          version: 0.1
-          phases:
-            build:
-              commands:
-                - echo Install NodeJS dependencies...
-                - npm install --only=prod
-          artifacts:
-            files:
-              - '**/*' # All files recursively
-      TimeoutInMinutes: 300 # 5min
-  MyAppTestAartifact:
-    Type: AWS::CodeBuild::Project
-    DependsOn: [CodeRepo, CodeBuildRole]
-    Properties:
-      Name: !Sub '${AWS::StackName}-myapp-test'
-      Description: A description about my project
-      ServiceRole: !GetAtt 'CodeBuildRole.Arn'
-      Artifacts:
-        Type: CODEPIPELINE
-      Environment:
-        # Info: http://docs.aws.amazon.com/codebuild/latest/userguide/sample-docker.html
-        Type: LINUX_CONTAINER
-        ComputeType: BUILD_GENERAL1_SMALL
-        # List of Bukd Environments
-        # http://docs.aws.amazon.com/codebuild/latest/userguide/build-env-ref.html
-        Image: aws/codebuild/nodejs:7.0.0
-      Source:
-        Location: !GetAtt 'CodeRepo.CloneUrlHttp'
-        Type: CODEPIPELINE
-        BuildSpec: !Sub |
-          version: 0.1
-          phases:
-            build:
-              commands:
-                - echo Install NodeJS dev/test dependencies...
-                - npm install --only=dev
-                - npm test
-      TimeoutInMinutes: 300 # 5min
-  MyAppIntegrationTestAartifact:
-    Type: AWS::CodeBuild::Project
-    DependsOn: [CodeRepo, CodeBuildRole]
-    Properties:
-      Name: !Sub '${AWS::StackName}-myapp-integration-test'
-      Description: A description about my project
-      ServiceRole: !GetAtt 'CodeBuildRole.Arn'
-      Artifacts:
-        Type: CODEPIPELINE
-      Environment:
-        # Info: http://docs.aws.amazon.com/codebuild/latest/userguide/sample-docker.html
-        Type: LINUX_CONTAINER
-        ComputeType: BUILD_GENERAL1_SMALL
-        # List of Bukd Environments
-        # http://docs.aws.amazon.com/codebuild/latest/userguide/build-env-ref.html
-        Image: aws/codebuild/nodejs:7.0.0
-        EnvironmentVariables:
-          - Name: API_URL
-            Value: !Sub 'http://${ECSALB.DNSName}/api'
-          - Name: DB_CONNECTIONSTRING
-            Value: !Sub '${DBInstance.Endpoint.Address}'
-          - Name: DB_USERNAME
-            Value: !Sub '${DBUsername}'
-          - Name: DB_PASSWORD
-            Value: !Sub '${DBPassword'
-          - Name: DB_NAME
-            Value: !Sub '${DBName}'
-      Source:
-        Location: !GetAtt 'CodeRepo.CloneUrlHttp'
-        Type: CODEPIPELINE
-        BuildSpec: !Sub |
-          version: 0.1
-          phases:
-            build:
-              commands:
-                - echo integration tests...
-                - npm install --only=dev
-                - npm run integration-tests
-      TimeoutInMinutes: 300 # 5min
-  MyAppBuildDockerImage:
-    Type: AWS::CodeBuild::Project
-    DependsOn: [CodeRepo, CodeBuildRole]
-    Properties:
-      Name: !Sub '${AWS::StackName}-myapp-image'
-      Description: A description about my project
-      ServiceRole: !GetAtt 'CodeBuildRole.Arn'
-      Artifacts:
-        Type: CODEPIPELINE
-      Environment:
-        # Info: http://docs.aws.amazon.com/codebuild/latest/userguide/sample-docker.html
-        Type: LINUX_CONTAINER
-        ComputeType: BUILD_GENERAL1_SMALL
-        # http://docs.aws.amazon.com/codebuild/latest/userguide/build-env-ref.html
-        Image: aws/codebuild/docker:1.12.1
-        EnvironmentVariables:
-          - Name: AWS_DEFAULT_REGION
-            Value: !Ref AWS::Region
-          - Name: IMAGE_REPO_NAME
-            Value: !Sub '${AWS::StackName}-myapp'
-          - Name: AWS_ACCOUNT_ID
-            Value: !Ref AWS::AccountId
-      Source:
-        Location: !GetAtt 'CodeRepo.CloneUrlHttp'
-        Type: CODEPIPELINE
-      TimeoutInMinutes: 300 # 5min
-  CodeDeployLinuxEC2SecurityGroup:
+  EC2SecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: Enable HTTP access via port 80 and SSH access.
@@ -1515,11 +1274,11 @@ Resources:
           CidrIp: !Ref 'SSHLocation'
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-CodeDeploy'
-  CodeDeployLinuxEC2InstanceRole:
+          Value: !Sub '${AWS::StackName}-EC2'
+  EC2InstanceRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${AWS::StackName}-CodeDeploy-EC2'
+      RoleName: !Sub '${AWS::StackName}-EC2-InstanceRole'
       AssumeRolePolicyDocument:
         Statement:
           - Effect: Allow
@@ -1554,34 +1313,11 @@ Resources:
                 Resource:
                   - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:*'
       Path: /
-  CodeDeployLinuxEC2InstanceRoleInstanceProfile:
+  EC2InstanceRoleInstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
       Path: /
-      Roles: [!Ref CodeDeployLinuxEC2InstanceRole]
-  CodeDeployTrustRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Sub '${AWS::StackName}-CodeDeploy'
-      AssumeRolePolicyDocument:
-        Statement:
-          - Sid: '1'
-            Effect: Allow
-            Principal:
-              Service: [codedeploy.amazonaws.com]
-            Action: ['sts:AssumeRole']
-      Policies:
-        - PolicyName: !Sub '${AWS::StackName}-CodeDeploy-policy'
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              # Allow CodeDeploy to deploy code into EC2
-              - Effect: Allow
-                Action:
-                  - ec2:*
-                  - autoscaling:* # something is required for CodeDeployDefault.AllAtOnce
-                Resource: '*'
-      Path: /
+      Roles: [!Ref EC2InstanceRole]
   EC2AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
@@ -1592,14 +1328,14 @@ Resources:
       MinSize: !Ref 'InstanceMinCount'
       MaxSize: !Ref 'InstanceMaxCount'
       DesiredCapacity: !Ref 'InstanceCount'
-      TargetGroupARNs: [!Ref CodeDeployTG]
+      TargetGroupARNs: [!Ref EC2TG]
       MetricsCollection:
         - Granularity: 1Minute
           # No metrics specified, send all!
           # http://docs.aws.amazon.com/AutoScaling/latest/APIReference/API_EnableMetricsCollection.html
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-CodeDeploy'
+          Value: !Sub '${AWS::StackName}-EC2'
           PropagateAtLaunch: True
     CreationPolicy:
       ResourceSignal:
@@ -1607,30 +1343,6 @@ Resources:
     UpdatePolicy:
       AutoScalingReplacingUpdate:
         WillReplace: True
-  LogGroupAppLog:
-    Type: AWS::Logs::LogGroup
-    DeletionPolicy: Delete
-    Properties:
-      LogGroupName: !Sub '${AWS::StackName}-applog'
-      RetentionInDays: 7
-  LogGroupAppErrorLog:
-    Type: AWS::Logs::LogGroup
-    DeletionPolicy: Delete
-    Properties:
-      LogGroupName: !Sub '${AWS::StackName}-apperr'
-      RetentionInDays: 7
-  LogGroupCloudInit:
-    Type: AWS::Logs::LogGroup
-    DeletionPolicy: Delete
-    Properties:
-      LogGroupName: !Sub '${AWS::StackName}-cloudinitoutput'
-      RetentionInDays: 7
-  LogGroupSysLog:
-    Type: AWS::Logs::LogGroup
-    DeletionPolicy: Delete
-    Properties:
-      LogGroupName: !Sub '${AWS::StackName}-syslog'
-      RetentionInDays: 7
   EC2LaunchConfig:
     Type: AWS::AutoScaling::LaunchConfiguration
     Metadata:
@@ -1699,11 +1411,11 @@ Resources:
               group: root
     Properties:
       ImageId: !FindInMap [AWSRegion2AMI, !Ref 'AWS::Region', !Ref OperatingSystem]
-      SpotPrice: !If [cEnableSpotInstances, !Ref SpotPricing, !Ref 'AWS::NoValue']
+      SpotPrice: !If [cEnableSpotInstances, '0.05', !Ref 'AWS::NoValue']
       InstanceType: !Ref InstanceType
       KeyName: !Ref KeyPairName
-      SecurityGroups: [!Ref CodeDeployLinuxEC2SecurityGroup]
-      IamInstanceProfile: !Ref CodeDeployLinuxEC2InstanceRoleInstanceProfile
+      SecurityGroups: [!Ref EC2SecurityGroup]
+      IamInstanceProfile: !Ref EC2InstanceRoleInstanceProfile
       InstanceMonitoring: True
       UserData:
         'Fn::Base64': !Sub |
@@ -1762,7 +1474,7 @@ Resources:
 
           # All is well, so signal AutoScalingGroup.
           $(which cfn-signal) -e 0 --stack ${AWS::StackName} --resource EC2AutoScalingGroup --region ${AWS::Region}
-  CodeDeployALBSecurityGroup:
+  EC2ALBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: CodeDeploy LB Security Group
@@ -1778,47 +1490,318 @@ Resources:
           ToPort: 443
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-CodeDeploy-LB'
-  CodeDeployALB:
+          Value: !Sub '${AWS::StackName}-EC2-LB'
+  EC2ALB:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: !Sub '${AWS::StackName}-CodeDeploy-LB'
+      Name: !Sub '${AWS::StackName}-EC2-LB'
       Scheme: internet-facing
       LoadBalancerAttributes:
         - Key: idle_timeout.timeout_seconds
-          Value: 30
+          Value: '30'
         - !If [cEnableELBLogging, {Key: access_logs.s3.enabled, Value: True}, !Ref 'AWS::NoValue']
         - !If [cEnableELBLogging, {Key: access_logs.s3.bucket, Value: !Ref ELBAccessLogsBucket}, !Ref 'AWS::NoValue']
-        - !If [cEnableELBLogging, {Key: access_logs.s3.prefix, Value: 'CodeDeploy-ELB'}, !Ref 'AWS::NoValue']
+        - !If [cEnableELBLogging, {Key: access_logs.s3.prefix, Value: 'EC2-ELB'}, !Ref 'AWS::NoValue']
       Subnets:
         - !GetAtt 'Networking.Outputs.publicSubnet01ID'
         - !GetAtt 'Networking.Outputs.publicSubnet02ID'
-      SecurityGroups: [!Ref CodeDeployALBSecurityGroup]
+      SecurityGroups: [!Ref EC2ALBSecurityGroup]
       Tags:
         - Key: custom:cloudformation:depends-on
           Value: !If [cEnableELBLogging, !Ref ELBAccessLogsBucketPolicy, !Ref 'AWS::NoValue']
-  CodeDeployTG:
+  EC2TG:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: !Sub '${AWS::StackName}-CodeDeployTG'
+      Name: !Sub '${AWS::StackName}-EC2TG'
       Port: 3000
       Protocol: HTTP
       VpcId: !GetAtt 'Networking.Outputs.VPCID'
-  CodeDeployALBListener:
+  EC2ALBListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
       DefaultActions:
         - Type: forward
-          TargetGroupArn: !Ref CodeDeployTG
-      LoadBalancerArn: !Ref CodeDeployALB
+          TargetGroupArn: !Ref EC2TG
+      LoadBalancerArn: !Ref EC2ALB
       Port: 80
       Protocol: HTTP
-  MyAppDeployApplication:
+  #####################################################################################
+  # End of EC2 Auto Scaling
+  #####################################################################################
+
+  #####################################################################################
+  # Start of CI/CD
+  #####################################################################################
+  QAGroup:
+    Type: AWS::IAM::Group
+    Properties:
+      GroupName: !Sub '${AWS::StackName}-QA'
+      ManagedPolicyArns: ['arn:aws:iam::aws:policy/IAMReadOnlyAccess', 'arn:aws:iam::aws:policy/IAMUserSSHKeys']
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # Pull repo
+              - Effect: Allow
+                Action:
+                  - codecommit:BatchGetRepositories
+                  - codecommit:List*
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - codecommit:Get*
+                  - codecommit:GitPull
+                Resource:
+                  - !Sub 'arn:aws:codecommit:${AWS::Region}:${AWS::AccountId}:${AWS::StackName}-repo'
+              - Effect: Allow
+                Action:
+                  - 'codepipeline:GetPipeline'
+                  - 'codepipeline:GetPipelineState'
+                  - 'codepipeline:GetPipelineExecution'
+                Resource:
+                  # - !Sub 'arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId):*'
+                  - !Sub 'arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}'
+              - Effect: Allow
+                Action:
+                  - 'codepipeline:PutApprovalResult'
+                Resource:
+                  - !Sub 'arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:pm-MyApp/ApprovalProduction/QAApproval'
+  DevGroup:
+    Type: AWS::IAM::Group
+    Properties:
+      GroupName: !Sub '${AWS::StackName}-Dev'
+      ManagedPolicyArns: ['arn:aws:iam::aws:policy/IAMReadOnlyAccess', 'arn:aws:iam::aws:policy/IAMUserSSHKeys']
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # List repo
+              - Effect: Allow
+                Action:
+                  - codecommit:BatchGetRepositories
+                  - codecommit:List*
+                Resource: '*'
+              # Pull repo
+              - Effect: Allow
+                Action:
+                  - codecommit:Get*
+                  - codecommit:GitPull
+                  - codecommit:GitPush
+                Resource:
+                  - !Sub 'arn:aws:codecommit:${AWS::Region}:${AWS::AccountId}:${AWS::StackName}-repo'
+  CodeRepo:
+    Type: AWS::CodeCommit::Repository
+    Properties:
+      RepositoryName: !Sub '${AWS::StackName}-repo'
+      RepositoryDescription: A code repo for the application
+  CodeBuildRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${AWS::StackName}-CodeBuild'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [codebuild.amazonaws.com]
+            Action: ['sts:AssumeRole']
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Statement:
+              # Login to ECR
+              - Effect: Allow
+                Action:
+                  - ecr:GetAuthorizationToken
+                Resource: '*'
+              # Publish to ECR
+              - Effect: Allow
+                Action:
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:CompleteLayerUpload
+                  - ecr:InitiateLayerUpload
+                  - ecr:PutImage
+                  - ecr:UploadLayerPart
+                Resource:
+                  # TODO: paramenterize pm=test => ImageName
+                  - !Sub 'arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/${AWS::StackName}-containerimage'
+              # Pull repo
+              - Effect: Allow
+                Action:
+                  - codecommit:GitPull
+                Resource:
+                  # TODO: paramenterize pm=test => RepositoryName
+                  - !Sub 'arn:aws:codecommit:${AWS::Region}:${AWS::AccountId}:${AWS::StackName}-repo'
+              # Write build logs
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource:
+                  # TODO: paramenterize pm=test => ProjectName
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-build:log-stream'
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-build:log-stream:*'
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-test:log-stream'
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-test:log-stream:*'
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-integration-test:log-stream'
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-integration-test:log-stream:*'
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-ecs-image:log-stream'
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-ecs-image:log-stream:*'
+  CodeBuildArtifact:
+    Type: AWS::CodeBuild::Project
+    DependsOn: [CodeRepo, CodeBuildRole]
+    Properties:
+      Name: !Sub '${AWS::StackName}-build'
+      Description: A description about my project
+      ServiceRole: !GetAtt 'CodeBuildRole.Arn'
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        # Info: http://docs.aws.amazon.com/codebuild/latest/userguide/sample-docker.html
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        # List of Bukd Environments
+        # http://docs.aws.amazon.com/codebuild/latest/userguide/build-env-ref.html
+        Image: aws/codebuild/nodejs:7.0.0
+      Source:
+        Location: !GetAtt 'CodeRepo.CloneUrlHttp'
+        Type: CODEPIPELINE
+        BuildSpec: !Sub |
+          version: 0.1
+          phases:
+            build:
+              commands:
+                - echo Install NodeJS dependencies...
+                - npm install --only=prod
+          artifacts:
+            files:
+              - '**/*' # All files recursively
+      TimeoutInMinutes: 300 # 5min
+  CodePipelineTestArtifact:
+    Type: AWS::CodeBuild::Project
+    DependsOn: [CodeRepo, CodeBuildRole]
+    Properties:
+      Name: !Sub '${AWS::StackName}-test'
+      Description: A description about my project
+      ServiceRole: !GetAtt 'CodeBuildRole.Arn'
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        # Info: http://docs.aws.amazon.com/codebuild/latest/userguide/sample-docker.html
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        # List of Bukd Environments
+        # http://docs.aws.amazon.com/codebuild/latest/userguide/build-env-ref.html
+        Image: aws/codebuild/nodejs:7.0.0
+      Source:
+        Location: !GetAtt 'CodeRepo.CloneUrlHttp'
+        Type: CODEPIPELINE
+        BuildSpec: !Sub |
+          version: 0.1
+          phases:
+            build:
+              commands:
+                - echo Install NodeJS dev/test dependencies...
+                - npm install --only=dev
+                - npm test
+      TimeoutInMinutes: 300 # 5min
+  IntegrationTestAartifact:
+    Type: AWS::CodeBuild::Project
+    DependsOn: [CodeRepo, CodeBuildRole]
+    Properties:
+      Name: !Sub '${AWS::StackName}-integration-test'
+      Description: A description about my project
+      ServiceRole: !GetAtt 'CodeBuildRole.Arn'
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        # Info: http://docs.aws.amazon.com/codebuild/latest/userguide/sample-docker.html
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        # List of Bukd Environments
+        # http://docs.aws.amazon.com/codebuild/latest/userguide/build-env-ref.html
+        Image: aws/codebuild/nodejs:7.0.0
+        EnvironmentVariables:
+          - Name: API_URL
+            Value: !Sub 'http://${ECSALB.DNSName}/api'
+          - Name: DB_CONNECTIONSTRING
+            Value: !Sub '${DBInstance.Endpoint.Address}'
+          - Name: DB_USERNAME
+            Value: !Sub '${DBUsername}'
+          - Name: DB_PASSWORD
+            Value: !Sub '${DBPassword'
+          - Name: DB_NAME
+            Value: !Sub '${DBName}'
+      Source:
+        Location: !GetAtt 'CodeRepo.CloneUrlHttp'
+        Type: CODEPIPELINE
+        BuildSpec: !Sub |
+          version: 0.1
+          phases:
+            build:
+              commands:
+                - echo integration tests...
+                - npm install --only=dev
+                - npm run integration-tests
+      TimeoutInMinutes: 300 # 5min
+  CodeBuildDockerImage:
+    Type: AWS::CodeBuild::Project
+    DependsOn: [CodeRepo, CodeBuildRole]
+    Properties:
+      Name: !Sub '${AWS::StackName}-ecs-image'
+      Description: A description about my project
+      ServiceRole: !GetAtt 'CodeBuildRole.Arn'
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        # Info: http://docs.aws.amazon.com/codebuild/latest/userguide/sample-docker.html
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        # http://docs.aws.amazon.com/codebuild/latest/userguide/build-env-ref.html
+        Image: aws/codebuild/docker:1.12.1
+        EnvironmentVariables:
+          - Name: AWS_DEFAULT_REGION
+            Value: !Ref AWS::Region
+          - Name: IMAGE_REPO_NAME
+            Value: !Sub '${AWS::StackName}-containerimage'
+          - Name: AWS_ACCOUNT_ID
+            Value: !Ref AWS::AccountId
+      Source:
+        Location: !GetAtt 'CodeRepo.CloneUrlHttp'
+        Type: CODEPIPELINE
+      TimeoutInMinutes: 300 # 5min
+  CodeDeployTrustRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${AWS::StackName}-CodeDeploy'
+      AssumeRolePolicyDocument:
+        Statement:
+          - Sid: '1'
+            Effect: Allow
+            Principal:
+              Service: [codedeploy.amazonaws.com]
+            Action: ['sts:AssumeRole']
+      Policies:
+        - PolicyName: !Sub '${AWS::StackName}-CodeDeploy-policy'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # Allow CodeDeploy to deploy code into EC2
+              - Effect: Allow
+                Action:
+                  - ec2:*
+                  - autoscaling:* # something is required for CodeDeployDefault.AllAtOnce
+                Resource: '*'
+      Path: /
+  CodeDeployApplication:
     Type: AWS::CodeDeploy::Application
-  MyAppDeployApplicationmentGroup:
+  CodeDeployApplicationdeploymentGroup:
     Type: AWS::CodeDeploy::DeploymentGroup
     Properties:
-      ApplicationName: !Ref MyAppDeployApplication
+      ApplicationName: !Ref CodeDeployApplication
       DeploymentConfigName: 'CodeDeployDefault.HalfAtATime'
       AutoScalingGroups: [!Ref EC2AutoScalingGroup]
       ServiceRoleArn: !GetAtt 'CodeDeployTrustRole.Arn'
@@ -1848,12 +1831,12 @@ Resources:
                   - codecommit:UploadArchive
                 Resource:
                   # TODO: paramenterize pm=test => RepositoryName
-                  - !Sub 'arn:aws:codecommit:${AWS::Region}:${AWS::AccountId}:${AWS::StackName}-myapp'
+                  - !Sub 'arn:aws:codecommit:${AWS::Region}:${AWS::AccountId}:${AWS::StackName}-repo'
               - Effect: Allow
                 Action:
                   - ecr:BatchGetImage
                 Resource:
-                  - !Sub 'arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/${AWS::StackName}-myapp'
+                  - !Sub 'arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/${AWS::StackName}-containerimage'
               - Effect: Allow
                 Action:
                   - codebuild:StartBuild
@@ -1938,15 +1921,15 @@ Resources:
       Endpoint: !Sub '${EmailApprovals}'
       Protocol: email
       TopicArn: !Ref ApprovalTopic
-  MyAppPipeline:
+  CodePipeline:
     Type: AWS::CodePipeline::Pipeline
     DependsOn:
       - ContainerCluster
-      - ECSTGMyApp
+      - ECSTargetGroup
       - ECSServiceRole
       - DBInstance
     Properties:
-      Name: !Sub '${AWS::StackName}-MyApp'
+      Name: !Sub '${AWS::StackName}-pipeline'
       RoleArn: !GetAtt 'CodePipelineServiceRole.Arn'
       Stages:
         - Name: Source
@@ -1973,20 +1956,20 @@ Resources:
                 Version: 1
                 Provider: CodeBuild
               OutputArtifacts:
-                - Name: MyAppBuild
+                - Name: BuildArtifact
               Configuration:
-                ProjectName: !Ref MyAppBuildArtifact
+                ProjectName: !Ref CodeBuildArtifact
               RunOrder: 1
             - Name: TestArtifact
               InputArtifacts:
-                - Name: MyAppBuild
+                - Name: BuildArtifact
               ActionTypeId:
                 Category: Build
                 Owner: AWS
                 Version: 1
                 Provider: CodeBuild
               Configuration:
-                ProjectName: !Ref MyAppTestAartifact
+                ProjectName: !Ref CodePipelineTestArtifact
               RunOrder: 2
             - Name: BuildDockerImage
               InputArtifacts:
@@ -1999,20 +1982,20 @@ Resources:
               OutputArtifacts:
                 - Name: DockerImageOutput
               Configuration:
-                ProjectName: !Ref MyAppBuildDockerImage
+                ProjectName: !Ref CodeBuildDockerImage
         - Name: Beta
           Actions:
             - Name: BetaEC2
               InputArtifacts:
-                - Name: MyAppBuild
+                - Name: BuildArtifact
               ActionTypeId:
                 Category: Deploy
                 Owner: AWS
                 Version: 1
                 Provider: CodeDeploy
               Configuration:
-                ApplicationName: !Ref MyAppDeployApplication
-                DeploymentGroupName: !Ref MyAppDeployApplicationmentGroup
+                ApplicationName: !Ref CodeDeployApplication
+                DeploymentGroupName: !Ref CodeDeployApplicationdeploymentGroup
             - Name: BetaECS
               ActionTypeId:
                 Category: Deploy
@@ -2023,14 +2006,14 @@ Resources:
                 ChangeSetName: Deploy
                 ActionMode: CREATE_UPDATE
                 # StackName: !Ref StackName
-                StackName: !Sub '${AWS::StackName}-MyApp-Service'
+                StackName: !Sub '${AWS::StackName}-ContainerApp'
                 Capabilities: CAPABILITY_NAMED_IAM
                 # TemplatePath: Template::cloudformation.template.myapp.yaml
-                TemplatePath: SourceOutput::cloudformation/myapp.template.yaml
+                TemplatePath: SourceOutput::cloudformation/containerapp.template.yaml
                 RoleArn: !GetAtt 'CloudFormationExecutionRole.Arn'
                 # Can't be a YAML object:  Value of property Configuration must be an object with String (or simple type) properties
                 # ParameterOverrides
-                #   ECSTGMyApp: !Ref ECSTGMyApp
+                #   ECSTargetGroup: !Ref ECSTargetGroup
                 #   ECSServiceRole: !Ref ECSServiceRole
                 #   DBAddress: !GetAtt 'DBInstance.Endpoint.Address'
                 ParameterOverrides: !Sub |
@@ -2039,9 +2022,9 @@ Resources:
                     "Cluster": "${ContainerCluster}",
                     "CloudwatchLogsGroup": "${ECSTasksLogsGroup}",
                     "DockerImageTag": { "Fn::GetParam" : ["DockerImageOutput", "build.json", "tag"] },
-                    "DockerImage": "${AWS::StackName}-myapp",
+                    "DockerImage": "${AWS::StackName}-containerimage",
                     "TaskRole": "${TaskRole}",
-                    "ECSTGMyApp": "${ECSTGMyApp}",
+                    "ECSTargetGroup": "${ECSTargetGroup}",
                     "ECSServiceRole": "${ECSServiceRole}",
                     "DBAddress": "${DBInstance.Endpoint.Address}"
                   }
@@ -2052,16 +2035,16 @@ Resources:
           Actions:
             - Name: HTTP
               InputArtifacts:
-                - Name: MyAppBuild
+                - Name: BuildArtifact
               ActionTypeId:
                 Category: Build
                 Owner: AWS
                 Version: 1
                 Provider: CodeBuild
               # OutputArtifacts:
-              #  - Name: MyAppBuild
+              #  - Name: BuildArtifact
               Configuration:
-                ProjectName: !Ref MyAppIntegrationTestAartifact
+                ProjectName: !Ref IntegrationTestAartifact
         - Name: ApprovalProduction
           Actions:
             - Name: QAApproval
@@ -2072,7 +2055,7 @@ Resources:
                 Provider: Manual
               Configuration:
                 NotificationArn: !Ref ApprovalTopic
-                CustomData: !Sub 'Approval or Reject this change after running Exploratory Tests: http://${CodeDeployALB.DNSName}/'
+                CustomData: !Sub 'Approval or Reject this change after running Exploratory Tests: http://${EC2ALB.DNSName}/'
       ArtifactStore:
         Type: S3
         Location: !Ref ArtifactStoreS3Location
@@ -2081,9 +2064,40 @@ Resources:
   #####################################################################################
 
   #####################################################################################
+  # Start of Logging
+  #####################################################################################
+  LogGroupAppLog:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName: !Sub '${AWS::StackName}-applog'
+      RetentionInDays: 7
+  LogGroupAppErrorLog:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName: !Sub '${AWS::StackName}-apperr'
+      RetentionInDays: 7
+  LogGroupCloudInit:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName: !Sub '${AWS::StackName}-cloudinitoutput'
+      RetentionInDays: 7
+  LogGroupSysLog:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName: !Sub '${AWS::StackName}-syslog'
+      RetentionInDays: 7
+  #####################################################################################
+  # End of Logging
+  #####################################################################################
+
+  #####################################################################################
   # Start of Public DNS
   #####################################################################################
-  CodeDeployLBCertifcate:
+  EC2LBCertifcate:
     Type: AWS::CertificateManager::Certificate
     Properties:
       DomainName: !Sub 'ec2.${AWS::StackName}.al-labs.co.uk'
@@ -2099,31 +2113,31 @@ Resources:
         - DomainName: !Sub 'ecs.${AWS::StackName}.al-labs.co.uk'
           ValidationDomain: 'al-labs.co.uk'
     Condition: cEnableHTTPS
-  CodeDeployALBHTTPSListener:
+  EC2ALBHTTPSListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
       DefaultActions:
         - Type: forward
-          TargetGroupArn: !Ref CodeDeployTG
-      LoadBalancerArn: !Ref CodeDeployALB
+          TargetGroupArn: !Ref EC2TG
+      LoadBalancerArn: !Ref EC2ALB
       Port: 443
       Protocol: HTTPS
       Certificates:
-        - CertificateArn: !Ref CodeDeployLBCertifcate
+        - CertificateArn: !Ref EC2LBCertifcate
     Condition: cEnableHTTPS
-  ALBHTTPSListener:
+  ECSALBHTTPSListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
       DefaultActions:
         - Type: forward
-          TargetGroupArn: !Ref ECSTGMyApp
+          TargetGroupArn: !Ref ECSTargetGroup
       LoadBalancerArn: !Ref ECSALB
       Port: 443
       Protocol: HTTPS
       Certificates:
         - CertificateArn: !Ref ECSLBCertifcate
     Condition: cEnableHTTPS
-  CodeDeployDNSRecord:
+  DNSRecord:
     Type: AWS::Route53::RecordSetGroup
     Properties:
       HostedZoneName: al-labs.co.uk.
@@ -2133,8 +2147,8 @@ Resources:
         - Name: !Sub 'ec2.${AWS::StackName}.al-labs.co.uk.'
           Type: A
           AliasTarget:
-            HostedZoneId: !GetAtt 'CodeDeployALB.CanonicalHostedZoneID'
-            DNSName: !GetAtt 'CodeDeployALB.DNSName'
+            HostedZoneId: !GetAtt 'EC2ALB.CanonicalHostedZoneID'
+            DNSName: !GetAtt 'EC2ALB.DNSName'
         - Name: !Sub 'ecs.${AWS::StackName}.al-labs.co.uk.'
           Type: A
           AliasTarget:

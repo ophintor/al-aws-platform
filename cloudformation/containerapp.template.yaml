@@ -8,7 +8,7 @@ Parameters:
     Type: String
   TaskRole:
     Type: String
-  ECSTGMyApp:
+  ECSTargetGroup:
     Type: String
   ECSServiceRole:
     Type: String
@@ -39,7 +39,7 @@ Resources:
       LoadBalancers:
         - ContainerName: myapp
           ContainerPort: 3000
-          TargetGroupArn: !Ref ECSTGMyApp
+          TargetGroupArn: !Ref ECSTargetGroup
       Role: !Ref ECSServiceRole
   MyAppDefinition:
     Type: AWS::ECS::TaskDefinition

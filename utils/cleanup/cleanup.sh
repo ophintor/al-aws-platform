@@ -7,16 +7,16 @@ REGION="${REGION:-eu-west-1}"
 
 aws ecr delete-repository \
 	--region "${REGION}" \
-	--repository-name "${STACK_NAME}-myapp" \
+	--repository-name "${STACK_NAME}-containerimage" \
 	--force
 
 aws cloudformation delete-stack \
 	--region "${REGION}" \
-    --stack-name "${STACK_NAME}-MyApp-Service"
+    --stack-name "${STACK_NAME}-ContainerApp"
 
 aws cloudformation wait stack-delete-complete \
 	--region "${REGION}" \
-	--stack-name "${STACK_NAME}-MyApp-Service"
+	--stack-name "${STACK_NAME}-ContainerApp"
 
 aws cloudformation delete-stack \
 	--region "${REGION}" \
@@ -42,8 +42,10 @@ done
 
 # Cleanup Los Groups
 declare -a LOG_GROUPS=(
-	"/aws/codebuild/${STACK_NAME}-myapp"
-	"/aws/codebuild/${STACK_NAME}-myapp-image"
+	"/aws/codebuild/${STACK_NAME}-build"
+	"/aws/codebuild/${STACK_NAME}-ecs-image"
+	"/aws/codebuild/${STACK_NAME}-test"
+	"/aws/codebuild/${STACK_NAME}-integration-test"
 	"/aws/codebuild/${STACK_NAME}-application"
 	"/aws/codebuild/${STACK_NAME}-kibana"
 	"/aws/lambda/${STACK_NAME}-es-snapshots"
