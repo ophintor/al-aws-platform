@@ -3,7 +3,7 @@ Description: >
   AWS CloudFormation test EC2 and ECS behind Loadbalancer for a 2-tier applcation using RDS (MySQL)
 Mappings:
   AWSRegion2AMI:
-# ubuntu/images/hvm-ssd/ubuntu-xenial-16.04-amd64-server-20170113
+    # ubuntu/images/hvm-ssd/ubuntu-xenial-16.04-amd64-server-20170113
     us-east-1:
       Ubuntu16x04: ami-6edd3078
     us-east-2:
@@ -21,7 +21,7 @@ Mappings:
     ap-northeast-1:
       Ubuntu16x04: ami-eb49358c
   AWSRegionECSAMI:
-# amzn-ami-2016.09.f-amazon-ecs-optimized
+    # amzn-ami-2016.09.f-amazon-ecs-optimized
     us-east-1:
       ecs: ami-b2df2ca4
     us-east-2:
