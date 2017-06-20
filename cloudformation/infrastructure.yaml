@@ -215,6 +215,13 @@ Parameters:
       - Disable
     Default: Enable
     Type: String
+  SpotPricing:
+    Description: Price to bid on Spot Instances.
+    Type: Number
+    Default: 0.05
+    ConstraintDescription: Must be a Positive Number between 0 and 1
+    MinValue: 0
+    MaxValue: 1
   KeyPairName:
     ConstraintDescription: can contain only ASCII characters.
     Description: Name of an existing EC2 KeyPair to enable SSH access to the instances
@@ -270,6 +277,7 @@ Metadata:
           default: 'Auto-Scaling Web Server Group''s Instance Configuration: '
         Parameters:
           - UseSpotInstances
+          - SpotPricing
           - InstanceType
           - OperatingSystem
           - InstanceCount
@@ -321,6 +329,8 @@ Metadata:
         default: Enable CloudTrail logging
       UseSpotInstances:
         default: Use Spot Instances
+      SpotPricing:
+        default: Spot Instance Bid Price
       EmailApprovals:
         default: Approval Email Address
       OperationsEmail:
@@ -335,7 +345,8 @@ Conditions:
   cEnableELBLogging: !Equals [!Ref ELBLogging, 'Enable']
   cEnableELBtoElasticSearch: !And [!Condition cEnableElasticSearchLogs, !Condition cEnableELBLogging]
   cEnableLogCloudTrail: !Equals [!Ref LogCloudTrail, 'Enable']
-  cEnableSpotInstances: !Equals [!Ref UseSpotInstances, 'Enable']
+  cSpotPriceGreaterThanZero: !Not [!Equals [!Ref SpotPricing, 0]]
+  cEnableSpotInstances: !And [!Equals [!Ref UseSpotInstances, 'Enable'], !Condition cSpotPriceGreaterThanZero]
   cEnableApprovalEmails: !Not [!Equals [!Ref EmailApprovals, '']]
   cEnableSlackApprovals: !Not [!Equals [!Ref SlackApprovalsWebhook, '']]
   cEnableASGNotications: !Not [!Equals [!Ref OperationsEmail, '']]
@@ -968,7 +979,7 @@ Resources:
       # AMI list: http://docs.aws.amazon.com/AmazonECS/latest/developerguide/launch_container_instance.html
       InstanceType: !Ref InstanceType
       ImageId: !FindInMap [AWSRegionECSAMI, !Ref 'AWS::Region', 'ecs']
-      SpotPrice: !If [cEnableSpotInstances, '0.05', !Ref 'AWS::NoValue']
+      SpotPrice: !If [cEnableSpotInstances, !Ref SpotPricing, !Ref 'AWS::NoValue']
       KeyName: !Ref KeyPairName
       SecurityGroups: [!Ref EcsSecurityGroup]
       IamInstanceProfile: !Ref EC2InstanceProfile
@@ -1688,7 +1699,7 @@ Resources:
               group: root
     Properties:
       ImageId: !FindInMap [AWSRegion2AMI, !Ref 'AWS::Region', !Ref OperatingSystem]
-      SpotPrice: !If [cEnableSpotInstances, '0.05', !Ref 'AWS::NoValue']
+      SpotPrice: !If [cEnableSpotInstances, !Ref SpotPricing, !Ref 'AWS::NoValue']
       InstanceType: !Ref InstanceType
       KeyName: !Ref KeyPairName
       SecurityGroups: [!Ref CodeDeployLinuxEC2SecurityGroup]
