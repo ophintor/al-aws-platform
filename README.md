@@ -13,12 +13,16 @@ Instances where the code will run. The demo uses the NodeJS code present on this
 
 ### Prerequisites
 
-There are only 4 regions supporting all the resources required to create the stack:
+There are 8 regions supporting all the resources required to create the stack:
 
  * Virginia: **us-east-1**
  * Ohio: **us-east-2**
  * Oregon: **us-west-2**
  * Ireland: **eu-west-1**
+ * Frankfurt: **eu-central-1**
+ * Singapore: **ap-southeast-1**
+ * Sydney: **ap-southeast-2**
+ * Tokyo: **ap-northeast-1**
 
 You need also to have an AWS account and configure the [AWS CLI](https://aws.amazon.com/cli/):
 
@@ -39,6 +43,7 @@ http://docs.aws.amazon.com/codecommit/latest/userguide/setting-up-ssh-unixes.htm
    **WARNING: Spot Instances can be auto terminated by AWS when the Spot Price rises above your bid price.**
    AWS will provide a 2 minute warning and then terminate the instance.
    It is possible to fail-over to using On-Demand Instances when this happens, but this feature has not been implemented in this platform yet.
+   **WARNING: Spot Instances currently (June 2017) does not work in regions: Frankfurt, Singapore, Sydney, Tokyo.**
 
 ### Launch the stack
 
