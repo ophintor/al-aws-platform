@@ -4,7 +4,7 @@ set -xu
 
 service todolist status
 
-# Wait a while, otherwise curl returns 000 o0
+# Wait a while, otherwise curl returns 000 o0
 sleep 5
 
 PORT=3000
