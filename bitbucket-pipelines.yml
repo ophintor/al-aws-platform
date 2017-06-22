@@ -9,13 +9,13 @@ pipelines:
   default:
     - step:
         script:
-          - apt-get update
-          - apt-get install -y shellcheck python-pip
-          - pip install yamllint
-          - find . -not -path .git -name "*.sh" | xargs shellcheck
-          - >-
-            find . -not -path .git -iregex ".*.ya?ml" |
-            xargs yamllint -d '{
+          - &deps_linter >-
+            apt-get update &&
+            apt-get install -y shellcheck python-pip &&
+            pip install yamllint
+          - &shell_linter find . -not -path "./.git/*" -name "*.sh" | xargs shellcheck
+          - &yaml_linter >-
+            find . -not -path "./.git/*" -iregex ".*\.ya?ml" | xargs yamllint -d '{
               "extends": "default",
               "rules": {
                 "line-length": {
@@ -28,6 +28,14 @@ pipelines:
       - step:
           image: python:3.6.1
           script:
+            # - *deps_linter
+            - echo -e "deb http://deb.debian.org/debian/ unstable main contrib non-free\ndeb-src http://deb.debian.org/debian/ unstable main contrib non-free" >>/etc/apt/sources.list
+            - apt-get update &&
+              apt-get install -y -t unstable shellcheck &&
+              pip install yamllint
+            - shellcheck --version
+            - *shell_linter
+            - *yaml_linter
             - pip install awscli
             - export BUCKET="al-cf-templates-us-east-1"
             - aws s3api head-bucket --bucket "${BUCKET}" || aws s3api create-bucket --bucket "${BUCKET}"
