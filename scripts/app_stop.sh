@@ -2,8 +2,6 @@
 
 set -xe
 
-for pid in $(pidof node) ; do
-    kill -9 "${pid}"
-done
+service todolist stop
 
 echo "[WebApp] App stoped"

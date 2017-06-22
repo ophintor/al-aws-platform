@@ -2,6 +2,11 @@
 
 set -xu
 
+service todolist status
+
+# Wait a while, otherwise curl returns 000 o0
+sleep 5
+
 PORT=3000
 
 for ((i=0; i<30; ++i )); do

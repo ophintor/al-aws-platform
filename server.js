@@ -1,12 +1,19 @@
 'use strict'
+
+var path = require('path');
+var fs = require('fs');
+
 var express = require('express');
 var app = express();
 var morgan = require('morgan');
 var bodyParser = require('body-parser');
 var methodOverride = require('method-override');
+
 const PORT = process.env.PORT || 3000;
 
-app.use(morgan(':remote-addr [:date[clf]] :method :url :status :res[content-length] :response-time ":user-agent"'));
+var accessLogStream = (process.env.USE_LOG_FILE && process.env.USE_LOG_FILE.toLowerCase() === 'true') ? fs.createWriteStream(path.join('/tmp/', 'server.log'), {flags: 'a'}) : process.stdout;
+
+app.use(morgan(':remote-addr [:date[clf]] :method :url :status :res[content-length] :response-time ":user-agent"', {stream: accessLogStream}));
 app.use(express.static('./public'));
 app.use(bodyParser.urlencoded({'extended': 'true'}));
 app.use(bodyParser.json());

@@ -1,0 +1,14 @@
+[Unit]
+Description=Todo list Server
+
+[Service]
+Environment=USE_LOG_FILE=true
+WorkingDirectory=/app/
+ExecStart=/app/scripts/entrypoint.sh node /app/server.js
+Restart=always
+RestartSec=5
+StandardOutput=syslog
+StandardError=syslog
+
+[Install]
+WantedBy=multi-user.target
