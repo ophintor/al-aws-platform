@@ -65,7 +65,7 @@ Mappings:
       Pattern: '[]'
     ECS:
       Pattern: '"Container"'
-  # http://docs.aws.amazon.com/elasticloadbalancing/latest/classic/enable-access-logs.html#enable-access-logs-console
+  # http://docs.aws.amazon.com/elasticloadbalancing/latest/classic/enable-access-logs.html#enable-access-logs-console
   AWSELBAccountID:
     us-east-1:
       id: 127311923021
@@ -133,7 +133,7 @@ Parameters:
     Description: The database admin account password
     MaxLength: 41
     MinLength: 8
-    NoEcho: True
+    NoEcho: true
     Type: String
   DBUsername:
     AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
@@ -142,7 +142,7 @@ Parameters:
     Description: The database admin account username
     MaxLength: 16
     MinLength: 1
-    NoEcho: True
+    NoEcho: true
     Type: String
   ElasticsearchLogs:
     Description: Enable/Disable Elasticsearch
@@ -274,7 +274,7 @@ Parameters:
       https://api.slack.com/incoming-webhooks
       If no URL is set, slack notificaitons will be disabled/not provisioned
     Default: ''
-    NoEcho: True
+    NoEcho: true
     Type: String
 Metadata:
   AWS::CloudFormation::Interface:
@@ -554,7 +554,7 @@ Resources:
       Value: !Ref DBPassword
       Description: DataBase password
       Type: 'SecureString'
-      Overwrite: True
+      Overwrite: true
   ####################################################################################
   # End of Set Parameter Function
   ####################################################################################
@@ -606,7 +606,7 @@ Resources:
       Value: !GetAtt 'DBInstance.Endpoint.Address'
       Description: DataBase Address
       Type: 'String'
-      Overwrite: True
+      Overwrite: true
   StoreDBUsername:
     Type: Custom::SetParameterStore
     Properties:
@@ -615,7 +615,7 @@ Resources:
       Value: !Ref DBUsername
       Description: DataBase username
       Type: 'String'
-      Overwrite: True
+      Overwrite: true
   StoreDBName:
     Type: Custom::SetParameterStore
     Properties:
@@ -624,7 +624,7 @@ Resources:
       Value: !Ref DBName
       Description: DataBase Name
       Type: 'String'
-      Overwrite: True
+      Overwrite: true
   ####################################################################################
   # End of RDS
   ####################################################################################
@@ -944,13 +944,13 @@ Resources:
       MaxSize: !Ref 'InstanceMaxCount'
       DesiredCapacity: !Ref 'InstanceCount'
       MetricsCollection:
+        # No metrics specified, send all!
+        # http://docs.aws.amazon.com/AutoScaling/latest/APIReference/API_EnableMetricsCollection.html
         - Granularity: 1Minute
-          # No metrics specified, send all!
-          # http://docs.aws.amazon.com/AutoScaling/latest/APIReference/API_EnableMetricsCollection.html
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-ECS'
-          PropagateAtLaunch: True
+          PropagateAtLaunch: true
       NotificationConfiguration: !If
         - cEnableASGNotications
         - TopicARN: !Ref ECSAutoScalingNotifications
@@ -965,7 +965,7 @@ Resources:
         Timeout: PT15M
     UpdatePolicy:
       AutoScalingReplacingUpdate:
-        WillReplace: True
+        WillReplace: true
   ECSLaunchConfig:
     Type: AWS::AutoScaling::LaunchConfiguration
     Metadata:
@@ -1006,8 +1006,8 @@ Resources:
           services:
             sysvinit:
               awslogs:
-                enabled: True
-                ensureRunning: True
+                enabled: true
+                ensureRunning: true
                 files:
                   - "/etc/awslogs/awslogs.conf"
                   - "/etc/awslogs/awscli.conf"
@@ -1019,7 +1019,7 @@ Resources:
       KeyName: !Ref KeyPairName
       SecurityGroups: [!Ref ECSSecurityGroup]
       IamInstanceProfile: !Ref ECSInstanceProfile
-      InstanceMonitoring: True
+      InstanceMonitoring: true
       UserData:
         Fn::Base64: !Sub |
           #!/bin/bash -xe
@@ -1150,7 +1150,7 @@ Resources:
       LoadBalancerAttributes:
         - Key: idle_timeout.timeout_seconds
           Value: 30
-        - !If [cEnableELBLogging, {Key: access_logs.s3.enabled, Value: True}, !Ref 'AWS::NoValue']
+        - !If [cEnableELBLogging, {Key: access_logs.s3.enabled, Value: true}, !Ref 'AWS::NoValue']
         - !If [cEnableELBLogging, {Key: access_logs.s3.bucket, Value: !Ref ELBAccessLogsBucket}, !Ref 'AWS::NoValue']
         - !If [cEnableELBLogging, {Key: access_logs.s3.prefix, Value: 'ECS-ELB'}, !Ref 'AWS::NoValue']
       Subnets:
@@ -1362,19 +1362,19 @@ Resources:
       DesiredCapacity: !Ref 'InstanceCount'
       TargetGroupARNs: [!Ref EC2TG]
       MetricsCollection:
+        # No metrics specified, send all!
+        # http://docs.aws.amazon.com/AutoScaling/latest/APIReference/API_EnableMetricsCollection.html
         - Granularity: 1Minute
-          # No metrics specified, send all!
-          # http://docs.aws.amazon.com/AutoScaling/latest/APIReference/API_EnableMetricsCollection.html
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-EC2'
-          PropagateAtLaunch: True
+          PropagateAtLaunch: true
     CreationPolicy:
       ResourceSignal:
         Timeout: PT15M
     UpdatePolicy:
       AutoScalingReplacingUpdate:
-        WillReplace: True
+        WillReplace: true
   EC2LaunchConfig:
     Type: AWS::AutoScaling::LaunchConfiguration
     Metadata:
@@ -1383,8 +1383,8 @@ Resources:
           services:
             sysvint:
               codedeploy-agent:
-                enabled: True
-                ensureRunning: True
+                enabled: true
+                ensureRunning: true
           packages:
             apt:
               mysql-client: []
@@ -1448,7 +1448,7 @@ Resources:
       KeyName: !Ref KeyPairName
       SecurityGroups: [!Ref EC2SecurityGroup]
       IamInstanceProfile: !Ref EC2InstanceRoleInstanceProfile
-      InstanceMonitoring: True
+      InstanceMonitoring: true
       UserData:
         'Fn::Base64': !Sub |
           #!/bin/bash -ex
@@ -1529,7 +1529,7 @@ Resources:
       LoadBalancerAttributes:
         - Key: idle_timeout.timeout_seconds
           Value: '30'
-        - !If [cEnableELBLogging, {Key: access_logs.s3.enabled, Value: True}, !Ref 'AWS::NoValue']
+        - !If [cEnableELBLogging, {Key: access_logs.s3.enabled, Value: true}, !Ref 'AWS::NoValue']
         - !If [cEnableELBLogging, {Key: access_logs.s3.bucket, Value: !Ref ELBAccessLogsBucket}, !Ref 'AWS::NoValue']
         - !If [cEnableELBLogging, {Key: access_logs.s3.prefix, Value: 'EC2-ELB'}, !Ref 'AWS::NoValue']
       Subnets:
@@ -1709,7 +1709,7 @@ Resources:
           artifacts:
             files:
               - '**/*' # All files recursively
-      TimeoutInMinutes: 300 # 5min
+      TimeoutInMinutes: 300  # 5min
   CodePipelineTestArtifact:
     Type: AWS::CodeBuild::Project
     DependsOn: [CodeRepo, CodeBuildRole]
@@ -2765,9 +2765,9 @@ Resources:
     Properties:
       CloudWatchLogsLogGroupArn: !GetAtt 'TrailLogGroup.Arn'
       CloudWatchLogsRoleArn: !GetAtt 'TrailLogGroupRole.Arn'
-      IncludeGlobalServiceEvents: True
-      IsLogging: True
-      IsMultiRegionTrail: True
+      IncludeGlobalServiceEvents: true
+      IsLogging: true
+      IsMultiRegionTrail: true
       S3BucketName: !Ref TrailBucket
     Type: AWS::CloudTrail::Trail
   TrailBucket:
@@ -3054,7 +3054,7 @@ Resources:
       Value: !Ref SlackApprovalsWebhook
       Description: Webhook URL for approvals notifications
       Type: 'SecureString'
-      Overwrite: True
+      Overwrite: true
   SlackNotificationsLambda:
     Type: AWS::Lambda::Function
     DependsOn: MyKeyAlias

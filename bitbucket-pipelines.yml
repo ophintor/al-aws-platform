@@ -16,11 +16,15 @@ pipelines:
           - &shell_linter find . -not -path "./.git/*" -name "*.sh" | xargs shellcheck
           - &yaml_linter >-
             find . -not -path "./.git/*" -iregex ".*\.ya?ml" | xargs yamllint -d '{
-              "extends": "default",
-              "rules": {
-                "line-length": {
-                  "level": "warning"
-                }
+              extends: default,
+              rules: {
+                line-length: disable,
+                comments: {
+                  require-starting-space: true,
+                  min-spaces-from-content: 1
+                },
+                document-start: disable,
+                document-end: disable
               }
             }'
   branches:
