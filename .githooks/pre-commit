@@ -1,0 +1,88 @@
+#!/bin/sh
+
+if [ -n "${DEBUG_GIT_HOOKS}" ]; then
+	set -x
+fi
+
+declare -r RED="\033[0;31m"
+declare -r GREEN="\033[0;32m"
+declare -r BLUE="\033[0;34m"
+declare -r LIGHTBLUE="\033[0;94m"
+declare -r LIGHTCYAN="\033[0;96m"
+declare -r YELLOW="\033[0;93m"
+declare -r RESET="\033[0;0m"
+declare -r UNDERLINE="\033[0;4m"
+
+if ! which yamllint 2>&1 >/dev/null ; then
+	echo "${LIGHTCYAN}yamllint${RESET} not found but is required to check the yaml files before commit"
+	echo "please install it doing:"
+	echo
+	echo "pip install yamllint"
+	echo
+	exit 1
+fi
+
+if ! which shellcheck 2>&1 >/dev/null ; then
+	echo "${LIGHTCYAN}shellcheck${RESET} not found but is required to check the yaml files before commit"
+	echo "please install it doing:"
+	echo
+	echo "brew install shellcheck"
+	echo
+	exit 1
+fi
+
+# NOTE: tr is just usefull to debug the json!
+# Rules doc: http://yamllint.readthedocs.io/en/latest/rules.html
+YAMLLINT_CONFIG=$(cat <<-END | tr '\n' ' '
+{
+	extends: default,
+	rules: {
+		line-length: disable,
+		comments: {
+			require-starting-space: true,
+			min-spaces-from-content: 1
+		},
+		document-start: disable,
+		document-end: disable
+	}
+}
+END
+)
+
+COMMIT_FILES=$(git diff --cached --name-only)
+
+for filename in ${COMMIT_FILES}; do
+	ext="${filename##*.}"
+	case "${ext}" in
+		yaml|yml)
+			yamllint -d "${YAMLLINT_CONFIG}" "${filename}"
+			# yamllint -d "${YAMLLINT_CONFIG}" <(git show "HEAD:${filename}")
+			if [ $? -ne 0 ]; then
+				echo "${RED}YAML lint failed, fix file [${filename}] before commit!${RESET}"
+				exit 1
+			fi
+		;;
+		sh)
+			shellcheck "${filename}"
+			# shellcheck <(git show "HEAD:${filename}")
+			if [ $? -ne 0 ]; then
+				echo "${RED}SHELL lint failed, fix file [${filename}] before commit!${RESET}"
+				exit 1
+			fi
+		;;
+	esac
+done
+
+exit 0
+
+find -E . -iregex ".*.ya?ml" -not -path "./node_modules/*" | xargs yamllint -d "${YAMLLINT_CONFIG}"
+if [ $? -ne 0 ]; then
+	echo "${RED}YAML lint failed, fix before commit!${RESET}"
+	exit 1
+fi
+
+find . -name "*.sh" | xargs shellcheck
+if [ $? -ne 0 ]; then
+	echo "${RED}SHELL lint failed, fix before commit!${RESET}"
+	exit 1
+fi
