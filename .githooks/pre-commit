@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env bash
 
 if [ -n "${DEBUG_GIT_HOOKS}" ]; then
 	set -x
@@ -31,8 +31,8 @@ if ! which shellcheck 2>&1 >/dev/null ; then
 	exit 1
 fi
 
-#Â NOTE: tr is just usefull to debug the json!
-#Â Rules doc: http://yamllint.readthedocs.io/en/latest/rules.html
+# NOTE: tr is just usefull to debug the json!
+# Rules doc: http://yamllint.readthedocs.io/en/latest/rules.html
 YAMLLINT_CONFIG=$(cat <<-END | tr '\n' ' '
 {
 	extends: default,
