@@ -944,9 +944,9 @@ Resources:
       MaxSize: !Ref 'InstanceMaxCount'
       DesiredCapacity: !Ref 'InstanceCount'
       MetricsCollection:
+        # No metrics specified, send all!
+        # http://docs.aws.amazon.com/AutoScaling/latest/APIReference/API_EnableMetricsCollection.html
         - Granularity: 1Minute
-          # No metrics specified, send all!
-          # http://docs.aws.amazon.com/AutoScaling/latest/APIReference/API_EnableMetricsCollection.html
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-ECS'
@@ -1362,9 +1362,9 @@ Resources:
       DesiredCapacity: !Ref 'InstanceCount'
       TargetGroupARNs: [!Ref EC2TG]
       MetricsCollection:
+        # No metrics specified, send all!
+        # http://docs.aws.amazon.com/AutoScaling/latest/APIReference/API_EnableMetricsCollection.html
         - Granularity: 1Minute
-          # No metrics specified, send all!
-          # http://docs.aws.amazon.com/AutoScaling/latest/APIReference/API_EnableMetricsCollection.html
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-EC2'
