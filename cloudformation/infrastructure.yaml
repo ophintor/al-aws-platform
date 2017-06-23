@@ -195,7 +195,7 @@ Parameters:
     Description: Minimum Number of Amazon EC2 instances in an autoscaling group. (Must
       be a number between 1 and 4).
     Type: Number
-    Default: 1
+    Default: 2
     ConstraintDescription: Must be a number between 1 and 4.
     MinValue: 1
     MaxValue: 4
@@ -575,7 +575,7 @@ Resources:
       GroupDescription: Allow Internal access to RDS Instances
       VpcId: !GetAtt 'Networking.Outputs.VPCID'
       SecurityGroupIngress:
-        - SourceSecurityGroupId: !Ref EcsSecurityGroup
+        - SourceSecurityGroupId: !Ref ECSSecurityGroup
           FromPort: 3306
           ToPort: 3306
           IpProtocol: tcp
@@ -970,43 +970,55 @@ Resources:
     Type: AWS::AutoScaling::LaunchConfiguration
     Metadata:
       AWS::CloudFormation::Init:
-        services:
-          sysvint:
-            awslogs:
-              enabled: True
-              ensureRunning: True
-              files:
-                - "/etc/awslogs/awslogs.conf"
         config:
           packages:
             yum:
               awslogs: []
           files:
+            # Configuration file for awslogs (yum package) is needed as there is no other convenient way to pass region info
+            # EC2 launch config uses a python script where we directly pass parameters for region
+            /etc/awslogs/awscli.conf:
+              content: !Sub |
+                [plugins]
+                cwlogs = cwlogs
+                [default]
+                region = ${AWS::Region}
+              mode: '000400'
+              owner: root
+              group: root
             /etc/awslogs/awslogs.conf:
               content: !Sub |
                 [general]
-                state_file= /var/awslogs/agent-state
+                state_file = /var/lib/awslogs/agent-state
                 [cloud-init-outputlog]
                 file = /var/log/cloud-init-output.log
                 log_group_name =  ${LogGroupCloudInit}
-                log_stream_name = ecs.cloudinit.outputlog-{instance_id}
+                log_stream_name = cloudinit.outputlog-{instance_id}
                 datetime_format = %d/%b/%Y:%H:%M:%S
                 [system-log]
-                file = /var/log/syslog
+                file = /var/log/messages
                 log_group_name =  ${LogGroupSysLog}
-                log_stream_name = ecs.syslog-{instance_id}
+                log_stream_name = syslog-{instance_id}
                 datetime_format = %b %d %H:%M:%S
               mode: '000400'
               owner: root
               group: root
+          services:
+            sysvinit:
+              awslogs:
+                enabled: True
+                ensureRunning: True
+                files:
+                  - "/etc/awslogs/awslogs.conf"
+                  - "/etc/awslogs/awscli.conf"
     Properties:
       # AMI list: http://docs.aws.amazon.com/AmazonECS/latest/developerguide/launch_container_instance.html
       InstanceType: !Ref InstanceType
       ImageId: !FindInMap [AWSRegionECSAMI, !Ref 'AWS::Region', 'ecs']
       SpotPrice: !If [cEnableSpotInstances, !Ref SpotPricing, !Ref 'AWS::NoValue']
       KeyName: !Ref KeyPairName
-      SecurityGroups: [!Ref EcsSecurityGroup]
-      IamInstanceProfile: !Ref EC2InstanceProfile
+      SecurityGroups: [!Ref ECSSecurityGroup]
+      IamInstanceProfile: !Ref ECSInstanceProfile
       InstanceMonitoring: True
       UserData:
         Fn::Base64: !Sub |
@@ -1027,7 +1039,7 @@ Resources:
           /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource ECSLaunchConfig --region ${AWS::Region}
 
           /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource ECSAutoScalingGroup --region ${AWS::Region}
-  EcsSecurityGroup:
+  ECSSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: ECS Security Group
@@ -1061,15 +1073,15 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-ECS-LB'
-  EC2InstanceProfile:
+  ECSInstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
       Path: /
-      Roles: [!Ref EC2Role]
-  EC2Role:
+      Roles: [!Ref ECSInstanceRole]
+  ECSInstanceRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${AWS::StackName}-ECS-EC2'
+      RoleName: !Sub '${AWS::StackName}-ECSInstanceRole'
       AssumeRolePolicyDocument:
         Statement:
           - Effect: Allow
@@ -1090,6 +1102,7 @@ Resources:
                   - 'ecs:RegisterContainerInstance'
                   - 'ecs:StartTelemetrySession'
                   - 'ecs:Submit*'
+                  - 'logs:CreateLogGroup'
                   - 'logs:CreateLogStream'
                   - 'logs:PutLogEvents'
                 Resource: '*'
@@ -1185,11 +1198,6 @@ Resources:
               - ecr:UploadLayerPart
               - ecr:CompleteLayerUpload
   # Crate Log Group to setup the retention time of ECS task logs
-  ECSTasksLogsGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: !Sub '${AWS::StackName}-ecs'
-      RetentionInDays: 1
   TaskRole:
     Type: AWS::IAM::Role
     Properties:
@@ -1371,12 +1379,12 @@ Resources:
     Type: AWS::AutoScaling::LaunchConfiguration
     Metadata:
       AWS::CloudFormation::Init:
-        services:
-          sysvint:
-            codedeploy-agent:
-              enabled: True
-              ensureRunning: True
         config:
+          services:
+            sysvint:
+              codedeploy-agent:
+                enabled: True
+                ensureRunning: True
           packages:
             apt:
               mysql-client: []
@@ -1393,11 +1401,11 @@ Resources:
                 log_group_name =  ${LogGroupAppLog}
                 log_stream_name = nodejs.serverlog-{instance_id}
                 datetime_format = %d/%b/%Y:%H:%M:%S
-                [nodejs-errorlog]
-                file = /tmp/server.err
-                log_group_name =  ${LogGroupAppErrorLog}
-                log_stream_name = nodejs.errorlog-{instance_id}
-                datetime_format = %d/%b/%Y:%H:%M:%S
+                # [nodejs-errorlog]
+                # file = /tmp/server.err
+                # log_group_name =  ${!LogGroupAppErrorLog}
+                # log_stream_name = nodejs.errorlog-{instance_id}
+                # datetime_format = %d/%b/%Y:%H:%M:%S
                 [cloud-init-outputlog]
                 file = /var/log/cloud-init-output.log
                 log_group_name =  ${LogGroupCloudInit}
@@ -1474,8 +1482,6 @@ Resources:
           # https://nodejs.org/en/download/package-manager/#debian-and-ubuntu-based-linux-distributions
           curl -sL https://deb.nodesource.com/setup_7.x | sudo -E bash -
           apt-get install -y nodejs
-
-          apt install -y
 
           # Call CFN-INIT to process the metadata for CloudFormation Init. Since ubuntu does not have the tools installed, we install the CFN Bootstrap in the previous step.\n,
           cfn-init -v --stack ${AWS::StackName} --resource EC2LaunchConfig --region ${AWS::Region}
@@ -2044,7 +2050,7 @@ Resources:
                   {
                     "ParamsPrefix": "${AWS::StackName}",
                     "Cluster": "${ContainerCluster}",
-                    "CloudwatchLogsGroup": "${ECSTasksLogsGroup}",
+                    "CloudwatchLogsGroup": "${LogGroupAppLog}",
                     "DockerImageTag": { "Fn::GetParam" : ["DockerImageOutput", "build.json", "tag"] },
                     "DockerImage": "${AWS::StackName}-containerimage",
                     "TaskRole": "${TaskRole}",
@@ -2088,7 +2094,7 @@ Resources:
   #####################################################################################
 
   #####################################################################################
-  # Start of Logging
+  # Start of Log Groups
   #####################################################################################
   LogGroupAppLog:
     Type: AWS::Logs::LogGroup
@@ -2096,12 +2102,15 @@ Resources:
     Properties:
       LogGroupName: !Sub '${AWS::StackName}-applog'
       RetentionInDays: 7
-  LogGroupAppErrorLog:
-    Type: AWS::Logs::LogGroup
-    DeletionPolicy: Delete
-    Properties:
-      LogGroupName: !Sub '${AWS::StackName}-apperr'
-      RetentionInDays: 7
+  ### Temporarly commented out as stdout and stderr are combined
+  ### Please note that the log agent configuration (for EC2) has
+  ### the error log section commented out
+  # LogGroupAppErrorLog:
+  #   Type: AWS::Logs::LogGroup
+  #   DeletionPolicy: Delete
+  #   Properties:
+  #     LogGroupName: !Sub '${AWS::StackName}-apperr'
+  #     RetentionInDays: 7
   LogGroupCloudInit:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Delete
@@ -2114,8 +2123,572 @@ Resources:
     Properties:
       LogGroupName: !Sub '${AWS::StackName}-syslog'
       RetentionInDays: 7
+  ######
+  LogStoreS3Location:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    Properties:
+      BucketName: !Sub '${AWS::StackName}-logs'
+      LifecycleConfiguration:
+        Rules:
+          - ExpirationInDays: 90
+            Id: !Sub '${AWS::StackName}-LogMigrationLifecycleRule'
+            Status: Enabled
+            Transitions:
+              - StorageClass: STANDARD_IA
+                TransitionInDays: 30
+              - StorageClass: GLACIER
+                TransitionInDays: 60
+  LogStoreS3LocationPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref 'LogStoreS3Location'
+      PolicyDocument:
+        Statement:
+          - Sid: AWSCloudWatchLogsAclCheck
+            Effect: Allow
+            Principal:
+              Service: !Sub 'logs.${AWS::Region}.amazonaws.com'
+            Action: s3:GetBucketAcl
+            Resource:
+              - !Sub 'arn:aws:s3:::${AWS::StackName}-logs'
+          - Sid: AWSCloudWatchLogsWrite
+            Effect: Allow
+            Principal:
+              Service: !Sub 'logs.${AWS::Region}.amazonaws.com'
+            Action: s3:PutObject
+            Resource:
+              - !Sub 'arn:aws:s3:::${AWS::StackName}-logs/*'
+            Condition:
+              StringEquals:
+                s3:x-amz-acl: bucket-owner-full-control
+          - Sid: AWSCloudTrailAclCheck
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource: !Sub 'arn:aws:s3:::${LogStoreS3Location}'
+          - Sid: AWSCloudTrailWrite
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub 'arn:aws:s3:::${LogStoreS3Location}/AWSLogs/${AWS::AccountId}/*'
+            Condition:
+              StringEquals:
+                s3:x-amz-acl: bucket-owner-full-control
+  LogMigrationLambdaRole:
+    Type: AWS::IAM::Role
+    Metadata:
+      Comment: Lambda Role to allow log migration from cloudwatch logs to S3
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+  LogMigrationLambdaRolePolicies:
+    Type: AWS::IAM::Policy
+    Metadata:
+      Comment: 'IAM Policy attached to Role for the Log Migration Lambda. '
+    Properties:
+      PolicyName: LogMigrationLambdaRolePolicy
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Action:
+              - logs:CreateExportTask
+            Resource:
+              - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${AWS::StackName}*:*'
+          - Effect: Allow
+            Action:
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}-LogMigrationLambda:*'
+          - Effect: Allow
+            Action:
+              - s3:PutObject
+            Resource:
+              - !Sub 'arn:aws:s3:::${AWS::StackName}-logs/*'
+      Roles:
+        - !Ref 'LogMigrationLambdaRole'
+  LogMigrationScheduledRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: ScheduledRule
+      ScheduleExpression: rate(59 minutes)
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt 'LogMigrationLambda.Arn'
+          Id: TargetFunctionV1
+  PermissionForEventsToInvokeLogMigrationLambda:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref 'LogMigrationLambda'
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt 'LogMigrationScheduledRule.Arn'
+  LogMigrationLambdaLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-LogMigrationLambda'
+      RetentionInDays: 1
+  LogMigrationLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: index.lambda_handler
+      FunctionName: !Sub '${AWS::StackName}-LogMigrationLambda'
+      Role: !GetAtt 'LogMigrationLambdaRole.Arn'
+      Code:
+        ZipFile: !Sub |
+          var AWS = require('aws-sdk');
+          exports.lambda_handler = function (event, context) {
+            try {
+              var cloudwatchlogs = new AWS.CloudWatchLogs();
+              var now = new Date();
+              var params = {
+                destination:'${AWS::StackName}-logs',
+                from: now.getTime() - 3600000,
+                logGroupName:'${AWS::StackName}-applog',
+                to: now.getTime(),
+                taskName: 'LogTask_applog_'+now.getTime().toString()
+              };
+              console.log('Log Migrate Action Called with Params : ' + JSON.stringify(params));
+              cloudwatchlogs.createExportTask(params, function(err, data) {
+                if (err){
+                  console.log('Error : ' + err, err.stack);
+                }
+                else {
+                  console.log('Success : ' + data);
+                }
+              });
+            }
+            catch (err) {
+              console.log('General Error.');
+              console.log(err);
+            }
+          };
+      Runtime: nodejs6.10
+      Timeout: '300'
   #####################################################################################
-  # End of Logging
+  # End of Log Groups
+  #####################################################################################
+
+  #####################################################################################
+  # Start of Metrics and Filters
+  #####################################################################################
+  ### LogGroupAppLog
+  AppRestartMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref 'LogGroupAppLog'
+      FilterPattern: App listening on port
+      MetricTransformations:
+        - MetricNamespace: !Sub '${AWS::StackName}'
+          MetricName: App Restarts
+          MetricValue: '1'
+  AppGETsMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref 'LogGroupAppLog'
+      FilterPattern: '[ip, timestamp, method=G, url, status_code,bytes,responsetime,useragent]'
+      MetricTransformations:
+        - MetricNamespace: !Sub '${AWS::StackName}'
+          MetricName: GETs
+          MetricValue: '1'
+  AppPOSTsMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref 'LogGroupAppLog'
+      FilterPattern: '[ip, timestamp, method=POST, url, status_code,bytes,responsetime,useragent]'
+      MetricTransformations:
+        - MetricNamespace: !Sub '${AWS::StackName}'
+          MetricName: POSTs
+          MetricValue: '1'
+  AppDELETEsMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref 'LogGroupAppLog'
+      FilterPattern: '[ip, timestamp, method=DELETE, url, status_code,bytes,responsetime,useragent]'
+      MetricTransformations:
+        - MetricNamespace: !Sub '${AWS::StackName}'
+          MetricName: DELETEs
+          MetricValue: '1'
+  AppBytesOutMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref 'LogGroupAppLog'
+      FilterPattern: '[ip, timestamp, method, url, status_code,bytes,responsetime,useragent]'
+      MetricTransformations:
+        - MetricNamespace: !Sub '${AWS::StackName}'
+          MetricName: Bytes_Out
+          MetricValue: $bytes
+  App4xxsMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref 'LogGroupAppLog'
+      FilterPattern: '[ip, timestamp, method, url, status_code=4*,bytes,responsetime,useragent]'
+      MetricTransformations:
+        - MetricNamespace: !Sub '${AWS::StackName}'
+          MetricName: 4xx_error_count
+          MetricValue: '1'
+  App200sMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref 'LogGroupAppLog'
+      FilterPattern: '[ip, timestamp, method, url, status_code=200,bytes,responsetime,useragent]'
+      MetricTransformations:
+        - MetricNamespace: !Sub '${AWS::StackName}'
+          MetricName: HTTP OK
+          MetricValue: '1'
+  AppChromeUsersMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref 'LogGroupAppLog'
+      FilterPattern: '[ip, timestamp, method, url, status_code,bytes,responsetime,useragent=*Chrome*]'
+      MetricTransformations:
+        - MetricNamespace: !Sub '${AWS::StackName}'
+          MetricName: Chrome Users
+          MetricValue: '1'
+  AppFirefoxUsersMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref 'LogGroupAppLog'
+      FilterPattern: '[ip, timestamp, method, url, status_code,bytes,responsetime,useragent=*Firefox*]'
+      MetricTransformations:
+        - MetricNamespace: !Sub '${AWS::StackName}'
+          MetricName: Firefox Users
+          MetricValue: '1'
+  App4xxRateAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Notify the Operator Email if the 4xx Error Rate is higher
+        than 5 every hour
+      AlarmName: !Sub '${AWS::StackName}-4xx_Error_count_alarm'
+      MetricName: 4xx_error_count
+      Namespace: !Sub '${AWS::StackName}'
+      Statistic: Sum
+      Period: '1800'
+      EvaluationPeriods: '2'
+      Threshold: '5'
+      AlarmActions:
+        - !Ref 'NotificationTopic'
+      Dimensions:
+        - Name: FilterName
+          Value: !Ref 'App4xxsMetricFilter'
+      ComparisonOperator: GreaterThanThreshold
+  AppBytesOutAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Sample Alarm to demonstrate CloudWatch Alarms. Triggers when
+        Average Bytes out is greater than 1000 every 10 minutes
+      MetricName: Bytes_Out
+      AlarmName: !Sub '${AWS::StackName}-Bytes_Out_Alarm'
+      Namespace: !Sub '${AWS::StackName}'
+      Statistic: Average
+      Period: '300'
+      EvaluationPeriods: '2'
+      Threshold: '1000'
+      AlarmActions:
+        - !Ref 'NotificationTopic'
+      Dimensions:
+        - Name: FilterName
+          Value: !Ref 'AppBytesOutMetricFilter'
+      ComparisonOperator: GreaterThanThreshold
+
+  ### TrailLogGroup
+  NotificationTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      Subscription:
+        - Endpoint: !Ref OperationsEmail
+          Protocol: email
+  SecurityGroupChangesMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref 'TrailLogGroup'
+      FilterPattern: '{ ($.eventName = AuthorizeSecurityGroupIngress) || ($.eventName
+        = AuthorizeSecurityGroupEgress) || ($.eventName = RevokeSecurityGroupIngress)
+        || ($.eventName = RevokeSecurityGroupEgress) || ($.eventName = CreateSecurityGroup)
+        || ($.eventName = DeleteSecurityGroup) }'
+      MetricTransformations:
+        - MetricNamespace: !Sub '${AWS::StackName}-CloudTrailMetrics'
+          MetricName: SecurityGroupEventCount
+          MetricValue: '1'
+    Condition: cEnableLogCloudTrail
+  SecurityGroupChangesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${AWS::StackName}-CloudTrailSecurityGroupChanges'
+      AlarmDescription: Alarms when an API call is made to create, update or delete
+        a Security Group.
+      AlarmActions:
+        - !Ref 'NotificationTopic'
+      MetricName: SecurityGroupEventCount
+      Namespace: CloudTrailMetrics
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      EvaluationPeriods: '1'
+      Period: '300'
+      Statistic: Sum
+      Threshold: '1'
+    Condition: cEnableLogCloudTrail
+  NetworkAclChangesMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref 'TrailLogGroup'
+      FilterPattern: '{ ($.eventName = CreateNetworkAcl) || ($.eventName = CreateNetworkAclEntry)
+        || ($.eventName = DeleteNetworkAcl) || ($.eventName = DeleteNetworkAclEntry)
+        || ($.eventName = ReplaceNetworkAclEntry) || ($.eventName = ReplaceNetworkAclAssociation)
+        }'
+      MetricTransformations:
+        - MetricNamespace: !Sub '${AWS::StackName}-CloudTrailMetrics'
+          MetricName: NetworkAclEventCount
+          MetricValue: '1'
+    Condition: cEnableLogCloudTrail
+  NetworkAclChangesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${AWS::StackName}-CloudTrailNetworkAclChanges'
+      AlarmDescription: Alarms when an API call is made to create, update or delete
+        a Network ACL.
+      AlarmActions:
+        - !Ref 'NotificationTopic'
+      MetricName: NetworkAclEventCount
+      Namespace: CloudTrailMetrics
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      EvaluationPeriods: '1'
+      Period: '300'
+      Statistic: Sum
+      Threshold: '1'
+    Condition: cEnableLogCloudTrail
+  GatewayChangesMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref 'TrailLogGroup'
+      FilterPattern: '{ ($.eventName = CreateCustomerGateway) || ($.eventName = DeleteCustomerGateway)
+        || ($.eventName = AttachInternetGateway) || ($.eventName = CreateInternetGateway)
+        || ($.eventName = DeleteInternetGateway) || ($.eventName = DetachInternetGateway)
+        }'
+      MetricTransformations:
+        - MetricNamespace: !Sub '${AWS::StackName}-CloudTrailMetrics'
+          MetricName: GatewayEventCount
+          MetricValue: '1'
+    Condition: cEnableLogCloudTrail
+  GatewayChangesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${AWS::StackName}-CloudTrailGatewayChanges'
+      AlarmDescription: Alarms when an API call is made to create, update or delete
+        a Customer or Internet Gateway.
+      AlarmActions:
+        - !Ref 'NotificationTopic'
+      MetricName: GatewayEventCount
+      Namespace: CloudTrailMetrics
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      EvaluationPeriods: '1'
+      Period: '300'
+      Statistic: Sum
+      Threshold: '1'
+    Condition: cEnableLogCloudTrail
+  VpcChangesMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref 'TrailLogGroup'
+      FilterPattern: '{ ($.eventName = CreateVpc) || ($.eventName = DeleteVpc) ||
+        ($.eventName = ModifyVpcAttribute) || ($.eventName = AcceptVpcPeeringConnection)
+        || ($.eventName = CreateVpcPeeringConnection) || ($.eventName = DeleteVpcPeeringConnection)
+        || ($.eventName = RejectVpcPeeringConnection) || ($.eventName = AttachClassicLinkVpc)
+        || ($.eventName = DetachClassicLinkVpc) || ($.eventName = DisableVpcClassicLink)
+        || ($.eventName = EnableVpcClassicLink) }'
+      MetricTransformations:
+        - MetricNamespace: !Sub '${AWS::StackName}-CloudTrailMetrics'
+          MetricName: VpcEventCount
+          MetricValue: '1'
+    Condition: cEnableLogCloudTrail
+  VpcChangesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${AWS::StackName}-CloudTrailVpcChanges'
+      AlarmDescription: Alarms when an API call is made to create, update or delete
+        a VPC, VPC peering connection or VPC connection to classic.
+      AlarmActions:
+        - !Ref 'NotificationTopic'
+      MetricName: VpcEventCount
+      Namespace: CloudTrailMetrics
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      EvaluationPeriods: '1'
+      Period: '300'
+      Statistic: Sum
+      Threshold: '1'
+    Condition: cEnableLogCloudTrail
+  EC2InstanceChangesMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref 'TrailLogGroup'
+      FilterPattern: '{ ($.eventName = RunInstances) || ($.eventName = RebootInstances)
+        || ($.eventName = StartInstances) || ($.eventName = StopInstances) || ($.eventName
+        = TerminateInstances) }'
+      MetricTransformations:
+        - MetricNamespace: !Sub '${AWS::StackName}-CloudTrailMetrics'
+          MetricName: EC2InstanceEventCount
+          MetricValue: '1'
+    Condition: cEnableLogCloudTrail
+  EC2InstanceChangesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${AWS::StackName}-CloudTrailEC2InstanceChanges'
+      AlarmDescription: Alarms when an API call is made to create, terminate, start,
+        stop or reboot an EC2 instance.
+      AlarmActions:
+        - !Ref 'NotificationTopic'
+      MetricName: EC2InstanceEventCount
+      Namespace: CloudTrailMetrics
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      EvaluationPeriods: '1'
+      Period: '300'
+      Statistic: Sum
+      Threshold: '1'
+    Condition: cEnableLogCloudTrail
+  EC2LargeInstanceChangesMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref 'TrailLogGroup'
+      FilterPattern: '{ ($.eventName = RunInstances) && (($.requestParameters.instanceType
+        = *.8xlarge) || ($.requestParameters.instanceType = *.4xlarge)) }'
+      MetricTransformations:
+        - MetricNamespace: !Sub '${AWS::StackName}-CloudTrailMetrics'
+          MetricName: EC2LargeInstanceEventCount
+          MetricValue: '1'
+    Condition: cEnableLogCloudTrail
+  EC2LargeInstanceChangesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${AWS::StackName}-CloudTrailEC2LargeInstanceChanges'
+      AlarmDescription: Alarms when an API call is made to create, terminate, start,
+        stop or reboot a 4x or 8x-large EC2 instance.
+      AlarmActions:
+        - !Ref 'NotificationTopic'
+      MetricName: EC2LargeInstanceEventCount
+      Namespace: CloudTrailMetrics
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      EvaluationPeriods: '1'
+      Period: '300'
+      Statistic: Sum
+      Threshold: '1'
+    Condition: cEnableLogCloudTrail
+  CloudTrailChangesMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref 'TrailLogGroup'
+      FilterPattern: '{ ($.eventName = CreateTrail) || ($.eventName = UpdateTrail)
+        || ($.eventName = DeleteTrail) || ($.eventName = StartLogging) || ($.eventName
+        = StopLogging) }'
+      MetricTransformations:
+        - MetricNamespace: !Sub '${AWS::StackName}-CloudTrailMetrics'
+          MetricName: CloudTrailEventCount
+          MetricValue: '1'
+    Condition: cEnableLogCloudTrail
+  CloudTrailChangesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${AWS::StackName}-CloudTrailChanges'
+      AlarmDescription: Alarms when an API call is made to create, update or delete
+        a CloudTrail trail, or to start or stop logging to a trail.
+      AlarmActions:
+        - !Ref 'NotificationTopic'
+      MetricName: CloudTrailEventCount
+      Namespace: CloudTrailMetrics
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      EvaluationPeriods: '1'
+      Period: '300'
+      Statistic: Sum
+      Threshold: '1'
+    Condition: cEnableLogCloudTrail
+  ConsoleSignInFailuresMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref 'TrailLogGroup'
+      FilterPattern: '{ ($.eventName = ConsoleLogin) && ($.errorMessage = "Failed
+        authentication") }'
+      MetricTransformations:
+        - MetricNamespace: !Sub '${AWS::StackName}-CloudTrailMetrics'
+          MetricName: ConsoleSignInFailureCount
+          MetricValue: '1'
+    Condition: cEnableLogCloudTrail
+  ConsoleSignInFailuresAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${AWS::StackName}-CloudTrailConsoleSignInFailures'
+      AlarmDescription: Alarms when an unauthenticated API call is made to sign into
+        the console.
+      AlarmActions:
+        - !Ref 'NotificationTopic'
+      MetricName: ConsoleSignInFailureCount
+      Namespace: CloudTrailMetrics
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      EvaluationPeriods: '1'
+      Period: '300'
+      Statistic: Sum
+      Threshold: '3'
+    Condition: cEnableLogCloudTrail
+  AuthorizationFailuresMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref 'TrailLogGroup'
+      FilterPattern: '{ ($.errorCode = "*UnauthorizedOperation") || ($.errorCode =
+        "AccessDenied*") }'
+      MetricTransformations:
+        - MetricNamespace: !Sub '${AWS::StackName}-CloudTrailMetrics'
+          MetricName: AuthorizationFailureCount
+          MetricValue: '1'
+    Condition: cEnableLogCloudTrail
+  AuthorizationFailuresAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${AWS::StackName}-CloudTrailAuthorizationFailures'
+      AlarmDescription: Alarms when an unauthorized API call is made.
+      AlarmActions:
+        - !Ref 'NotificationTopic'
+      MetricName: AuthorizationFailureCount
+      Namespace: CloudTrailMetrics
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      EvaluationPeriods: '1'
+      Period: '300'
+      Statistic: Sum
+      Threshold: '1'
+    Condition: cEnableLogCloudTrail
+  IAMPolicyChangesMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref 'TrailLogGroup'
+      FilterPattern: '{($.eventName=DeleteGroupPolicy)||($.eventName=DeleteRolePolicy)||($.eventName=DeleteUserPolicy)||($.eventName=PutGroupPolicy)||($.eventName=PutRolePolicy)||($.eventName=PutUserPolicy)||($.eventName=CreatePolicy)||($.eventName=DeletePolicy)||($.eventName=CreatePolicyVersion)||($.eventName=DeletePolicyVersion)||($.eventName=AttachRolePolicy)||($.eventName=DetachRolePolicy)||($.eventName=AttachUserPolicy)||($.eventName=DetachUserPolicy)||($.eventName=AttachGroupPolicy)||($.eventName=DetachGroupPolicy)}'
+      MetricTransformations:
+        - MetricNamespace: !Sub '${AWS::StackName}-CloudTrailMetrics'
+          MetricName: IAMPolicyEventCount
+          MetricValue: '1'
+    Condition: cEnableLogCloudTrail
+  IAMPolicyChangesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${AWS::StackName}-CloudTrailIAMPolicyChanges'
+      AlarmDescription: Alarms when an API call is made to change an IAM policy.
+      AlarmActions:
+        - !Ref 'NotificationTopic'
+      MetricName: IAMPolicyEventCount
+      Namespace: CloudTrailMetrics
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      EvaluationPeriods: '1'
+      Period: '300'
+      Statistic: Sum
+      Threshold: '1'
+    Condition: cEnableLogCloudTrail
+  #####################################################################################
+  # End of Metrics and Filters
   #####################################################################################
 
   #####################################################################################
