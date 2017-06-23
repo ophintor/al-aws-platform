@@ -122,3 +122,10 @@ This repo has an **.editorconfig** file so you should install EditorConfig in yo
 
 * VS Code - https://marketplace.visualstudio.com/items?itemName=EditorConfig.EditorConfig
 * Atom - https://atom.io/packages/editorconfig
+
+You can configure locally git hooks to run the tests before commit/push and then fail the pipeline
+
+* You need to configure yout repo to use the **.githooks** folder
+```
+git config core.hooksPath .githooks
+```
