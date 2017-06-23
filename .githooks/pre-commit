@@ -24,15 +24,16 @@ fi
 
 if ! which shellcheck 2>&1 >/dev/null ; then
 	echo "${LIGHTCYAN}shellcheck${RESET} not found but is required to check the yaml files before commit"
-	echo "please install it doing:"
+	echo "please install it using accordingly your operating system,"
+	echo "for instance, on OS X:"
 	echo
 	echo "brew install shellcheck"
 	echo
 	exit 1
 fi
 
-# NOTE: tr is just usefull to debug the json!
-# Rules doc: http://yamllint.readthedocs.io/en/latest/rules.html
+#ï¿½NOTE: tr is just usefull to debug the json!
+#ï¿½Rules doc: http://yamllint.readthedocs.io/en/latest/rules.html
 YAMLLINT_CONFIG=$(cat <<-END | tr '\n' ' '
 {
 	extends: default,
