@@ -156,6 +156,13 @@ Parameters:
     MaxLength: 64
     MinLength: 0
     Type: String
+  UseContainers:
+    Description: Use Docker Containers
+    Type: String
+    Default: Disabled
+    AllowedValues:
+      - Enabled
+      - Disabled
   InstanceType:
     AllowedValues:
       - t2.micro
@@ -296,6 +303,7 @@ Metadata:
         Parameters:
           - UseSpotInstances
           - SpotPricing
+          - UseContainers
           - InstanceType
           - OperatingSystem
           - InstanceCount
@@ -337,6 +345,8 @@ Metadata:
         default: Use HTTPS
       UseDNS:
         default: Use DNS
+      UseContainers:
+        default: Use Docker Containers
       ElasticsearchLogs:
         default: Deploy Elasticsearch
       ElasticsearchStack:
@@ -371,6 +381,7 @@ Conditions:
     - !Not [!Equals [!Sub '${AWS::Region}', 'ap-southeast-1']]
     - !Not [!Equals [!Sub '${AWS::Region}', 'ap-southeast-2']]
     - !Not [!Equals [!Sub '${AWS::Region}', 'ap-northeast-1']]
+  cEnableContainers: !Equals [!Ref UseContainers, 'Enable']
   cEnableApprovalEmails: !Not [!Equals [!Ref EmailApprovals, '']]
   cEnableSlackApprovals: !Not [!Equals [!Ref SlackApprovalsWebhook, '']]
   cEnableASGNotications: !Not [!Equals [!Ref OperationsEmail, '']]
@@ -1197,7 +1208,7 @@ Resources:
               - ecr:InitiateLayerUpload
               - ecr:UploadLayerPart
               - ecr:CompleteLayerUpload
-  # Crate Log Group to setup the retention time of ECS task logs
+  # Create Log Group to setup the retention time of ECS task logs
   TaskRole:
     Type: AWS::IAM::Role
     Properties:
