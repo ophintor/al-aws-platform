@@ -65,7 +65,7 @@ Mappings:
       Pattern: '[]'
     ECS:
       Pattern: '"Container"'
-  # http://docs.aws.amazon.com/elasticloadbalancing/latest/classic/enable-access-logs.html#enable-access-logs-console
+  # http://docs.aws.amazon.com/elasticloadbalancing/latest/classic/enable-access-logs.html#enable-access-logs-console
   AWSELBAccountID:
     us-east-1:
       id: 127311923021
@@ -945,8 +945,8 @@ Resources:
       DesiredCapacity: !Ref 'InstanceCount'
       MetricsCollection:
         - Granularity: 1Minute
-          # No metrics specified, send all!
-          # http://docs.aws.amazon.com/AutoScaling/latest/APIReference/API_EnableMetricsCollection.html
+          # No metrics specified, send all!
+          # http://docs.aws.amazon.com/AutoScaling/latest/APIReference/API_EnableMetricsCollection.html
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-ECS'
@@ -1363,8 +1363,8 @@ Resources:
       TargetGroupARNs: [!Ref EC2TG]
       MetricsCollection:
         - Granularity: 1Minute
-          # No metrics specified, send all!
-          # http://docs.aws.amazon.com/AutoScaling/latest/APIReference/API_EnableMetricsCollection.html
+          # No metrics specified, send all!
+          # http://docs.aws.amazon.com/AutoScaling/latest/APIReference/API_EnableMetricsCollection.html
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-EC2'
