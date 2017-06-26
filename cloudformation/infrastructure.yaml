@@ -1693,7 +1693,7 @@ Resources:
       RetentionInDays: 1
   CodeBuildArtifact:
     Type: AWS::CodeBuild::Project
-    DependsOn: [CodeRepo, CodeBuildRole,CodeBuildArtifactLogGroup]
+    DependsOn: [CodeRepo, CodeBuildRole, CodeBuildArtifactLogGroup]
     Properties:
       Name: !Sub '${AWS::StackName}-build'
       Description: A description about my project
@@ -1723,7 +1723,7 @@ Resources:
       TimeoutInMinutes: 300  # 5min
   CodePipelineTestArtifact:
     Type: AWS::CodeBuild::Project
-    DependsOn: [CodeRepo, CodeBuildRole,CodePipelineTestArtifactLogGroup]
+    DependsOn: [CodeRepo, CodeBuildRole, CodePipelineTestArtifactLogGroup]
     Properties:
       Name: !Sub '${AWS::StackName}-test'
       Description: A description about my project
@@ -1751,7 +1751,7 @@ Resources:
       TimeoutInMinutes: 300 # 5min
   IntegrationTestArtifact:
     Type: AWS::CodeBuild::Project
-    DependsOn: [CodeRepo, CodeBuildRole,IntegrationTestArtifactLogGroup]
+    DependsOn: [CodeRepo, CodeBuildRole, IntegrationTestArtifactLogGroup]
     Properties:
       Name: !Sub '${AWS::StackName}-integration-test'
       Description: A description about my project
@@ -1790,7 +1790,7 @@ Resources:
       TimeoutInMinutes: 300 # 5min
   CodeBuildDockerImage:
     Type: AWS::CodeBuild::Project
-    DependsOn: [CodeRepo, CodeBuildRole,CodeBuildDockerImageLogGroup]
+    DependsOn: [CodeRepo, CodeBuildRole, CodeBuildDockerImageLogGroup]
     Properties:
       Name: !Sub '${AWS::StackName}-ecs-image'
       Description: A description about my project
