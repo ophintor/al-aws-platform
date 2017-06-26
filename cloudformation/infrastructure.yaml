@@ -406,7 +406,7 @@ Resources:
             Action:
               - kms:Encrypt
             Principal:
-              AWS: !GetAtt 'LambdaRole.Arn'
+              AWS: !GetAtt 'EncryptLambdaRole.Arn'
             Resource: '*'
           # TODO: This can be set in the key! but we don't have it here
           - Effect: Allow
@@ -426,10 +426,11 @@ Resources:
   # Create Log Group to setup the Retention time of Lambda Logs
   EncryptLambdaLogsGroup:
     Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
     Properties:
       LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-set-param-store'
       RetentionInDays: 1
-  LambdaRole:
+  EncryptLambdaRole:
     Type: AWS::IAM::Role
     Properties:
       RoleName: !Sub '${AWS::StackName}-Lambda-SetParamStore'
@@ -446,12 +447,6 @@ Resources:
         - PolicyName: root
           PolicyDocument:
             Statement:
-              # Allow lambda to create log group
-              - Effect: Allow
-                Action:
-                  - logs:CreateLogGroup
-                Resource:
-                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*'
               # Create Log streams and write on it
               - Effect: Allow
                 Action:
@@ -475,7 +470,7 @@ Resources:
     Properties:
       FunctionName: !Sub '${AWS::StackName}-set-param-store'
       Handler: index.lambda_handler
-      Role: !GetAtt 'LambdaRole.Arn'
+      Role: !GetAtt 'EncryptLambdaRole.Arn'
       Code:
         ZipFile: |
           import base64
@@ -693,31 +688,24 @@ Resources:
                 - 'lambda.amazonaws.com'
             Action:
               - 'sts:AssumeRole'
-  ELBLogLambdaRolePolicies:
-    Type: AWS::IAM::Policy
-    Condition: cEnableELBLogging
-    Metadata:
-      Comment: IAM Policy attached to the ELBLogLambdaRole.
-    Properties:
-      PolicyName: ELBLogLambdaRolePolicy
-      PolicyDocument:
-        Statement:
-          - Effect: Allow
-            Action:
-              - 'logs:CreateLogStream'
-              - 'logs:PutLogEvents'
-              - 'logs:DescribeLogGroups'
-              - 'logs:DescribeLogStreams'
-            Resource:
-              - !Sub '${LogGroupELBLog.Arn}'
-              - !Sub '${ELBLogsToCWLambdaLogGroup.Arn}'
-          - Effect: Allow
-            Action:
-              - 's3:GetObject'
-            Resource:
-              - !Sub 'arn:aws:s3:::${AWS::StackName}-elb-logs/*'
-      Roles:
-        - !Ref 'ELBLogLambdaRole'
+      Properties:
+        PolicyName: ELBLogLambdaRolePolicy
+        PolicyDocument:
+          Statement:
+            - Effect: Allow
+              Action:
+                - 'logs:CreateLogStream'
+                - 'logs:PutLogEvents'
+                - 'logs:DescribeLogGroups'
+                - 'logs:DescribeLogStreams'
+              Resource:
+                - !Sub '${LogGroupELBLog.Arn}'
+                - !Sub '${ELBLogsToCWLambdaLogGroup.Arn}'
+            - Effect: Allow
+              Action:
+                - 's3:GetObject'
+              Resource:
+                - !Sub 'arn:aws:s3:::${AWS::StackName}-elb-logs/*'
   ELBLogLambdaInvokePermission:
     Type: AWS::Lambda::Permission
     Condition: cEnableELBLogging
@@ -731,14 +719,14 @@ Resources:
     Condition: cEnableELBLogging
     DeletionPolicy: Delete
     Properties:
-      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-ELBLogsToCWLambda'
+      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-elblogs-to-cw-migration'
       RetentionInDays: 1
   ELBLogsToCWLambda:
     Type: AWS::Lambda::Function
     Condition: cEnableELBLogging
-    DependsOn: ELBLogLambdaRolePolicies
+    DependsOn: ELBLogLambdaRole
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-ELBLogsToCWLambda'
+      FunctionName: !Sub '${AWS::StackName}-elblogs-to-cw-migration'
       Description: 'This code will move your ELB logs from S3 to CloudWatch. It is
         compressed, so quite hard to read. Original: github.com/awslabs/cloudwatch-logs-centralize-logs'
       Role: !GetAtt 'ELBLogLambdaRole.Arn'
@@ -1667,7 +1655,6 @@ Resources:
               # Write build logs
               - Effect: Allow
                 Action:
-                  - logs:CreateLogGroup
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                 Resource:
@@ -1680,9 +1667,33 @@ Resources:
                   - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-integration-test:log-stream:*'
                   - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-ecs-image:log-stream'
                   - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-ecs-image:log-stream:*'
+  CodeBuildArtifactLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName: !Sub '/aws/codebuild/${AWS::StackName}-build'
+      RetentionInDays: 1
+  CodePipelineTestArtifactLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName: !Sub '/aws/codebuild/${AWS::StackName}-test'
+      RetentionInDays: 1
+  IntegrationTestArtifactLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName: !Sub '/aws/codebuild/${AWS::StackName}-integration-test'
+      RetentionInDays: 1
+  CodeBuildDockerImageLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName: !Sub '/aws/codebuild/${AWS::StackName}-ecs-image'
+      RetentionInDays: 1
   CodeBuildArtifact:
     Type: AWS::CodeBuild::Project
-    DependsOn: [CodeRepo, CodeBuildRole]
+    DependsOn: [CodeRepo, CodeBuildRole,CodeBuildArtifactLogGroup]
     Properties:
       Name: !Sub '${AWS::StackName}-build'
       Description: A description about my project
@@ -1712,7 +1723,7 @@ Resources:
       TimeoutInMinutes: 300  # 5min
   CodePipelineTestArtifact:
     Type: AWS::CodeBuild::Project
-    DependsOn: [CodeRepo, CodeBuildRole]
+    DependsOn: [CodeRepo, CodeBuildRole,CodePipelineTestArtifactLogGroup]
     Properties:
       Name: !Sub '${AWS::StackName}-test'
       Description: A description about my project
@@ -1738,9 +1749,9 @@ Resources:
                 - npm install --only=dev
                 - npm test
       TimeoutInMinutes: 300 # 5min
-  IntegrationTestAartifact:
+  IntegrationTestArtifact:
     Type: AWS::CodeBuild::Project
-    DependsOn: [CodeRepo, CodeBuildRole]
+    DependsOn: [CodeRepo, CodeBuildRole,IntegrationTestArtifactLogGroup]
     Properties:
       Name: !Sub '${AWS::StackName}-integration-test'
       Description: A description about my project
@@ -1779,7 +1790,7 @@ Resources:
       TimeoutInMinutes: 300 # 5min
   CodeBuildDockerImage:
     Type: AWS::CodeBuild::Project
-    DependsOn: [CodeRepo, CodeBuildRole]
+    DependsOn: [CodeRepo, CodeBuildRole,CodeBuildDockerImageLogGroup]
     Properties:
       Name: !Sub '${AWS::StackName}-ecs-image'
       Description: A description about my project
@@ -2074,7 +2085,7 @@ Resources:
               # OutputArtifacts:
               #  - Name: BuildArtifact
               Configuration:
-                ProjectName: !Ref IntegrationTestAartifact
+                ProjectName: !Ref IntegrationTestArtifact
         - Name: ApprovalProduction
           Actions:
             - Name: QAApproval
@@ -2191,31 +2202,25 @@ Resources:
                 - lambda.amazonaws.com
             Action:
               - sts:AssumeRole
-  LogMigrationLambdaRolePolicies:
-    Type: AWS::IAM::Policy
-    Metadata:
-      Comment: 'IAM Policy attached to Role for the Log Migration Lambda. '
-    Properties:
-      PolicyName: LogMigrationLambdaRolePolicy
-      PolicyDocument:
-        Statement:
-          - Effect: Allow
-            Action:
-              - logs:CreateExportTask
-            Resource:
-              - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${AWS::StackName}*:*'
-          - Effect: Allow
-            Action:
-              - logs:CreateLogStream
-              - logs:PutLogEvents
-            Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}-LogMigrationLambda:*'
-          - Effect: Allow
-            Action:
-              - s3:PutObject
-            Resource:
-              - !Sub 'arn:aws:s3:::${AWS::StackName}-logs/*'
-      Roles:
-        - !Ref 'LogMigrationLambdaRole'
+      Policies:
+        - PolicyName: LogMigrationLambdaRolePolicy
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateExportTask
+                Resource:
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${AWS::StackName}*:*'
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}-log-migration:*'
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                Resource:
+                  - !Sub 'arn:aws:s3:::${AWS::StackName}-logs/*'
   LogMigrationScheduledRule:
     Type: AWS::Events::Rule
     Properties:
@@ -2236,13 +2241,13 @@ Resources:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Delete
     Properties:
-      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-LogMigrationLambda'
+      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-log-migration'
       RetentionInDays: 1
   LogMigrationLambda:
     Type: AWS::Lambda::Function
     Properties:
       Handler: index.lambda_handler
-      FunctionName: !Sub '${AWS::StackName}-LogMigrationLambda'
+      FunctionName: !Sub '${AWS::StackName}-log-migration'
       Role: !GetAtt 'LogMigrationLambdaRole.Arn'
       Code:
         ZipFile: !Sub |
@@ -2801,6 +2806,7 @@ Resources:
       LogGroupName: !Sub '/aws/cloudtrail/${AWS::StackName}'
       RetentionInDays: 7
     Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
     Condition: cEnableLogCloudTrail
   TrailLogGroupRole:
     Properties:
@@ -2906,9 +2912,17 @@ Resources:
     Type: AWS::IAM::InstanceProfile
 
   # Exported so service stacks can stream logs to it.
+  LogStreamerLogsGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-es-log-streamer'
+      RetentionInDays: 1
   LogStreamer:
+    Type: AWS::Lambda::Function
     Condition: cEnableElasticSearchLogs
     Properties:
+      FunctionName: !Sub '${AWS::StackName}-es-log-streamer'
       Code:
         S3Bucket: !Sub 'solutions-${AWS::Region}'
         S3Key: centralized-logging/v1/centralizedLoggingDownload.zip
@@ -2917,8 +2931,8 @@ Resources:
       Role: !GetAtt 'LogStreamerRole.Arn'
       Runtime: nodejs4.3
       Timeout: 300
-    Type: AWS::Lambda::Function
   LogStreamerRole:
+    Type: AWS::IAM::Role
     Condition: cEnableElasticSearchLogs
     Properties:
       AssumeRolePolicyDocument:
@@ -2934,7 +2948,6 @@ Resources:
             Statement:
               - Effect: Allow
                 Action:
-                  - logs:CreateLogGroup
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                 Resource:
@@ -2950,7 +2963,6 @@ Resources:
                 Resource: !Sub 'arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}*'
             Version: '2012-10-17'
           PolicyName: My_Lambda_Function_Permissions
-    Type: AWS::IAM::Role
   MyFlowLog:
     Condition: cEnableElasticSearchLogs
     Properties:
@@ -2962,6 +2974,7 @@ Resources:
     Type: AWS::EC2::FlowLog
 
   VPCFlowLogsLogGroup:
+    DeletionPolicy: Delete
     Condition: cEnableElasticSearchLogs
     Properties:
       RetentionInDays: 7
@@ -2998,6 +3011,7 @@ Resources:
   ###########################################
   SlackLambdaLogsGroup:
     Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
     Condition: cEnableSlackApprovals
     Properties:
       LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-slack-notifications'
@@ -3020,12 +3034,6 @@ Resources:
         - PolicyName: root
           PolicyDocument:
             Statement:
-              # Allow lambda to create log group
-              - Effect: Allow
-                Action:
-                  - logs:CreateLogGroup
-                Resource:
-                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*'
               # Create Log streams and write on it
               - Effect: Allow
                 Action:
@@ -3055,6 +3063,12 @@ Resources:
       Description: Webhook URL for approvals notifications
       Type: 'SecureString'
       Overwrite: true
+  SlackNotificationsLogsGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-slack-notifications'
+      RetentionInDays: 1
   SlackNotificationsLambda:
     Type: AWS::Lambda::Function
     DependsOn: MyKeyAlias
