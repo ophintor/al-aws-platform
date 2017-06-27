@@ -2287,8 +2287,15 @@ Resources:
   #####################################################################################
 
   #####################################################################################
-  # Start of Metrics and Filters
+  # Start of Metrics and Alerts
   #####################################################################################
+  EmailNotificationTopic:
+    Type: AWS::SNS::Topic
+    Condition: cEnableEmailNotications
+    Properties:
+      Subscription:
+        - Endpoint: !Ref OperationsEmail
+          Protocol: email
   ### LogGroupAppLog
   AppRestartMetricFilter:
     Type: AWS::Logs::MetricFilter
@@ -2409,13 +2416,6 @@ Resources:
       ComparisonOperator: GreaterThanThreshold
 
   ### TrailLogGroup
-  NotificationTopic:
-    Type: AWS::SNS::Topic
-    Condition: cEnableEmailNotications
-    Properties:
-      Subscription:
-        - Endpoint: !Ref OperationsEmail
-          Protocol: email
   SecurityGroupChangesMetricFilter:
     Type: AWS::Logs::MetricFilter
     Properties:
