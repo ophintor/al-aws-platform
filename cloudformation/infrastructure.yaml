@@ -2391,7 +2391,7 @@ Resources:
       EvaluationPeriods: '2'
       Threshold: '5'
       AlarmActions:
-        - !If [cEnableEmailNotications, !Ref NotificationTopic, !Ref 'AWS::NoValue']
+        - !If [cEnableEmailNotications, !Ref EmailNotificationTopic, !Ref 'AWS::NoValue']
       Dimensions:
         - Name: FilterName
           Value: !Ref 'App4xxsMetricFilter'
@@ -2409,7 +2409,7 @@ Resources:
       EvaluationPeriods: '2'
       Threshold: '1000'
       AlarmActions:
-        - !If [cEnableEmailNotications, !Ref NotificationTopic, !Ref 'AWS::NoValue']
+        - !If [cEnableEmailNotications, !Ref EmailNotificationTopic, !Ref 'AWS::NoValue']
       Dimensions:
         - Name: FilterName
           Value: !Ref 'AppBytesOutMetricFilter'
@@ -2436,7 +2436,7 @@ Resources:
       AlarmDescription: Alarms when an API call is made to create, update or delete
         a Security Group.
       AlarmActions:
-        - !If [cEnableEmailNotications, !Ref NotificationTopic, !Ref 'AWS::NoValue']
+        - !If [cEnableEmailNotications, !Ref EmailNotificationTopic, !Ref 'AWS::NoValue']
       MetricName: SecurityGroupEventCount
       Namespace: CloudTrailMetrics
       ComparisonOperator: GreaterThanOrEqualToThreshold
@@ -2465,7 +2465,7 @@ Resources:
       AlarmDescription: Alarms when an API call is made to create, update or delete
         a Network ACL.
       AlarmActions:
-        - !If [cEnableEmailNotications, !Ref NotificationTopic, !Ref 'AWS::NoValue']
+        - !If [cEnableEmailNotications, !Ref EmailNotificationTopic, !Ref 'AWS::NoValue']
       MetricName: NetworkAclEventCount
       Namespace: CloudTrailMetrics
       ComparisonOperator: GreaterThanOrEqualToThreshold
@@ -2494,7 +2494,7 @@ Resources:
       AlarmDescription: Alarms when an API call is made to create, update or delete
         a Customer or Internet Gateway.
       AlarmActions:
-        - !If [cEnableEmailNotications, !Ref NotificationTopic, !Ref 'AWS::NoValue']
+        - !If [cEnableEmailNotications, !Ref EmailNotificationTopic, !Ref 'AWS::NoValue']
       MetricName: GatewayEventCount
       Namespace: CloudTrailMetrics
       ComparisonOperator: GreaterThanOrEqualToThreshold
@@ -2525,7 +2525,7 @@ Resources:
       AlarmDescription: Alarms when an API call is made to create, update or delete
         a VPC, VPC peering connection or VPC connection to classic.
       AlarmActions:
-        - !If [cEnableEmailNotications, !Ref NotificationTopic, !Ref 'AWS::NoValue']
+        - !If [cEnableEmailNotications, !Ref EmailNotificationTopic, !Ref 'AWS::NoValue']
       MetricName: VpcEventCount
       Namespace: CloudTrailMetrics
       ComparisonOperator: GreaterThanOrEqualToThreshold
@@ -2553,7 +2553,7 @@ Resources:
       AlarmDescription: Alarms when an API call is made to create, terminate, start,
         stop or reboot an EC2 instance.
       AlarmActions:
-        - !If [cEnableEmailNotications, !Ref NotificationTopic, !Ref 'AWS::NoValue']
+        - !If [cEnableEmailNotications, !Ref EmailNotificationTopic, !Ref 'AWS::NoValue']
       MetricName: EC2InstanceEventCount
       Namespace: CloudTrailMetrics
       ComparisonOperator: GreaterThanOrEqualToThreshold
@@ -2580,7 +2580,7 @@ Resources:
       AlarmDescription: Alarms when an API call is made to create, terminate, start,
         stop or reboot a 4x or 8x-large EC2 instance.
       AlarmActions:
-        - !If [cEnableEmailNotications, !Ref NotificationTopic, !Ref 'AWS::NoValue']
+        - !If [cEnableEmailNotications, !Ref EmailNotificationTopic, !Ref 'AWS::NoValue']
       MetricName: EC2LargeInstanceEventCount
       Namespace: CloudTrailMetrics
       ComparisonOperator: GreaterThanOrEqualToThreshold
@@ -2608,7 +2608,7 @@ Resources:
       AlarmDescription: Alarms when an API call is made to create, update or delete
         a CloudTrail trail, or to start or stop logging to a trail.
       AlarmActions:
-        - !If [cEnableEmailNotications, !Ref NotificationTopic, !Ref 'AWS::NoValue']
+        - !If [cEnableEmailNotications, !Ref EmailNotificationTopic, !Ref 'AWS::NoValue']
       MetricName: CloudTrailEventCount
       Namespace: CloudTrailMetrics
       ComparisonOperator: GreaterThanOrEqualToThreshold
@@ -2635,7 +2635,7 @@ Resources:
       AlarmDescription: Alarms when an unauthenticated API call is made to sign into
         the console.
       AlarmActions:
-        - !If [cEnableEmailNotications, !Ref NotificationTopic, !Ref 'AWS::NoValue']
+        - !If [cEnableEmailNotications, !Ref EmailNotificationTopic, !Ref 'AWS::NoValue']
       MetricName: ConsoleSignInFailureCount
       Namespace: CloudTrailMetrics
       ComparisonOperator: GreaterThanOrEqualToThreshold
@@ -2661,7 +2661,7 @@ Resources:
       AlarmName: !Sub '${AWS::StackName}-CloudTrailAuthorizationFailures'
       AlarmDescription: Alarms when an unauthorized API call is made.
       AlarmActions:
-        - !If [cEnableEmailNotications, !Ref NotificationTopic, !Ref 'AWS::NoValue']
+        - !If [cEnableEmailNotications, !Ref EmailNotificationTopic, !Ref 'AWS::NoValue']
       MetricName: AuthorizationFailureCount
       Namespace: CloudTrailMetrics
       ComparisonOperator: GreaterThanOrEqualToThreshold
@@ -2686,7 +2686,7 @@ Resources:
       AlarmName: !Sub '${AWS::StackName}-CloudTrailIAMPolicyChanges'
       AlarmDescription: Alarms when an API call is made to change an IAM policy.
       AlarmActions:
-        - !If [cEnableEmailNotications, !Ref NotificationTopic, !Ref 'AWS::NoValue']
+        - !If [cEnableEmailNotications, !Ref EmailNotificationTopic, !Ref 'AWS::NoValue']
       MetricName: IAMPolicyEventCount
       Namespace: CloudTrailMetrics
       ComparisonOperator: GreaterThanOrEqualToThreshold
