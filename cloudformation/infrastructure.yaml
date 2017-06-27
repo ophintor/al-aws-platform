@@ -380,12 +380,14 @@ Conditions:
 # Resources documentation
 # http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-template-resource-type-ref.html
 Resources:
-  Networking:
-    Type: AWS::CloudFormation::Stack
-    Properties:
-      TemplateURL: https://s3.amazonaws.com/al-cf-templates-us-east-1/infrastructure-networking.yaml
-      Parameters:
-        ParentStackName: !Sub '${AWS::StackName}'
+
+  ####################################################################################
+  # Base Networking
+  ####################################################################################
+  'Fn::Transform':
+    Name: 'AWS::Include'
+    Parameters:
+      Location: "s3://al-cf-templates-eu-west-1/cloudformation/infrastructure/networking/base-network.yaml"
 
   ####################################################################################
   # Start of Set Parameter Function
@@ -564,13 +566,13 @@ Resources:
     Properties:
       DBSubnetGroupDescription: RDS Subnet Group
       SubnetIds:
-        - !GetAtt 'Networking.Outputs.privateSubnet01ID'
-        - !GetAtt 'Networking.Outputs.privateSubnet02ID'
+        - !Ref privateSubnet01
+        - !Ref privateSubnet02
   DBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: Allow Internal access to RDS Instances
-      VpcId: !GetAtt 'Networking.Outputs.VPCID'
+      VpcId: !Ref VPC
       SecurityGroupIngress:
         - SourceSecurityGroupId: !Ref ECSSecurityGroup
           FromPort: 3306
@@ -927,8 +929,8 @@ Resources:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
       VPCZoneIdentifier:
-        - !GetAtt 'Networking.Outputs.publicSubnet01ID'
-        - !GetAtt 'Networking.Outputs.publicSubnet02ID'
+        - !Ref publicSubnet01
+        - !Ref publicSubnet02
       LaunchConfigurationName: !Ref ECSLaunchConfig
       MinSize: !Ref 'InstanceMinCount'
       MaxSize: !Ref 'InstanceMaxCount'
@@ -1033,7 +1035,7 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: ECS Security Group
-      VpcId: !GetAtt 'Networking.Outputs.VPCID'
+      VpcId: !Ref VPC
       SecurityGroupIngress:
         - CidrIp: 0.0.0.0/0
           IpProtocol: tcp
@@ -1050,7 +1052,7 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: ECS LB Security Group
-      VpcId: !GetAtt 'Networking.Outputs.VPCID'
+      VpcId: !Ref VPC
       SecurityGroupIngress:
         - CidrIp: 0.0.0.0/0
           IpProtocol: tcp
@@ -1144,8 +1146,8 @@ Resources:
         - !If [cEnableELBLogging, {Key: access_logs.s3.bucket, Value: !Ref ELBAccessLogsBucket}, !Ref 'AWS::NoValue']
         - !If [cEnableELBLogging, {Key: access_logs.s3.prefix, Value: 'ECS-ELB'}, !Ref 'AWS::NoValue']
       Subnets:
-        - !GetAtt 'Networking.Outputs.publicSubnet01ID'
-        - !GetAtt 'Networking.Outputs.publicSubnet02ID'
+        - !Ref publicSubnet01
+        - !Ref publicSubnet02
       SecurityGroups: [!Ref ECSALBSecurityGroup]
       Tags:
         - Key: custom:cloudformation:depends-on
@@ -1157,7 +1159,7 @@ Resources:
       Name: !Sub '${AWS::StackName}-ECSTargetGroup'
       Port: 3000
       Protocol: HTTP
-      VpcId: !GetAtt 'Networking.Outputs.VPCID'
+      VpcId: !Ref VPC
   ALBListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
@@ -1284,7 +1286,7 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: Enable HTTP access via port 80 and SSH access.
-      VpcId: !GetAtt 'Networking.Outputs.VPCID'
+      VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 3000
@@ -1344,8 +1346,8 @@ Resources:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
       VPCZoneIdentifier:
-        - !GetAtt 'Networking.Outputs.publicSubnet01ID'
-        - !GetAtt 'Networking.Outputs.publicSubnet02ID'
+        - !Ref publicSubnet01
+        - !Ref publicSubnet02
       LaunchConfigurationName: !Ref EC2LaunchConfig
       MinSize: !Ref 'InstanceMinCount'
       MaxSize: !Ref 'InstanceMaxCount'
@@ -1498,7 +1500,7 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: CodeDeploy LB Security Group
-      VpcId: !GetAtt 'Networking.Outputs.VPCID'
+      VpcId: !Ref VPC
       SecurityGroupIngress:
         - CidrIp: 0.0.0.0/0
           IpProtocol: tcp
@@ -1523,8 +1525,8 @@ Resources:
         - !If [cEnableELBLogging, {Key: access_logs.s3.bucket, Value: !Ref ELBAccessLogsBucket}, !Ref 'AWS::NoValue']
         - !If [cEnableELBLogging, {Key: access_logs.s3.prefix, Value: 'EC2-ELB'}, !Ref 'AWS::NoValue']
       Subnets:
-        - !GetAtt 'Networking.Outputs.publicSubnet01ID'
-        - !GetAtt 'Networking.Outputs.publicSubnet02ID'
+        - !Ref publicSubnet01
+        - !Ref publicSubnet02
       SecurityGroups: [!Ref EC2ALBSecurityGroup]
       Tags:
         - Key: custom:cloudformation:depends-on
@@ -1535,7 +1537,7 @@ Resources:
       Name: !Sub '${AWS::StackName}-EC2TG'
       Port: 3000
       Protocol: HTTP
-      VpcId: !GetAtt 'Networking.Outputs.VPCID'
+      VpcId: !Ref VPC
   EC2ALBListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
@@ -2971,7 +2973,7 @@ Resources:
     Properties:
       DeliverLogsPermissionArn: !GetAtt 'flowlogsRole.Arn'
       LogGroupName: !Ref VPCFlowLogsLogGroup
-      ResourceId: !GetAtt 'Networking.Outputs.VPCID'
+      ResourceId: !Ref VPC
       ResourceType: VPC
       TrafficType: ALL
     Type: AWS::EC2::FlowLog
