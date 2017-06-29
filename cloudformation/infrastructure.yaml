@@ -2,6 +2,9 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: >
   Automation Logic Cloud Platform
 Mappings:
+  DBEngines:
+    MySQL:
+      port: 3306
   AWSRegion2AMI:
     # ubuntu/images/hvm-ssd/ubuntu-xenial-16.04-amd64-server-20170113
     us-east-1:
@@ -103,6 +106,13 @@ Outputs:
         !Sub '${ElasticsearchStack}-DomainEndpointES'
 
 Parameters:
+  AppPort:
+    ConstraintDescription: must be a valid TCP port number (1-65535)
+    Default: 3000
+    Description: Which TCP port the app listens on
+    MaxValue: 65535
+    MinValue: 1
+    Type: Number
   DBAllocatedStorage:
     ConstraintDescription: must be between 5 and 1024Gb.
     Default: 5
@@ -143,6 +153,11 @@ Parameters:
     MaxLength: 16
     MinLength: 1
     NoEcho: true
+    Type: String
+  DBEngine:
+    AllowedValues: ["MySQL"]
+    Default: MySQL
+    Description: Which DB Engine to use
     Type: String
   ElasticsearchLogs:
     Description: Enable/Disable Elasticsearch
@@ -294,6 +309,10 @@ Metadata:
           - DBClass
           - DBAllocatedStorage
       - Label:
+          default: 'Application Settings'
+        Parameters:
+          - AppPort
+      - Label:
           default: 'Auto-Scaling Web Server Group''s Instance Configuration: '
         Parameters:
           - UseSpotInstances
@@ -323,6 +342,8 @@ Metadata:
           - ElasticsearchStack
           - LogCloudTrail
     ParameterLabels:
+      AppPort:
+        default: Application TCP Port
       DBName:
         default: Database Name
       DBUsername:
@@ -575,12 +596,12 @@ Resources:
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - SourceSecurityGroupId: !Ref ECSSecurityGroup
-          FromPort: 3306
-          ToPort: 3306
+          FromPort: !FindInMap [DBEngines, !Ref 'DBEngine', port]
+          ToPort: !FindInMap [DBEngines, !Ref 'DBEngine', port]
           IpProtocol: tcp
         - SourceSecurityGroupId: !Ref EC2SecurityGroup
-          FromPort: 3306
-          ToPort: 3306
+          FromPort: !FindInMap [DBEngines, !Ref 'DBEngine', port]
+          ToPort: !FindInMap [DBEngines, !Ref 'DBEngine', port]
           IpProtocol: tcp
       Tags:
         - Key: Name
@@ -1157,7 +1178,7 @@ Resources:
     Properties:
       HealthCheckPath: /
       Name: !Sub '${AWS::StackName}-ECSTargetGroup'
-      Port: 3000
+      Port: !Ref AppPort
       Protocol: HTTP
       VpcId: !Ref VPC
   ALBListener:
@@ -1289,8 +1310,8 @@ Resources:
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
-          FromPort: 3000
-          ToPort: 3000
+          FromPort: !Ref AppPort
+          ToPort: !Ref AppPort
           CidrIp: 0.0.0.0/0
         - IpProtocol: tcp
           FromPort: 22
@@ -1535,7 +1556,7 @@ Resources:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
       Name: !Sub '${AWS::StackName}-EC2TG'
-      Port: 3000
+      Port: !Ref AppPort
       Protocol: HTTP
       VpcId: !Ref VPC
   EC2ALBListener:
