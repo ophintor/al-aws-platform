@@ -70,6 +70,7 @@ CHANGE_SET_ID=$(aws cloudformation create-change-set \
 )
 
 CHANGE_SET_STATUS=$(aws cloudformation describe-change-set \
+	--region "${REGION}" \
 	--change-set-name "${STACK_NAME}-change-set" \
 	--stack-name "${STACK_NAME}" \
 	--query "Status" \
@@ -79,10 +80,12 @@ CHANGE_SET_STATUS=$(aws cloudformation describe-change-set \
 case "${CHANGE_SET_STATUS}" in
 	CREATE_*)
 		aws cloudformation wait change-set-create-complete \
+			--region "${REGION}" \
 			--change-set-name "${CHANGE_SET_ID}" \
 			--stack-name "${STACK_NAME}"
 
 		aws cloudformation execute-change-set \
+			--region "${REGION}" \
 			--change-set-name "${CHANGE_SET_ID}"
 
 		aws cloudformation wait ${wait_action} \
@@ -93,6 +96,7 @@ case "${CHANGE_SET_STATUS}" in
 		echo "Change set creation [${CHANGE_SET_STATUS}]"
 		echo "This could be due to no changes being introduced"
 		aws cloudformation delete-change-set \
+			--region "${REGION}" \
 			--change-set-name "${STACK_NAME}-change-set" \
 			--stack-name "${STACK_NAME}"
 		exit 1
