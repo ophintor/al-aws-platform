@@ -1798,7 +1798,7 @@ Resources:
           - Name: DB_USERNAME
             Value: !Sub '${DBUsername}'
           - Name: DB_PASSWORD
-            Value: !Sub '${DBPassword'
+            Value: !Sub '${DBPassword}'
           - Name: DB_NAME
             Value: !Sub '${DBName}'
       Source:
