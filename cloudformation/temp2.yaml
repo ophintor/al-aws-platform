@@ -1,0 +1,368 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Automation Logic Cloud Platform
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+    - Label:
+        default: 'Auto-Scaling Web Server Group''s Instance Configuration: '
+      Parameters:
+      - UseContainers
+      - InstanceType
+      - OperatingSystem
+      - UseSpotInstances
+# Allowing Conditions in the AWS::CloudFormation::Interface would be a good way to hide parameters.
+# For Instance if the above "UseSpotInstances = Disabled" the below "SpotPricing" could be removed with "AWS::NoValue"
+      - SpotPricing
+      - InstanceCount
+      - InstanceMaxCount
+      - InstanceMinCount      
+    - Label:
+        default: 'Security: '
+      Parameters:
+      - KeyPairName
+      - SSHLocation
+    ParameterLabels:
+      UseContainers:
+        default: Use Docker Containers
+      InstanceType:
+        default: EC2 Instance Type
+      InstanceCount:
+        default: EC2 Instance Count
+      InstanceMaxCount:
+        default: Auto Scaling Maximum Instances
+      InstanceMinCount:
+        default: Auto Scaling Minimum Instances
+      SSHLocation:
+        default: SSH Location
+      OperatingSystem:
+        default: Use HTTPS
+      UseSpotInstances:
+        default: Use Spot Instances
+      SpotPricing:
+        default: Spot Bid Price
+      KeyPairName:
+        default: Key Pair Name
+Mappings:
+  AWSRegion2AMI:
+    # ubuntu/images/hvm-ssd/ubuntu-xenial-16.04-amd64-server-20170113
+    us-east-1:
+      Ubuntu16x04: ami-6edd3078
+    us-east-2:
+      Ubuntu16x04: ami-fcc19b99
+    us-west-2:
+      Ubuntu16x04: ami-7c803d1c
+    eu-west-1:
+      Ubuntu16x04: ami-405f7226
+    eu-central-1:
+      Ubuntu16x04: ami-5aee2235
+    ap-southeast-1:
+      Ubuntu16x04: ami-b1943fd2
+    ap-southeast-2:
+      Ubuntu16x04: ami-fe71759d
+    ap-northeast-1:
+      Ubuntu16x04: ami-eb49358c
+Parameters:
+  UseContainers:
+    Description: Use Docker Containers
+    Type: String
+    Default: Disabled
+    AllowedValues:
+      - Enabled
+      - Disabled
+  InstanceType:
+    AllowedValues:
+      - t2.micro
+      - m3.medium
+      - m3.large
+      - m3.xlarge
+      - m3.2xlarge
+      - m4.large
+      - m4.xlarge
+      - c3.large
+      - c3.xlarge
+      - c3.2xlarge
+      - c4.large
+      - c4.xlarge
+      - c4.2xlarge
+    ConstraintDescription: must be a valid EC2 instance type.
+    Default: c4.large
+    Description: WebServer EC2 instance type
+    Type: String
+  InstanceCount:
+    Description: Number of Amazon EC2 instances to Launch. (Must be a number between
+      1 and 4).
+    Type: Number
+    Default: 2
+    ConstraintDescription: Must be a number between 1 and 4.
+    MinValue: 1
+    MaxValue: 4
+  InstanceMaxCount:
+    Description: Maximum Number of Amazon EC2 instances in an autoscaling group. (Must
+      be a number between 4 and 8)
+    Type: Number
+    Default: 4
+    ConstraintDescription: Must be a number between 4 and 8.
+    MinValue: 4
+    MaxValue: 8
+  InstanceMinCount:
+    Description: Minimum Number of Amazon EC2 instances in an autoscaling group. (Must
+      be a number between 1 and 4).
+    Type: Number
+    Default: 2
+    ConstraintDescription: Must be a number between 1 and 4.
+    MinValue: 1
+    MaxValue: 4
+  SSHLocation:
+    Description: The IP address range that can be used to connect using SSH or RDP
+      to the Amazon EC2 instances.
+    Type: String
+    Default: 0.0.0.0/0
+    AllowedPattern: (\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})
+    ConstraintDescription: Must be a valid IP CIDR range of the form x.x.x.x/x.
+  OperatingSystem:
+    AllowedValues:
+      - Ubuntu16x04
+    Default: Ubuntu16x04
+    Description: Operating System Type
+    Type: String
+  UseSpotInstances:
+    Description: Enable/Disable Spot Instances to lower pricing. Warning t2.micro Instance Type does not work with spot instances. Frankfurt, Singapore, Sydney and Tokio regions currently does not support spot instances.
+    AllowedValues:
+      - Enable
+      - Disable
+    Default: Enable
+    Type: String
+  SpotPricing:
+    Description: Price to bid on Spot Instances.
+    Type: Number
+    Default: 0.05
+    ConstraintDescription: Must be a Positive Number between 0 and 1
+    MinValue: 0
+    MaxValue: 1
+  KeyPairName:
+    ConstraintDescription: can contain only ASCII characters.
+    Description: Name of an existing EC2 KeyPair to enable SSH access to the instances
+    Type: AWS::EC2::KeyPair::KeyName
+Conditions:
+  cSpotPriceGreaterThanZero: !Not [!Equals [!Ref SpotPricing, 0]]
+  cEnableSpotInstances: !And
+    - !Equals [!Ref UseSpotInstances, 'Enable']
+    - !Condition cSpotPriceGreaterThanZero
+    - !Not [!Equals [!Sub '${AWS::Region}', 'eu-central-1']]
+    - !Not [!Equals [!Sub '${AWS::Region}', 'ap-southeast-1']]
+    - !Not [!Equals [!Sub '${AWS::Region}', 'ap-southeast-2']]
+    - !Not [!Equals [!Sub '${AWS::Region}', 'ap-northeast-1']]
+  cEnableContainers: !Equals [!Ref UseContainers, 'Enabled']
+  cEnableInstances: !Not [!Equals [!Ref UseContainers, 'Enabled']]
+
+# Resources documentation
+# http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-template-resource-type-ref.html
+Resources:
+  myVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: '10.250.0.0/16'
+      InstanceTenancy: 'default'
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-VPC'
+  publicSubnet01:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref myVPC
+      CidrBlock: 10.250.0.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: True
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-PublicSubnet01'
+  publicSubnet02:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref myVPC
+      CidrBlock: 10.250.2.0/24
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: True
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-PublicSubnet02'
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    DependsOn: [myVPC]
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-InternetGateway'
+  AttachInternetGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref myVPC
+      InternetGatewayId: !Ref InternetGateway
+  InternetPublicRoutingTable:
+    Type: AWS::EC2::RouteTable
+    DependsOn: AttachInternetGateway
+    Properties:
+      VpcId: !Ref myVPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-InternetRoutingTable'
+  InternetPublicRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref InternetPublicRoutingTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+  PublicSubnet01RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref publicSubnet01
+      RouteTableId: !Ref InternetPublicRoutingTable
+  PublicSubnet02RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref publicSubnet02
+      RouteTableId: !Ref InternetPublicRoutingTable
+
+
+
+  #####################################################################################
+  # Start of EC2 Auto Scaling
+  #####################################################################################
+  EC2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enable HTTP access via port 80 and SSH access.
+      VpcId: !Ref myVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3000
+          ToPort: 3000
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref 'SSHLocation'
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-EC2'
+  EC2InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${AWS::StackName}-EC2-InstanceRole'
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [ec2.amazonaws.com]
+            Action: ['sts:AssumeRole']
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ec2:*
+                  - codedeploy:*
+                  - autoscaling:Describe*
+                  - cloudformation:Describe*
+                  - cloudformation:GetTemplate
+                  - s3:Get*
+                  - codepipeline:*
+                  - rds:DescribeDBInstances
+                Resource: '*'
+              # Allow fetch from Parameters Store in a specific name space
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameters
+                Resource:
+                  - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}.db.*'
+              # Allow describe parameters to automate config process
+              - Effect: Allow
+                Action:
+                  - ssm:DescribeParameters
+                Resource:
+                  - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:*'
+      Path: /
+  EC2InstanceRoleInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: /
+      Roles: [!Ref EC2InstanceRole]
+
+
+  #####################################################################################
+  # Start of Include Transform
+  #####################################################################################
+
+  # TRY LOADING THE TEMPLATE ON THE CLOUD FORMATION INTERFACE IN THREE WAYS.
+  # 1. With the following Fn::Transform block commented out. (in which case AWS::CloudFormation::Interface formatting will work)
+  # 2. With the Fn::Transform block uncommented. (in which case AWS::CloudFormation::Interface formatting is broken)
+  # 3. With the "UseContainers" parameter enabled rather than the default of disabled. (None of the conditions for the condition "cEnableInstances" will work either in the include snippet or on the Fn::Transform)
+
+  'Fn::Transform':
+    Name: 'AWS::Include'
+    Condition: cEnableInstances     #This does not work. But it would be nice if it did.
+    Parameters:
+      Location : "s3://al-cf-templates-eu-west-1/ec2snippet.yaml"  
+
+
+  #####################################################################################
+  # End of Include Transform
+  #####################################################################################
+
+
+
+  EC2ALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: CodeDeploy LB Security Group
+      VpcId: !Ref myVPC
+      SecurityGroupIngress:
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-EC2-LB'
+  EC2ALB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub '${AWS::StackName}-EC2-LB'
+      Scheme: internet-facing
+      LoadBalancerAttributes:
+        - Key: idle_timeout.timeout_seconds
+          Value: '30'
+      Subnets:
+        - !Ref publicSubnet01
+        - !Ref publicSubnet02
+      SecurityGroups: [!Ref EC2ALBSecurityGroup]
+  EC2TG:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub '${AWS::StackName}-EC2TG'
+      Port: 3000
+      Protocol: HTTP
+      VpcId: !Ref myVPC
+  EC2ALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref EC2TG
+      LoadBalancerArn: !Ref EC2ALB
+      Port: 80
+      Protocol: HTTP
+  LogGroupCloudInit:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName: !Sub '${AWS::StackName}-cloudinitoutput'
+      RetentionInDays: 7
+  LogGroupSysLog:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName: !Sub '${AWS::StackName}-syslog'
+      RetentionInDays: 7

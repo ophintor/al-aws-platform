@@ -1,0 +1,89 @@
+ECSLaunchConfig:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Condition: cEnableContainers
+    Metadata:
+      AWS::CloudFormation::Init:
+        config:
+          packages:
+            yum:
+              awslogs: []
+          files:
+            # Configuration file for awslogs (yum package) is needed as there is no other convenient way to pass region info
+            # EC2 launch config uses a python script where we directly pass parameters for region
+            /etc/awslogs/awscli.conf:
+              content:
+                Fn::Sub: |
+                  [plugins]
+                  cwlogs = cwlogs
+                  [default]
+                  region = ${AWS::Region}
+              mode: '000400'
+              owner: root
+              group: root
+            /etc/awslogs/awslogs.conf:
+              content:
+                Fn::Sub: |
+                  [general]
+                  state_file = /var/lib/awslogs/agent-state
+                  [cloud-init-outputlog]
+                  file = /var/log/cloud-init-output.log
+                  log_group_name =  ${LogGroupCloudInit}
+                  log_stream_name = cloudinit.outputlog-{instance_id}
+                  datetime_format = %d/%b/%Y:%H:%M:%S
+                  [system-log]
+                  file = /var/log/messages
+                  log_group_name =  ${LogGroupSysLog}
+                  log_stream_name = syslog-{instance_id}
+                  datetime_format = %b %d %H:%M:%S
+              mode: '000400'
+              owner: root
+              group: root
+          services:
+            sysvinit:
+              awslogs:
+                enabled: true
+                ensureRunning: true
+                files:
+                  - "/etc/awslogs/awslogs.conf"
+                  - "/etc/awslogs/awscli.conf"
+    Properties:
+      # AMI list: http://docs.aws.amazon.com/AmazonECS/latest/developerguide/launch_container_instance.html
+      InstanceType:
+        Ref: InstanceType
+      ImageId:
+        Fn::FindInMap:
+          - AWSRegionECSAMI
+          - Ref: 'AWS::Region'
+          - 'ecs'
+      SpotPrice:
+        Fn::If:
+          - cEnableSpotInstances
+          - Ref: SpotPricing
+          - Ref: 'AWS::NoValue'
+      KeyName:
+        Ref: KeyPairName
+      SecurityGroups:
+        - Ref: ECSSecurityGroup
+      IamInstanceProfile:
+        Ref: ECSInstanceProfile
+      InstanceMonitoring: true
+      UserData:
+        Fn::Base64:
+          Fn::Sub: |
+            #!/bin/bash -xe
+
+            echo ECS_CLUSTER=${ContainerCluster} >> /etc/ecs/ecs.config
+            yum install -y aws-cfn-bootstrap
+
+            # We can "trap" errors and use cfn-signal to "stop" the deploy
+            function error_exit
+            {
+              /opt/aws/bin/cfn-signal -e 1 --stack ${AWS::StackName} --resource ECSAutoScalingGroup --region ${AWS::Region}
+              exit 1
+            }
+            trap 'error_exit' ERR
+
+            # Call CFN-INIT to process the metadata for CloudFormation Init.
+            /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource ECSLaunchConfig --region ${AWS::Region}
+
+            /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource ECSAutoScalingGroup --region ${AWS::Region}
