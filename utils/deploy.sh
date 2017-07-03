@@ -44,11 +44,11 @@ case "${STACK_STATUS}" in
 	# UPDATE_ROLLBACK_COMPLETE_CLEANUP_IN_PROGRESS | UPDATE_ROLLBACK_COMPLETE | REVIEW_IN_PROGRESS
 
 	*_COMPLETE)
-		declare -r action="update-stack"
+		declare -r change_set_type="UPDATE"
 		declare -r wait_action="stack-update-complete"
 	;;
 	"")
-		declare -r action="create-stack"
+		declare -r change_set_type="CREATE"
 		declare -r wait_action="stack-create-complete"
 	;;
 	*)
@@ -57,16 +57,55 @@ case "${STACK_STATUS}" in
 	;;
 esac
 
-aws cloudformation "${action}" \
+CHANGE_SET_ID=$(aws cloudformation create-change-set \
 	--region "${REGION}" \
 	--template-url "${S3_OBJECT_URL}" \
 	--stack-name "${STACK_NAME}" \
+	--change-set-name "${STACK_NAME}-change-set" \
+	--change-set-type "${change_set_type}" \
 	--capabilities "CAPABILITY_NAMED_IAM" \
-	--parameters "$(tr '\n\r\t' ' ' < "${PARAMS_FOLDER}/${STACK_PARAMS_FILE}")"
+	--parameters "$(tr '\n\r\t' ' ' < "${PARAMS_FOLDER}/${STACK_PARAMS_FILE}")" \
+	--query "Id" \
+	--output text
+)
 
-aws cloudformation wait ${wait_action} \
+CHANGE_SET_STATUS=$(aws cloudformation describe-change-set \
 	--region "${REGION}" \
-	--stack-name "${STACK_NAME}"
+	--change-set-name "${STACK_NAME}-change-set" \
+	--stack-name "${STACK_NAME}" \
+	--query "Status" \
+	--output text \
+)
+
+case "${CHANGE_SET_STATUS}" in
+	CREATE_*)
+		aws cloudformation wait change-set-create-complete \
+			--region "${REGION}" \
+			--change-set-name "${CHANGE_SET_ID}" \
+			--stack-name "${STACK_NAME}"
+
+		aws cloudformation execute-change-set \
+			--region "${REGION}" \
+			--change-set-name "${CHANGE_SET_ID}"
+
+		aws cloudformation wait ${wait_action} \
+			--region "${REGION}" \
+			--stack-name "${STACK_NAME}"
+	;;
+	FAILED)
+		echo "Change set creation [${CHANGE_SET_STATUS}]"
+		echo "This could be due to no changes being introduced"
+		aws cloudformation delete-change-set \
+			--region "${REGION}" \
+			--change-set-name "${STACK_NAME}-change-set" \
+			--stack-name "${STACK_NAME}"
+		exit 1
+	;;
+	*)
+		echo "Unexpected error occurred"
+		exit 1
+	;;
+esac
 
 # Wait input from user
 read -s -n 1 -r -p "Press [Enter] key to push code..." ; echo

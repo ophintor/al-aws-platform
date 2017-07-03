@@ -2,6 +2,9 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: >
   Automation Logic Cloud Platform
 Mappings:
+  DBEngines:
+    MySQL:
+      port: 3306
   AWSRegion2AMI:
     # ubuntu/images/hvm-ssd/ubuntu-xenial-16.04-amd64-server-20170113
     us-east-1:
@@ -103,6 +106,13 @@ Outputs:
         !Sub '${ElasticsearchStack}-DomainEndpointES'
 
 Parameters:
+  AppPort:
+    ConstraintDescription: must be a valid TCP port number (1-65535)
+    Default: 3000
+    Description: Which TCP port the app listens on
+    MaxValue: 65535
+    MinValue: 1
+    Type: Number
   DBAllocatedStorage:
     ConstraintDescription: must be between 5 and 1024Gb.
     Default: 5
@@ -143,6 +153,11 @@ Parameters:
     MaxLength: 16
     MinLength: 1
     NoEcho: true
+    Type: String
+  DBEngine:
+    AllowedValues: ["MySQL"]
+    Default: MySQL
+    Description: Which DB Engine to use
     Type: String
   ElasticsearchLogs:
     Description: Enable/Disable Elasticsearch
@@ -266,15 +281,17 @@ Parameters:
     Default: Disable
     Type: String
   OperationsEmail:
-    Description: EMail address to notify if there are any scaling operations
+    Description: EMail address to notify if there are any autoscaling/cloudtrail operations or application errors
     Type: String
-    AllowedPattern: (^$|([a-zA-Z0-9_\-\.]+)@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.)|(([a-zA-Z0-9\-]+\.)+))([a-zA-Z]{2,4}|[0-9]{1,3})(\]?))
+    AllowedPattern: (^$|([a-zA-Z0-9_\-\.+]+)@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.)|(([a-zA-Z0-9\-]+\.)+))([a-zA-Z]{2,4}|[0-9]{1,3})(\]?))
     ConstraintDescription: Must be a valid email address.
     Default: ''
   EmailApprovals:
     Description: Email used to send approval notifications
-    Default: ''
     Type: String
+    AllowedPattern: (^$|([a-zA-Z0-9_\-\.+]+)@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.)|(([a-zA-Z0-9\-]+\.)+))([a-zA-Z]{2,4}|[0-9]{1,3})(\]?))
+    ConstraintDescription: Must be a valid email address.
+    Default: ''
   SlackApprovalsWebhook:
     Description: |
       Slack channel incoming webhook to send approval notifications, check
@@ -298,6 +315,10 @@ Metadata:
           - DBPassword
           - DBClass
           - DBAllocatedStorage
+      - Label:
+          default: 'Application Settings'
+        Parameters:
+          - AppPort
       - Label:
           default: 'Auto-Scaling Web Server Group''s Instance Configuration: '
         Parameters:
@@ -329,6 +350,8 @@ Metadata:
           - ElasticsearchStack
           - LogCloudTrail
     ParameterLabels:
+      AppPort:
+        default: Application TCP Port
       DBName:
         default: Database Name
       DBUsername:
@@ -384,17 +407,19 @@ Conditions:
   cEnableContainers: !Equals [!Ref UseContainers, 'Enabled']
   cEnableApprovalEmails: !Not [!Equals [!Ref EmailApprovals, '']]
   cEnableSlackApprovals: !Not [!Equals [!Ref SlackApprovalsWebhook, '']]
-  cEnableASGNotications: !Not [!Equals [!Ref OperationsEmail, '']]
+  cEnableEmailNotications: !Not [!Equals [!Ref OperationsEmail, '']]
 
 # Resources documentation
 # http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-template-resource-type-ref.html
 Resources:
-  Networking:
-    Type: AWS::CloudFormation::Stack
-    Properties:
-      TemplateURL: https://s3.amazonaws.com/al-cf-templates-us-east-1/infrastructure-networking.yaml
-      Parameters:
-        ParentStackName: !Sub '${AWS::StackName}'
+
+  ####################################################################################
+  # Base Networking
+  ####################################################################################
+  'Fn::Transform':
+    Name: 'AWS::Include'
+    Parameters:
+      Location: "s3://al-cf-templates-eu-west-1/cloudformation/infrastructure/networking/base-network.yaml"
 
   ####################################################################################
   # Start of Set Parameter Function
@@ -417,7 +442,7 @@ Resources:
             Action:
               - kms:Encrypt
             Principal:
-              AWS: !GetAtt 'LambdaRole.Arn'
+              AWS: !GetAtt 'EncryptLambdaRole.Arn'
             Resource: '*'
           # TODO: This can be set in the key! but we don't have it here
           - Effect: Allow
@@ -437,10 +462,11 @@ Resources:
   # Create Log Group to setup the Retention time of Lambda Logs
   EncryptLambdaLogsGroup:
     Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
     Properties:
       LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-set-param-store'
       RetentionInDays: 1
-  LambdaRole:
+  EncryptLambdaRole:
     Type: AWS::IAM::Role
     Properties:
       RoleName: !Sub '${AWS::StackName}-Lambda-SetParamStore'
@@ -457,12 +483,6 @@ Resources:
         - PolicyName: root
           PolicyDocument:
             Statement:
-              # Allow lambda to create log group
-              - Effect: Allow
-                Action:
-                  - logs:CreateLogGroup
-                Resource:
-                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*'
               # Create Log streams and write on it
               - Effect: Allow
                 Action:
@@ -486,7 +506,7 @@ Resources:
     Properties:
       FunctionName: !Sub '${AWS::StackName}-set-param-store'
       Handler: index.lambda_handler
-      Role: !GetAtt 'LambdaRole.Arn'
+      Role: !GetAtt 'EncryptLambdaRole.Arn'
       Code:
         ZipFile: |
           import base64
@@ -578,21 +598,21 @@ Resources:
     Properties:
       DBSubnetGroupDescription: RDS Subnet Group
       SubnetIds:
-        - !GetAtt 'Networking.Outputs.privateSubnet01ID'
-        - !GetAtt 'Networking.Outputs.privateSubnet02ID'
+        - !Ref privateSubnet01
+        - !Ref privateSubnet02
   DBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: Allow Internal access to RDS Instances
-      VpcId: !GetAtt 'Networking.Outputs.VPCID'
+      VpcId: !Ref VPC
       SecurityGroupIngress:
         - SourceSecurityGroupId: !Ref ECSSecurityGroup
-          FromPort: 3306
-          ToPort: 3306
+          FromPort: !FindInMap [DBEngines, !Ref 'DBEngine', port]
+          ToPort: !FindInMap [DBEngines, !Ref 'DBEngine', port]
           IpProtocol: tcp
         - SourceSecurityGroupId: !Ref EC2SecurityGroup
-          FromPort: 3306
-          ToPort: 3306
+          FromPort: !FindInMap [DBEngines, !Ref 'DBEngine', port]
+          ToPort: !FindInMap [DBEngines, !Ref 'DBEngine', port]
           IpProtocol: tcp
       Tags:
         - Key: Name
@@ -704,31 +724,24 @@ Resources:
                 - 'lambda.amazonaws.com'
             Action:
               - 'sts:AssumeRole'
-  ELBLogLambdaRolePolicies:
-    Type: AWS::IAM::Policy
-    Condition: cEnableELBLogging
-    Metadata:
-      Comment: IAM Policy attached to the ELBLogLambdaRole.
-    Properties:
-      PolicyName: ELBLogLambdaRolePolicy
-      PolicyDocument:
-        Statement:
-          - Effect: Allow
-            Action:
-              - 'logs:CreateLogStream'
-              - 'logs:PutLogEvents'
-              - 'logs:DescribeLogGroups'
-              - 'logs:DescribeLogStreams'
-            Resource:
-              - !Sub '${LogGroupELBLog.Arn}'
-              - !Sub '${ELBLogsToCWLambdaLogGroup.Arn}'
-          - Effect: Allow
-            Action:
-              - 's3:GetObject'
-            Resource:
-              - !Sub 'arn:aws:s3:::${AWS::StackName}-elb-logs/*'
-      Roles:
-        - !Ref 'ELBLogLambdaRole'
+      Properties:
+        PolicyName: ELBLogLambdaRolePolicy
+        PolicyDocument:
+          Statement:
+            - Effect: Allow
+              Action:
+                - 'logs:CreateLogStream'
+                - 'logs:PutLogEvents'
+                - 'logs:DescribeLogGroups'
+                - 'logs:DescribeLogStreams'
+              Resource:
+                - !Sub '${LogGroupELBLog.Arn}'
+                - !Sub '${ELBLogsToCWLambdaLogGroup.Arn}'
+            - Effect: Allow
+              Action:
+                - 's3:GetObject'
+              Resource:
+                - !Sub 'arn:aws:s3:::${AWS::StackName}-elb-logs/*'
   ELBLogLambdaInvokePermission:
     Type: AWS::Lambda::Permission
     Condition: cEnableELBLogging
@@ -742,14 +755,14 @@ Resources:
     Condition: cEnableELBLogging
     DeletionPolicy: Delete
     Properties:
-      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-ELBLogsToCWLambda'
+      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-elblogs-to-cw-migration'
       RetentionInDays: 1
   ELBLogsToCWLambda:
     Type: AWS::Lambda::Function
     Condition: cEnableELBLogging
-    DependsOn: ELBLogLambdaRolePolicies
+    DependsOn: ELBLogLambdaRole
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-ELBLogsToCWLambda'
+      FunctionName: !Sub '${AWS::StackName}-elblogs-to-cw-migration'
       Description: 'This code will move your ELB logs from S3 to CloudWatch. It is
         compressed, so quite hard to read. Original: github.com/awslabs/cloudwatch-logs-centralize-logs'
       Role: !GetAtt 'ELBLogLambdaRole.Arn'
@@ -938,7 +951,7 @@ Resources:
       ClusterName: !Sub '${AWS::StackName}-cluster'
   ECSAutoScalingNotifications:
     Type: AWS::SNS::Topic
-    Condition: cEnableASGNotications
+    Condition: cEnableEmailNotications
     Properties:
       Subscription:
         - Endpoint: !Ref OperationsEmail
@@ -948,8 +961,8 @@ Resources:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
       VPCZoneIdentifier:
-        - !GetAtt 'Networking.Outputs.publicSubnet01ID'
-        - !GetAtt 'Networking.Outputs.publicSubnet02ID'
+        - !Ref publicSubnet01
+        - !Ref publicSubnet02
       LaunchConfigurationName: !Ref ECSLaunchConfig
       MinSize: !Ref 'InstanceMinCount'
       MaxSize: !Ref 'InstanceMaxCount'
@@ -963,7 +976,7 @@ Resources:
           Value: !Sub '${AWS::StackName}-ECS'
           PropagateAtLaunch: true
       NotificationConfiguration: !If
-        - cEnableASGNotications
+        - cEnableEmailNotications
         - TopicARN: !Ref ECSAutoScalingNotifications
           NotificationTypes:
             - 'autoscaling:EC2_INSTANCE_LAUNCH'
@@ -1054,7 +1067,7 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: ECS Security Group
-      VpcId: !GetAtt 'Networking.Outputs.VPCID'
+      VpcId: !Ref VPC
       SecurityGroupIngress:
         - CidrIp: 0.0.0.0/0
           IpProtocol: tcp
@@ -1071,7 +1084,7 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: ECS LB Security Group
-      VpcId: !GetAtt 'Networking.Outputs.VPCID'
+      VpcId: !Ref VPC
       SecurityGroupIngress:
         - CidrIp: 0.0.0.0/0
           IpProtocol: tcp
@@ -1165,8 +1178,8 @@ Resources:
         - !If [cEnableELBLogging, {Key: access_logs.s3.bucket, Value: !Ref ELBAccessLogsBucket}, !Ref 'AWS::NoValue']
         - !If [cEnableELBLogging, {Key: access_logs.s3.prefix, Value: 'ECS-ELB'}, !Ref 'AWS::NoValue']
       Subnets:
-        - !GetAtt 'Networking.Outputs.publicSubnet01ID'
-        - !GetAtt 'Networking.Outputs.publicSubnet02ID'
+        - !Ref publicSubnet01
+        - !Ref publicSubnet02
       SecurityGroups: [!Ref ECSALBSecurityGroup]
       Tags:
         - Key: custom:cloudformation:depends-on
@@ -1176,9 +1189,9 @@ Resources:
     Properties:
       HealthCheckPath: /
       Name: !Sub '${AWS::StackName}-ECSTargetGroup'
-      Port: 3000
+      Port: !Ref AppPort
       Protocol: HTTP
-      VpcId: !GetAtt 'Networking.Outputs.VPCID'
+      VpcId: !Ref VPC
   ALBListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
@@ -1305,11 +1318,11 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: Enable HTTP access via port 80 and SSH access.
-      VpcId: !GetAtt 'Networking.Outputs.VPCID'
+      VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
-          FromPort: 3000
-          ToPort: 3000
+          FromPort: !Ref AppPort
+          ToPort: !Ref AppPort
           CidrIp: 0.0.0.0/0
         - IpProtocol: tcp
           FromPort: 22
@@ -1365,8 +1378,8 @@ Resources:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
       VPCZoneIdentifier:
-        - !GetAtt 'Networking.Outputs.publicSubnet01ID'
-        - !GetAtt 'Networking.Outputs.publicSubnet02ID'
+        - !Ref publicSubnet01
+        - !Ref publicSubnet02
       LaunchConfigurationName: !Ref EC2LaunchConfig
       MinSize: !Ref 'InstanceMinCount'
       MaxSize: !Ref 'InstanceMaxCount'
@@ -1519,7 +1532,7 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: CodeDeploy LB Security Group
-      VpcId: !GetAtt 'Networking.Outputs.VPCID'
+      VpcId: !Ref VPC
       SecurityGroupIngress:
         - CidrIp: 0.0.0.0/0
           IpProtocol: tcp
@@ -1544,8 +1557,8 @@ Resources:
         - !If [cEnableELBLogging, {Key: access_logs.s3.bucket, Value: !Ref ELBAccessLogsBucket}, !Ref 'AWS::NoValue']
         - !If [cEnableELBLogging, {Key: access_logs.s3.prefix, Value: 'EC2-ELB'}, !Ref 'AWS::NoValue']
       Subnets:
-        - !GetAtt 'Networking.Outputs.publicSubnet01ID'
-        - !GetAtt 'Networking.Outputs.publicSubnet02ID'
+        - !Ref publicSubnet01
+        - !Ref publicSubnet02
       SecurityGroups: [!Ref EC2ALBSecurityGroup]
       Tags:
         - Key: custom:cloudformation:depends-on
@@ -1554,9 +1567,9 @@ Resources:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
       Name: !Sub '${AWS::StackName}-EC2TG'
-      Port: 3000
+      Port: !Ref AppPort
       Protocol: HTTP
-      VpcId: !GetAtt 'Networking.Outputs.VPCID'
+      VpcId: !Ref VPC
   EC2ALBListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
@@ -1678,7 +1691,6 @@ Resources:
               # Write build logs
               - Effect: Allow
                 Action:
-                  - logs:CreateLogGroup
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                 Resource:
@@ -1691,9 +1703,33 @@ Resources:
                   - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-integration-test:log-stream:*'
                   - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-ecs-image:log-stream'
                   - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-ecs-image:log-stream:*'
+  CodeBuildArtifactLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName: !Sub '/aws/codebuild/${AWS::StackName}-build'
+      RetentionInDays: 1
+  CodePipelineTestArtifactLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName: !Sub '/aws/codebuild/${AWS::StackName}-test'
+      RetentionInDays: 1
+  IntegrationTestArtifactLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName: !Sub '/aws/codebuild/${AWS::StackName}-integration-test'
+      RetentionInDays: 1
+  CodeBuildDockerImageLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName: !Sub '/aws/codebuild/${AWS::StackName}-ecs-image'
+      RetentionInDays: 1
   CodeBuildArtifact:
     Type: AWS::CodeBuild::Project
-    DependsOn: [CodeRepo, CodeBuildRole]
+    DependsOn: [CodeRepo, CodeBuildRole, CodeBuildArtifactLogGroup]
     Properties:
       Name: !Sub '${AWS::StackName}-build'
       Description: A description about my project
@@ -1723,7 +1759,7 @@ Resources:
       TimeoutInMinutes: 300  # 5min
   CodePipelineTestArtifact:
     Type: AWS::CodeBuild::Project
-    DependsOn: [CodeRepo, CodeBuildRole]
+    DependsOn: [CodeRepo, CodeBuildRole, CodePipelineTestArtifactLogGroup]
     Properties:
       Name: !Sub '${AWS::StackName}-test'
       Description: A description about my project
@@ -1749,9 +1785,9 @@ Resources:
                 - npm install --only=dev
                 - npm test
       TimeoutInMinutes: 300 # 5min
-  IntegrationTestAartifact:
+  IntegrationTestArtifact:
     Type: AWS::CodeBuild::Project
-    DependsOn: [CodeRepo, CodeBuildRole]
+    DependsOn: [CodeRepo, CodeBuildRole, IntegrationTestArtifactLogGroup]
     Properties:
       Name: !Sub '${AWS::StackName}-integration-test'
       Description: A description about my project
@@ -1773,7 +1809,7 @@ Resources:
           - Name: DB_USERNAME
             Value: !Sub '${DBUsername}'
           - Name: DB_PASSWORD
-            Value: !Sub '${DBPassword'
+            Value: !Sub '${DBPassword}'
           - Name: DB_NAME
             Value: !Sub '${DBName}'
       Source:
@@ -1790,7 +1826,7 @@ Resources:
       TimeoutInMinutes: 300 # 5min
   CodeBuildDockerImage:
     Type: AWS::CodeBuild::Project
-    DependsOn: [CodeRepo, CodeBuildRole]
+    DependsOn: [CodeRepo, CodeBuildRole, CodeBuildDockerImageLogGroup]
     Properties:
       Name: !Sub '${AWS::StackName}-ecs-image'
       Description: A description about my project
@@ -2085,7 +2121,7 @@ Resources:
               # OutputArtifacts:
               #  - Name: BuildArtifact
               Configuration:
-                ProjectName: !Ref IntegrationTestAartifact
+                ProjectName: !Ref IntegrationTestArtifact
         - Name: ApprovalProduction
           Actions:
             - Name: QAApproval
@@ -2202,31 +2238,25 @@ Resources:
                 - lambda.amazonaws.com
             Action:
               - sts:AssumeRole
-  LogMigrationLambdaRolePolicies:
-    Type: AWS::IAM::Policy
-    Metadata:
-      Comment: 'IAM Policy attached to Role for the Log Migration Lambda. '
-    Properties:
-      PolicyName: LogMigrationLambdaRolePolicy
-      PolicyDocument:
-        Statement:
-          - Effect: Allow
-            Action:
-              - logs:CreateExportTask
-            Resource:
-              - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${AWS::StackName}*:*'
-          - Effect: Allow
-            Action:
-              - logs:CreateLogStream
-              - logs:PutLogEvents
-            Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}-LogMigrationLambda:*'
-          - Effect: Allow
-            Action:
-              - s3:PutObject
-            Resource:
-              - !Sub 'arn:aws:s3:::${AWS::StackName}-logs/*'
-      Roles:
-        - !Ref 'LogMigrationLambdaRole'
+      Policies:
+        - PolicyName: LogMigrationLambdaRolePolicy
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateExportTask
+                Resource:
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${AWS::StackName}*:*'
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}-log-migration:*'
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                Resource:
+                  - !Sub 'arn:aws:s3:::${AWS::StackName}-logs/*'
   LogMigrationScheduledRule:
     Type: AWS::Events::Rule
     Properties:
@@ -2247,13 +2277,13 @@ Resources:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Delete
     Properties:
-      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-LogMigrationLambda'
+      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-log-migration'
       RetentionInDays: 1
   LogMigrationLambda:
     Type: AWS::Lambda::Function
     Properties:
       Handler: index.lambda_handler
-      FunctionName: !Sub '${AWS::StackName}-LogMigrationLambda'
+      FunctionName: !Sub '${AWS::StackName}-log-migration'
       Role: !GetAtt 'LogMigrationLambdaRole.Arn'
       Code:
         ZipFile: !Sub |
@@ -2291,8 +2321,15 @@ Resources:
   #####################################################################################
 
   #####################################################################################
-  # Start of Metrics and Filters
+  # Start of Metrics and Alerts
   #####################################################################################
+  EmailNotificationTopic:
+    Type: AWS::SNS::Topic
+    Condition: cEnableEmailNotications
+    Properties:
+      Subscription:
+        - Endpoint: !Ref OperationsEmail
+          Protocol: email
   ### LogGroupAppLog
   AppRestartMetricFilter:
     Type: AWS::Logs::MetricFilter
@@ -2388,7 +2425,7 @@ Resources:
       EvaluationPeriods: '2'
       Threshold: '5'
       AlarmActions:
-        - !Ref 'NotificationTopic'
+        - !If [cEnableEmailNotications, !Ref EmailNotificationTopic, !Ref 'AWS::NoValue']
       Dimensions:
         - Name: FilterName
           Value: !Ref 'App4xxsMetricFilter'
@@ -2406,19 +2443,13 @@ Resources:
       EvaluationPeriods: '2'
       Threshold: '1000'
       AlarmActions:
-        - !Ref 'NotificationTopic'
+        - !If [cEnableEmailNotications, !Ref EmailNotificationTopic, !Ref 'AWS::NoValue']
       Dimensions:
         - Name: FilterName
           Value: !Ref 'AppBytesOutMetricFilter'
       ComparisonOperator: GreaterThanThreshold
 
   ### TrailLogGroup
-  NotificationTopic:
-    Type: AWS::SNS::Topic
-    Properties:
-      Subscription:
-        - Endpoint: !Ref OperationsEmail
-          Protocol: email
   SecurityGroupChangesMetricFilter:
     Type: AWS::Logs::MetricFilter
     Properties:
@@ -2439,7 +2470,7 @@ Resources:
       AlarmDescription: Alarms when an API call is made to create, update or delete
         a Security Group.
       AlarmActions:
-        - !Ref 'NotificationTopic'
+        - !If [cEnableEmailNotications, !Ref EmailNotificationTopic, !Ref 'AWS::NoValue']
       MetricName: SecurityGroupEventCount
       Namespace: CloudTrailMetrics
       ComparisonOperator: GreaterThanOrEqualToThreshold
@@ -2468,7 +2499,7 @@ Resources:
       AlarmDescription: Alarms when an API call is made to create, update or delete
         a Network ACL.
       AlarmActions:
-        - !Ref 'NotificationTopic'
+        - !If [cEnableEmailNotications, !Ref EmailNotificationTopic, !Ref 'AWS::NoValue']
       MetricName: NetworkAclEventCount
       Namespace: CloudTrailMetrics
       ComparisonOperator: GreaterThanOrEqualToThreshold
@@ -2497,7 +2528,7 @@ Resources:
       AlarmDescription: Alarms when an API call is made to create, update or delete
         a Customer or Internet Gateway.
       AlarmActions:
-        - !Ref 'NotificationTopic'
+        - !If [cEnableEmailNotications, !Ref EmailNotificationTopic, !Ref 'AWS::NoValue']
       MetricName: GatewayEventCount
       Namespace: CloudTrailMetrics
       ComparisonOperator: GreaterThanOrEqualToThreshold
@@ -2528,7 +2559,7 @@ Resources:
       AlarmDescription: Alarms when an API call is made to create, update or delete
         a VPC, VPC peering connection or VPC connection to classic.
       AlarmActions:
-        - !Ref 'NotificationTopic'
+        - !If [cEnableEmailNotications, !Ref EmailNotificationTopic, !Ref 'AWS::NoValue']
       MetricName: VpcEventCount
       Namespace: CloudTrailMetrics
       ComparisonOperator: GreaterThanOrEqualToThreshold
@@ -2556,7 +2587,7 @@ Resources:
       AlarmDescription: Alarms when an API call is made to create, terminate, start,
         stop or reboot an EC2 instance.
       AlarmActions:
-        - !Ref 'NotificationTopic'
+        - !If [cEnableEmailNotications, !Ref EmailNotificationTopic, !Ref 'AWS::NoValue']
       MetricName: EC2InstanceEventCount
       Namespace: CloudTrailMetrics
       ComparisonOperator: GreaterThanOrEqualToThreshold
@@ -2583,7 +2614,7 @@ Resources:
       AlarmDescription: Alarms when an API call is made to create, terminate, start,
         stop or reboot a 4x or 8x-large EC2 instance.
       AlarmActions:
-        - !Ref 'NotificationTopic'
+        - !If [cEnableEmailNotications, !Ref EmailNotificationTopic, !Ref 'AWS::NoValue']
       MetricName: EC2LargeInstanceEventCount
       Namespace: CloudTrailMetrics
       ComparisonOperator: GreaterThanOrEqualToThreshold
@@ -2611,7 +2642,7 @@ Resources:
       AlarmDescription: Alarms when an API call is made to create, update or delete
         a CloudTrail trail, or to start or stop logging to a trail.
       AlarmActions:
-        - !Ref 'NotificationTopic'
+        - !If [cEnableEmailNotications, !Ref EmailNotificationTopic, !Ref 'AWS::NoValue']
       MetricName: CloudTrailEventCount
       Namespace: CloudTrailMetrics
       ComparisonOperator: GreaterThanOrEqualToThreshold
@@ -2638,7 +2669,7 @@ Resources:
       AlarmDescription: Alarms when an unauthenticated API call is made to sign into
         the console.
       AlarmActions:
-        - !Ref 'NotificationTopic'
+        - !If [cEnableEmailNotications, !Ref EmailNotificationTopic, !Ref 'AWS::NoValue']
       MetricName: ConsoleSignInFailureCount
       Namespace: CloudTrailMetrics
       ComparisonOperator: GreaterThanOrEqualToThreshold
@@ -2664,7 +2695,7 @@ Resources:
       AlarmName: !Sub '${AWS::StackName}-CloudTrailAuthorizationFailures'
       AlarmDescription: Alarms when an unauthorized API call is made.
       AlarmActions:
-        - !Ref 'NotificationTopic'
+        - !If [cEnableEmailNotications, !Ref EmailNotificationTopic, !Ref 'AWS::NoValue']
       MetricName: AuthorizationFailureCount
       Namespace: CloudTrailMetrics
       ComparisonOperator: GreaterThanOrEqualToThreshold
@@ -2689,7 +2720,7 @@ Resources:
       AlarmName: !Sub '${AWS::StackName}-CloudTrailIAMPolicyChanges'
       AlarmDescription: Alarms when an API call is made to change an IAM policy.
       AlarmActions:
-        - !Ref 'NotificationTopic'
+        - !If [cEnableEmailNotications, !Ref EmailNotificationTopic, !Ref 'AWS::NoValue']
       MetricName: IAMPolicyEventCount
       Namespace: CloudTrailMetrics
       ComparisonOperator: GreaterThanOrEqualToThreshold
@@ -2812,6 +2843,7 @@ Resources:
       LogGroupName: !Sub '/aws/cloudtrail/${AWS::StackName}'
       RetentionInDays: 7
     Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
     Condition: cEnableLogCloudTrail
   TrailLogGroupRole:
     Properties:
@@ -2917,9 +2949,17 @@ Resources:
     Type: AWS::IAM::InstanceProfile
 
   # Exported so service stacks can stream logs to it.
+  LogStreamerLogsGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-es-log-streamer'
+      RetentionInDays: 1
   LogStreamer:
+    Type: AWS::Lambda::Function
     Condition: cEnableElasticSearchLogs
     Properties:
+      FunctionName: !Sub '${AWS::StackName}-es-log-streamer'
       Code:
         S3Bucket: !Sub 'solutions-${AWS::Region}'
         S3Key: centralized-logging/v1/centralizedLoggingDownload.zip
@@ -2928,8 +2968,8 @@ Resources:
       Role: !GetAtt 'LogStreamerRole.Arn'
       Runtime: nodejs4.3
       Timeout: 300
-    Type: AWS::Lambda::Function
   LogStreamerRole:
+    Type: AWS::IAM::Role
     Condition: cEnableElasticSearchLogs
     Properties:
       AssumeRolePolicyDocument:
@@ -2945,7 +2985,6 @@ Resources:
             Statement:
               - Effect: Allow
                 Action:
-                  - logs:CreateLogGroup
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                 Resource:
@@ -2961,18 +3000,18 @@ Resources:
                 Resource: !Sub 'arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}*'
             Version: '2012-10-17'
           PolicyName: My_Lambda_Function_Permissions
-    Type: AWS::IAM::Role
   MyFlowLog:
     Condition: cEnableElasticSearchLogs
     Properties:
       DeliverLogsPermissionArn: !GetAtt 'flowlogsRole.Arn'
       LogGroupName: !Ref VPCFlowLogsLogGroup
-      ResourceId: !GetAtt 'Networking.Outputs.VPCID'
+      ResourceId: !Ref VPC
       ResourceType: VPC
       TrafficType: ALL
     Type: AWS::EC2::FlowLog
 
   VPCFlowLogsLogGroup:
+    DeletionPolicy: Delete
     Condition: cEnableElasticSearchLogs
     Properties:
       RetentionInDays: 7
@@ -3009,6 +3048,7 @@ Resources:
   ###########################################
   SlackLambdaLogsGroup:
     Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
     Condition: cEnableSlackApprovals
     Properties:
       LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-slack-notifications'
@@ -3031,12 +3071,6 @@ Resources:
         - PolicyName: root
           PolicyDocument:
             Statement:
-              # Allow lambda to create log group
-              - Effect: Allow
-                Action:
-                  - logs:CreateLogGroup
-                Resource:
-                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*'
               # Create Log streams and write on it
               - Effect: Allow
                 Action:
@@ -3066,6 +3100,12 @@ Resources:
       Description: Webhook URL for approvals notifications
       Type: 'SecureString'
       Overwrite: true
+  SlackNotificationsLogsGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-slack-notifications'
+      RetentionInDays: 1
   SlackNotificationsLambda:
     Type: AWS::Lambda::Function
     DependsOn: MyKeyAlias
