@@ -1079,10 +1079,13 @@ Resources:
           IpProtocol: tcp
           FromPort: 80
           ToPort: 80
-        - CidrIp: 0.0.0.0/0
-          IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
+        - !If
+          - cEnableHTTPS
+          - CidrIp: 0.0.0.0/0
+            IpProtocol: tcp
+            FromPort: 443
+            ToPort: 443
+          - !Ref 'AWS::NoValue'
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-ECS-LB'
@@ -1527,10 +1530,13 @@ Resources:
           IpProtocol: tcp
           FromPort: 80
           ToPort: 80
-        - CidrIp: 0.0.0.0/0
-          IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
+        - !If
+          - cEnableHTTPS
+          - CidrIp: 0.0.0.0/0
+            IpProtocol: tcp
+            FromPort: 443
+            ToPort: 443
+          - !Ref 'AWS::NoValue'
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-EC2-LB'
