@@ -620,32 +620,26 @@ Resources:
       BackupRetentionPeriod: 0 # NOTE: This disables backups and speedups the provisioning tests...!
       DBSubnetGroupName: !Ref DBSubnetGroup
   StoreDBAddress:
-    Type: Custom::SetParameterStore
+    Type: AWS::SSM::Parameter
     Properties:
-      ServiceToken: !GetAtt 'EncryptLambda.Arn'
-      ParameterStoreName: !Sub '${AWS::StackName}.db.connectionstring'
+      Name: !Sub '${AWS::StackName}.db.connectionstring'
       Value: !GetAtt 'DBInstance.Endpoint.Address'
       Description: DataBase Address
       Type: 'String'
-      Overwrite: true
   StoreDBUsername:
-    Type: Custom::SetParameterStore
+    Type: AWS::SSM::Parameter
     Properties:
-      ServiceToken: !GetAtt 'EncryptLambda.Arn'
-      ParameterStoreName: !Sub '${AWS::StackName}.db.username'
+      Name: !Sub '${AWS::StackName}.db.username'
       Value: !Ref DBUsername
       Description: DataBase username
       Type: 'String'
-      Overwrite: true
   StoreDBName:
-    Type: Custom::SetParameterStore
+    Type: AWS::SSM::Parameter
     Properties:
-      ServiceToken: !GetAtt 'EncryptLambda.Arn'
-      ParameterStoreName: !Sub '${AWS::StackName}.db.name'
+      Name: !Sub '${AWS::StackName}.db.name'
       Value: !Ref DBName
       Description: DataBase Name
       Type: 'String'
-      Overwrite: true
   ####################################################################################
   # End of RDS
   ####################################################################################
