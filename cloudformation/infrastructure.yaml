@@ -303,6 +303,7 @@ Metadata:
       - Label:
           default: 'Database Configuration:'
         Parameters:
+          - DBEngine
           - DBName
           - DBUsername
           - DBPassword
