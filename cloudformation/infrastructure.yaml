@@ -3103,7 +3103,7 @@ Resources:
     Properties:
       FunctionName: !Sub '${AWS::StackName}-slack-notifications'
       Description: |
-        Lambda Function to send approvals notifications to slcak channel
+        Lambda Function to send approvals notifications to slack channel
       Handler: index.handler
       Role: !GetAtt 'SlackLambdaRole.Arn'
       Code:
