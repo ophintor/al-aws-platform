@@ -44,7 +44,6 @@
           "Parameters": [
             "KeyPairName",
             "SSHLocation",
-            "UserName",
             "UseHTTPS"
           ]
         },
@@ -127,11 +126,6 @@
       "Default": "xavier.thomas@automationlogic.com",
       "AllowedPattern": "([a-zA-Z0-9_\\-\\.]+)@((\\[[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.)|(([a-zA-Z0-9\\-]+\\.)+))([a-zA-Z]{2,4}|[0-9]{1,3})(\\]?)",
       "ConstraintDescription": "must be a valid email address."
-    },
-    "UserName": {
-      "Description": "The Username of the User creating the stack. Used to provide IAM permisions.",
-      "Type": "String",
-      "Default": "xavier.thomas"
     },
     "TagKey": {
       "Description": "The EC2 tag key that identifies this as a target for deployments.",
@@ -798,48 +792,18 @@
           "Version": "2012-10-17",
           "Statement": [
             {
-              "Sid": "Allow administration of the key",
+              "Sid": "Allow complete control of the key to the root user",
               "Effect": "Allow",
               "Principal": {
                 "AWS": {
-                  "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:user/${UserName}"
+                  "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
                 }
               },
-              "Action": [
-                "kms:Create*",
-                "kms:Describe*",
-                "kms:Enable*",
-                "kms:List*",
-                "kms:Put*",
-                "kms:Update*",
-                "kms:Revoke*",
-                "kms:Disable*",
-                "kms:Get*",
-                "kms:Delete*",
-                "kms:ScheduleKeyDeletion",
-                "kms:CancelKeyDeletion"
-              ],
+              "Action": "*",
               "Resource": "*"
             },
             {
-              "Sid": "Allow use of the key",
-              "Effect": "Allow",
-              "Principal": {
-                "AWS": {
-                  "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:user/${UserName}"
-                }
-              },
-              "Action": [
-                "kms:Encrypt",
-                "kms:Decrypt",
-                "kms:ReEncrypt*",
-                "kms:GenerateDataKey*",
-                "kms:DescribeKey"
-              ],
-              "Resource": "*"
-            },
-            {
-              "Sid": "Allow encrypting under this key.",
+              "Sid": "Allow encrypting under this key to the Lambda Role",
               "Effect": "Allow",
               "Principal": {
                 "AWS": {
@@ -856,7 +820,7 @@
               "Resource": "*"
             },
             {
-              "Sid": "Allow decrypting of any value encrypted under this key.",
+              "Sid": "Allow decrypting of any value encrypted under this key to the Instance Role",
               "Effect": "Allow",
               "Principal": {
                 "AWS": {
