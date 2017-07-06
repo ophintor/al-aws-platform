@@ -29,6 +29,8 @@
             "default": "Auto-Scaling Web Server Group's Instance Configuration: "
           },
           "Parameters": [
+            "UseSpotInstances",
+            "SpotPricing",
             "InstanceType",
             "InstanceCount",
             "InstanceMaxCount",
@@ -108,6 +110,12 @@
         },
         "LogCloudTrail": {
           "default": "Enable CloudTrail Logging"
+        },
+        "UseSpotInstances": {
+          "default": "Use Spot Instances"
+        },
+        "SpotPricing": {
+          "default": "Spot Instance Bid Price"
         }
       }
     }
@@ -300,6 +308,23 @@
       ],
       "Default": "Enable",
       "Type": "String"
+    },
+    "UseSpotInstances": {
+      "Description": "Enable/Disable Spot Instances to lower pricing. Warning t2.micro Instance Type does not work with spot instances. Frankfurt, Singapore, Sydney and Tokio regions currently does not support spot instances.",
+      "AllowedValues": [
+        "Enable",
+        "Disable"
+      ],
+      "Default": "Enable",
+      "Type": "String"
+    },
+    "SpotPricing": {
+      "Description": "Price to bid on Spot Instances.",
+      "Type": "Number",
+      "Default": 0.05,
+      "ConstraintDescription": "Must be a Positive Number between 0 and 1",
+      "MinValue": 0,
+      "MaxValue": 1
     }
   },
   "Mappings": {
@@ -427,6 +452,79 @@
           "Ref": "LogCloudTrail"
         },
         "Enable"
+      ]
+    },
+    "cSpotPriceGreaterThanZero": {
+      "Fn::Not": [
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "SpotPricing"
+            },
+            0
+          ]
+        }
+      ]
+    },
+    "cEnableSpotInstances": {
+      "Fn::And": [
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "UseSpotInstances"
+            },
+            "Enable"
+          ]
+        },
+        { "Condition": "cSpotPriceGreaterThanZero"},
+        {
+          "Fn::Not": [
+            {
+              "Fn::Equals": [
+                {
+                  "Fn::Sub": "${AWS::Region}"
+                },
+                "eu-central-1"
+              ]
+            }
+          ]
+        },
+        {
+          "Fn::Not": [
+            {
+              "Fn::Equals": [
+                {
+                  "Fn::Sub": "${AWS::Region}"
+                },
+                "ap-southeast-1"
+              ]
+            }
+          ]
+        },
+        {
+          "Fn::Not": [
+            {
+              "Fn::Equals": [
+                {
+                  "Fn::Sub": "${AWS::Region}"
+                },
+                "ap-southeast-2"
+              ]
+            }
+          ]
+        },
+        {
+          "Fn::Not": [
+            {
+              "Fn::Equals": [
+                {
+                  "Fn::Sub": "${AWS::Region}"
+                },
+                "ap-northeast-1"
+              ]
+            }
+          ]
+        }
       ]
     }
   },
@@ -2459,7 +2557,17 @@
         "IamInstanceProfile": {
           "Ref": "InstanceRoleInstanceProfile"
         },
-        "SpotPrice": "0.05",
+        "SpotPrice": {
+          "Fn::If": [
+            "cEnableSpotInstances",
+            {
+                "Ref": "SpotPricing"
+            },
+            {
+                "Ref": "AWS::NoValue"
+            }
+          ]
+        },
         "ImageId": {
           "Fn::FindInMap": [
             "Region2AMI",
