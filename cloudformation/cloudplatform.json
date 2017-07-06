@@ -183,28 +183,28 @@
       "ConstraintDescription": "must be a valid EC2 instance type."
     },
     "InstanceCount": {
-      "Description": "Number of Amazon EC2 instances to Launch. (Must be a number between 1 and 3).",
+      "Description": "Number of Amazon EC2 instances to Launch. (Must be a number between 1 and 4).",
       "Type": "Number",
-      "Default": "3",
-      "ConstraintDescription": "Must be a number between 1 and 3.",
+      "Default": "2",
+      "ConstraintDescription": "Must be a number between 1 and 4.",
       "MinValue": "1",
-      "MaxValue": "3"
+      "MaxValue": "4"
     },
     "InstanceMaxCount": {
-      "Description": "Maximum Number of Amazon EC2 instances in an autoscaling group. (Must be a number between 3 and 5)",
+      "Description": "Maximum Number of Amazon EC2 instances in an autoscaling group. (Must be a number between 2 and 8)",
       "Type": "Number",
-      "Default": "5",
-      "ConstraintDescription": "Must be a number between 1 and 5.",
-      "MinValue": "3",
-      "MaxValue": "5"
+      "Default": "4",
+      "ConstraintDescription": "Must be a number between 2 and 8.",
+      "MinValue": "2",
+      "MaxValue": "8"
     },
     "InstanceMinCount": {
-      "Description": "Minimum Number of Amazon EC2 instances in an autoscaling group. (Must be a number between 1 and 3).",
+      "Description": "Minimum Number of Amazon EC2 instances in an autoscaling group. (Must be a number between 1 and 4).",
       "Type": "Number",
-      "Default": "1",
-      "ConstraintDescription": "Must be a number between 1 and 3.",
+      "Default": "2",
+      "ConstraintDescription": "Must be a number between 1 and 4.",
       "MinValue": "1",
-      "MaxValue": "3"
+      "MaxValue": "4"
     },
     "SSHLocation": {
       "Description": "The IP address range that can be used to connect using SSH or RDP to the Amazon EC2 instances.",
@@ -277,7 +277,7 @@
         "True",
         "False"
       ],
-      "Default": "True",
+      "Default": "False",
       "Type": "String"
     },
     "ClusterSize": {
@@ -287,7 +287,7 @@
             "Medium",
             "Large"
         ],
-        "Default": "Medium",
+        "Default": "Small",
         "Description": "Amazon ES cluster size: small (2 data nodes), medium (4 data nodes), large (6 data nodes)",
         "Type": "String"
     },
@@ -306,7 +306,7 @@
         "Enable",
         "Disable"
       ],
-      "Default": "Enable",
+      "Default": "Disable",
       "Type": "String"
     },
     "UseSpotInstances": {
