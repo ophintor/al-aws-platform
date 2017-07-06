@@ -310,6 +310,7 @@ Metadata:
       - Label:
           default: 'Database Configuration:'
         Parameters:
+          - DBEngine
           - DBName
           - DBUsername
           - DBPassword
@@ -630,32 +631,26 @@ Resources:
       BackupRetentionPeriod: 0 # NOTE: This disables backups and speedups the provisioning tests...!
       DBSubnetGroupName: !Ref DBSubnetGroup
   StoreDBAddress:
-    Type: Custom::SetParameterStore
+    Type: AWS::SSM::Parameter
     Properties:
-      ServiceToken: !GetAtt 'EncryptLambda.Arn'
-      ParameterStoreName: !Sub '${AWS::StackName}.db.connectionstring'
+      Name: !Sub '${AWS::StackName}.db.connectionstring'
       Value: !GetAtt 'DBInstance.Endpoint.Address'
       Description: DataBase Address
       Type: 'String'
-      Overwrite: true
   StoreDBUsername:
-    Type: Custom::SetParameterStore
+    Type: AWS::SSM::Parameter
     Properties:
-      ServiceToken: !GetAtt 'EncryptLambda.Arn'
-      ParameterStoreName: !Sub '${AWS::StackName}.db.username'
+      Name: !Sub '${AWS::StackName}.db.username'
       Value: !Ref DBUsername
       Description: DataBase username
       Type: 'String'
-      Overwrite: true
   StoreDBName:
-    Type: Custom::SetParameterStore
+    Type: AWS::SSM::Parameter
     Properties:
-      ServiceToken: !GetAtt 'EncryptLambda.Arn'
-      ParameterStoreName: !Sub '${AWS::StackName}.db.name'
+      Name: !Sub '${AWS::StackName}.db.name'
       Value: !Ref DBName
       Description: DataBase Name
       Type: 'String'
-      Overwrite: true
   ####################################################################################
   # End of RDS
   ####################################################################################
@@ -1090,10 +1085,13 @@ Resources:
           IpProtocol: tcp
           FromPort: 80
           ToPort: 80
-        - CidrIp: 0.0.0.0/0
-          IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
+        - !If
+          - cEnableHTTPS
+          - CidrIp: 0.0.0.0/0
+            IpProtocol: tcp
+            FromPort: 443
+            ToPort: 443
+          - !Ref 'AWS::NoValue'
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-ECS-LB'
@@ -1538,10 +1536,13 @@ Resources:
           IpProtocol: tcp
           FromPort: 80
           ToPort: 80
-        - CidrIp: 0.0.0.0/0
-          IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
+        - !If
+          - cEnableHTTPS
+          - CidrIp: 0.0.0.0/0
+            IpProtocol: tcp
+            FromPort: 443
+            ToPort: 443
+          - !Ref 'AWS::NoValue'
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-EC2-LB'
@@ -3113,7 +3114,7 @@ Resources:
     Properties:
       FunctionName: !Sub '${AWS::StackName}-slack-notifications'
       Description: |
-        Lambda Function to send approvals notifications to slcak channel
+        Lambda Function to send approvals notifications to slack channel
       Handler: index.handler
       Role: !GetAtt 'SlackLambdaRole.Arn'
       Code:
