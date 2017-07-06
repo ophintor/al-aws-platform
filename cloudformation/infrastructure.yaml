@@ -84,7 +84,7 @@ Outputs:
     Description: Website
     Value: !Join ['', [
       !If [cEnableHTTPS, 'https://', 'http://'],
-      !If [cEnableDNS, !Sub 'ec2.${AWS::StackName}.al-labs.co.uk', !Sub '${EC2ALB.DNSName}']]
+      !If [cEnableDNS, !Sub 'ec2.${AWS::StackName}.al-labs.co.uk', !Sub '${AppLoadBalancer.DNSName}']]
     ]
   RepoURL:
     Description: Git Repository
@@ -93,7 +93,7 @@ Outputs:
     Description: ECS LB URL
     Value: !Join ['', [
       !If [cEnableHTTPS, 'https://', 'http://'],
-      !If [cEnableDNS, !Sub 'ecs.${AWS::StackName}.al-labs.co.uk', !Sub '${ECSALB.DNSName}']]
+      !If [cEnableDNS, !Sub 'ecs.${AWS::StackName}.al-labs.co.uk', !Sub '${AppLoadBalancer.DNSName}']]
     ]
   PipelineUrl:
     Value: !Sub 'https://console.aws.amazon.com/codepipeline/home?region=${AWS::Region}#/view/${CodePipeline}'
@@ -1164,41 +1164,6 @@ Resources:
                   - 'ec2:Describe*'
                   - 'ec2:AuthorizeSecurityGroupIngress'
                 Resource: '*'
-  ECSALB:
-    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
-    Properties:
-      Name: !Sub '${AWS::StackName}-ECS-LB'
-      Scheme: internet-facing
-      LoadBalancerAttributes:
-        - Key: idle_timeout.timeout_seconds
-          Value: 30
-        - !If [cEnableELBLogging, {Key: access_logs.s3.enabled, Value: true}, !Ref 'AWS::NoValue']
-        - !If [cEnableELBLogging, {Key: access_logs.s3.bucket, Value: !Ref ELBAccessLogsBucket}, !Ref 'AWS::NoValue']
-        - !If [cEnableELBLogging, {Key: access_logs.s3.prefix, Value: 'ECS-ELB'}, !Ref 'AWS::NoValue']
-      Subnets:
-        - !Ref publicSubnet01
-        - !Ref publicSubnet02
-      SecurityGroups: [!Ref ECSALBSecurityGroup]
-      Tags:
-        - Key: custom:cloudformation:depends-on
-          Value: !If [cEnableELBLogging, !Ref ELBAccessLogsBucketPolicy, !Ref 'AWS::NoValue']
-  ECSTargetGroup:
-    Type: AWS::ElasticLoadBalancingV2::TargetGroup
-    Properties:
-      HealthCheckPath: /
-      Name: !Sub '${AWS::StackName}-ECSTargetGroup'
-      Port: !Ref AppPort
-      Protocol: HTTP
-      VpcId: !Ref VPC
-  ALBListener:
-    Type: AWS::ElasticLoadBalancingV2::Listener
-    Properties:
-      DefaultActions:
-        - Type: forward
-          TargetGroupArn: !Ref ECSTargetGroup
-      LoadBalancerArn: !Ref ECSALB
-      Port: 80
-      Protocol: HTTP
   MyRepository:
     Type: AWS::ECR::Repository
     Properties:
@@ -1382,7 +1347,7 @@ Resources:
       MinSize: !Ref 'InstanceMinCount'
       MaxSize: !Ref 'InstanceMaxCount'
       DesiredCapacity: !Ref 'InstanceCount'
-      TargetGroupARNs: [!Ref EC2TG]
+      TargetGroupARNs: [!Ref AppTargetGroup]
       MetricsCollection:
         # No metrics specified, send all!
         # http://docs.aws.amazon.com/AutoScaling/latest/APIReference/API_EnableMetricsCollection.html
@@ -1546,17 +1511,25 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-EC2-LB'
-  EC2ALB:
+  #####################################################################################
+  # End of EC2 Auto Scaling
+  #####################################################################################
+
+  #####################################################################################
+  # Common stuff between EC2/ECS
+  #####################################################################################
+
+  AppLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: !Sub '${AWS::StackName}-EC2-LB'
+      Name: !Sub '${AWS::StackName}-App-LoadBalancer'
       Scheme: internet-facing
       LoadBalancerAttributes:
         - Key: idle_timeout.timeout_seconds
           Value: '30'
         - !If [cEnableELBLogging, {Key: access_logs.s3.enabled, Value: true}, !Ref 'AWS::NoValue']
         - !If [cEnableELBLogging, {Key: access_logs.s3.bucket, Value: !Ref ELBAccessLogsBucket}, !Ref 'AWS::NoValue']
-        - !If [cEnableELBLogging, {Key: access_logs.s3.prefix, Value: 'EC2-ELB'}, !Ref 'AWS::NoValue']
+        - !If [cEnableELBLogging, {Key: access_logs.s3.prefix, Value: 'App-ELB'}, !Ref 'AWS::NoValue']
       Subnets:
         - !Ref publicSubnet01
         - !Ref publicSubnet02
@@ -1564,25 +1537,22 @@ Resources:
       Tags:
         - Key: custom:cloudformation:depends-on
           Value: !If [cEnableELBLogging, !Ref ELBAccessLogsBucketPolicy, !Ref 'AWS::NoValue']
-  EC2TG:
+  AppTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: !Sub '${AWS::StackName}-EC2TG'
+      Name: !Sub '${AWS::StackName}-AppTargetGroup'
       Port: !Ref AppPort
       Protocol: HTTP
       VpcId: !Ref VPC
-  EC2ALBListener:
+  AppLoadBalancerListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
       DefaultActions:
         - Type: forward
-          TargetGroupArn: !Ref EC2TG
-      LoadBalancerArn: !Ref EC2ALB
+          TargetGroupArn: !Ref AppTargetGroup
+      LoadBalancerArn: !Ref AppLoadBalancer
       Port: 80
       Protocol: HTTP
-  #####################################################################################
-  # End of EC2 Auto Scaling
-  #####################################################################################
 
   #####################################################################################
   # Start of CI/CD
@@ -1804,7 +1774,7 @@ Resources:
         Image: aws/codebuild/nodejs:7.0.0
         EnvironmentVariables:
           - Name: API_URL
-            Value: !Sub 'http://${ECSALB.DNSName}/api'
+            Value: !Sub 'http://${AppLoadBalancer.DNSName}/api'
           - Name: DB_CONNECTIONSTRING
             Value: !Sub '${DBInstance.Endpoint.Address}'
           - Name: DB_USERNAME
@@ -2003,7 +1973,7 @@ Resources:
     Type: AWS::CodePipeline::Pipeline
     DependsOn:
       - ContainerCluster
-      - ECSTargetGroup
+      - AppTargetGroup
       - ECSServiceRole
       - DBInstance
     Properties:
@@ -2083,10 +2053,8 @@ Resources:
               Configuration:
                 ChangeSetName: Deploy
                 ActionMode: CREATE_UPDATE
-                # StackName: !Ref StackName
                 StackName: !Sub '${AWS::StackName}-ContainerApp'
                 Capabilities: CAPABILITY_NAMED_IAM
-                # TemplatePath: Template::cloudformation.template.myapp.yaml
                 TemplatePath: SourceOutput::cloudformation/containerapp.template.yaml
                 RoleArn: !GetAtt 'CloudFormationExecutionRole.Arn'
                 # Can't be a YAML object:  Value of property Configuration must be an object with String (or simple type) properties
@@ -2102,7 +2070,7 @@ Resources:
                     "DockerImageTag": { "Fn::GetParam" : ["DockerImageOutput", "build.json", "tag"] },
                     "DockerImage": "${AWS::StackName}-containerimage",
                     "TaskRole": "${TaskRole}",
-                    "ECSTargetGroup": "${ECSTargetGroup}",
+                    "ECSTargetGroup": "${AppTargetGroup}",
                     "ECSServiceRole": "${ECSServiceRole}",
                     "DBAddress": "${DBInstance.Endpoint.Address}"
                   }
@@ -2133,7 +2101,7 @@ Resources:
                 Provider: Manual
               Configuration:
                 NotificationArn: !Ref ApprovalTopic
-                CustomData: !Sub 'Approval or Reject this change after running Exploratory Tests: http://${EC2ALB.DNSName}/'
+                CustomData: !Sub 'Approval or Reject this change after running Exploratory Tests: http://${AppLoadBalancer.DNSName}/'
       ArtifactStore:
         Type: S3
         Location: !Ref ArtifactStoreS3Location
@@ -2758,8 +2726,8 @@ Resources:
     Properties:
       DefaultActions:
         - Type: forward
-          TargetGroupArn: !Ref EC2TG
-      LoadBalancerArn: !Ref EC2ALB
+          TargetGroupArn: !Ref AppTargetGroup
+      LoadBalancerArn: !Ref AppLoadBalancer
       Port: 443
       Protocol: HTTPS
       Certificates:
@@ -2770,8 +2738,8 @@ Resources:
     Properties:
       DefaultActions:
         - Type: forward
-          TargetGroupArn: !Ref ECSTargetGroup
-      LoadBalancerArn: !Ref ECSALB
+          TargetGroupArn: !Ref AppTargetGroup
+      LoadBalancerArn: !Ref AppLoadBalancer
       Port: 443
       Protocol: HTTPS
       Certificates:
@@ -2787,13 +2755,13 @@ Resources:
         - Name: !Sub 'ec2.${AWS::StackName}.al-labs.co.uk.'
           Type: A
           AliasTarget:
-            HostedZoneId: !GetAtt 'EC2ALB.CanonicalHostedZoneID'
-            DNSName: !GetAtt 'EC2ALB.DNSName'
+            HostedZoneId: !GetAtt 'AppLoadBalancer.CanonicalHostedZoneID'
+            DNSName: !GetAtt 'AppLoadBalancer.DNSName'
         - Name: !Sub 'ecs.${AWS::StackName}.al-labs.co.uk.'
           Type: A
           AliasTarget:
-            HostedZoneId: !GetAtt 'ECSALB.CanonicalHostedZoneID'
-            DNSName: !GetAtt 'ECSALB.DNSName'
+            HostedZoneId: !GetAtt 'AppLoadBalancer.CanonicalHostedZoneID'
+            DNSName: !GetAtt 'AppLoadBalancer.DNSName'
     Condition: cEnableDNS
   #####################################################################################
   # End of Public DNS
