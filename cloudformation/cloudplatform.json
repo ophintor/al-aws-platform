@@ -3594,7 +3594,7 @@
         "ApplicationName": {
           "Ref": "CodeDeployApplication"
         },
-        "DeploymentConfigName": "CodeDeployDefault.HalfAtATime",
+        "DeploymentConfigName": "CodeDeployDefault.OneAtATime",
         "AutoScalingGroups": [
           {
             "Ref": "AutoScalingGroup"
