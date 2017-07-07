@@ -973,7 +973,7 @@ Resources:
       ResourceSignal:
         Timeout: PT15M
     UpdatePolicy:
-      - !If
+      !If
         - cMinInstancesGreaterThanOne
         - AutoScalingRollingUpdate:
             MinInstancesInService: '1'
