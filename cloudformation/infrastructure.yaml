@@ -972,16 +972,15 @@ Resources:
     CreationPolicy:
       ResourceSignal:
         Timeout: PT15M
-    UpdatePolicy:
-      !If
-        - cMinInstancesGreaterThanOne
-        - AutoScalingRollingUpdate:
-            MinInstancesInService: '1'
-            MaxBatchSize: '1'
-            PauseTime: PT15M
-            WaitOnResourceSignals: 'true'
-        - AutoScalingReplacingUpdate:
-            WillReplace: true
+    UpdatePolicy: !If
+      - cMinInstancesGreaterThanOne
+      - AutoScalingRollingUpdate:
+          MinInstancesInService: '1'
+          MaxBatchSize: '1'
+          PauseTime: PT15M
+          WaitOnResourceSignals: 'true'
+      - AutoScalingReplacingUpdate:
+          WillReplace: true
   ECSLaunchConfig:
     Type: AWS::AutoScaling::LaunchConfiguration
     Metadata:
@@ -1391,9 +1390,15 @@ Resources:
     CreationPolicy:
       ResourceSignal:
         Timeout: PT15M
-    UpdatePolicy:
-      AutoScalingReplacingUpdate:
-        WillReplace: true
+    UpdatePolicy: !If
+      - cMinInstancesGreaterThanOne
+      - AutoScalingRollingUpdate:
+          MinInstancesInService: '1'
+          MaxBatchSize: '1'
+          PauseTime: PT15M
+          WaitOnResourceSignals: 'true'
+      - AutoScalingReplacingUpdate:
+          WillReplace: true
   EC2LaunchConfig:
     Type: AWS::AutoScaling::LaunchConfiguration
     Metadata:
