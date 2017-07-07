@@ -973,15 +973,15 @@ Resources:
       ResourceSignal:
         Timeout: PT15M
     UpdatePolicy:
-        - !If
-          - cMinInstancesGreaterThanOne
-          - AutoScalingRollingUpdate:
-              MinInstancesInService: '1'
-              MaxBatchSize: '1'
-              PauseTime: PT15M
-              WaitOnResourceSignals: 'true'
-          - AutoScalingReplacingUpdate:
-              WillReplace: true
+      - !If
+        - cMinInstancesGreaterThanOne
+        - AutoScalingRollingUpdate:
+            MinInstancesInService: '1'
+            MaxBatchSize: '1'
+            PauseTime: PT15M
+            WaitOnResourceSignals: 'true'
+        - AutoScalingReplacingUpdate:
+            WillReplace: true
   ECSLaunchConfig:
     Type: AWS::AutoScaling::LaunchConfiguration
     Metadata:
