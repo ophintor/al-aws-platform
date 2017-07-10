@@ -1089,33 +1089,9 @@ Resources:
           IpProtocol: tcp
           FromPort: 31000
           ToPort: 61000
-        - CidrIp: !Ref 'SSHLocation'
-          IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-ECS'
-  ECSALBSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: ECS LB Security Group
-      VpcId: !Ref VPC
-      SecurityGroupIngress:
-        - CidrIp: 0.0.0.0/0
-          IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-        - !If
-          - cEnableHTTPS
-          - CidrIp: 0.0.0.0/0
-            IpProtocol: tcp
-            FromPort: 443
-            ToPort: 443
-          - !Ref 'AWS::NoValue'
-      Tags:
-        - Key: Name
-          Value: !Sub '${AWS::StackName}-ECS-LB'
   ECSInstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
@@ -1308,10 +1284,6 @@ Resources:
           FromPort: !Ref AppPort
           ToPort: !Ref AppPort
           CidrIp: 0.0.0.0/0
-        - IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
-          CidrIp: !Ref 'SSHLocation'
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-EC2'
@@ -1518,26 +1490,7 @@ Resources:
 
           # All is well, so signal AutoScalingGroup.
           $(which cfn-signal) -e 0 --stack ${AWS::StackName} --resource EC2AutoScalingGroup --region ${AWS::Region}
-  EC2ALBSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: CodeDeploy LB Security Group
-      VpcId: !Ref VPC
-      SecurityGroupIngress:
-        - CidrIp: 0.0.0.0/0
-          IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-        - !If
-          - cEnableHTTPS
-          - CidrIp: 0.0.0.0/0
-            IpProtocol: tcp
-            FromPort: 443
-            ToPort: 443
-          - !Ref 'AWS::NoValue'
-      Tags:
-        - Key: Name
-          Value: !Sub '${AWS::StackName}-EC2-LB'
+
   #####################################################################################
   # End of EC2 Auto Scaling
   #####################################################################################
@@ -1560,7 +1513,7 @@ Resources:
       Subnets:
         - !Ref publicSubnet01
         - !Ref publicSubnet02
-      SecurityGroups: [!Ref EC2ALBSecurityGroup]
+      SecurityGroups: [!Ref AppSecurityGroup]
       Tags:
         - Key: custom:cloudformation:depends-on
           Value: !If [cEnableELBLogging, !Ref ELBAccessLogsBucketPolicy, !Ref 'AWS::NoValue']
@@ -1580,6 +1533,30 @@ Resources:
       LoadBalancerArn: !Ref AppLoadBalancer
       Port: 80
       Protocol: HTTP
+  AppSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: SSH, HTTP and HTTPS
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - CidrIp: !Ref 'SSHLocation'
+          IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+        - !If
+          - cEnableHTTPS
+          - CidrIp: 0.0.0.0/0
+            IpProtocol: tcp
+            FromPort: 443
+            ToPort: 443
+          - !Ref 'AWS::NoValue'
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-app-security-group'
 
   #####################################################################################
   # Start of CI/CD
