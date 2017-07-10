@@ -417,6 +417,7 @@ Conditions:
     - !Not [!Equals [!Sub '${AWS::Region}', 'ap-southeast-2']]
     - !Not [!Equals [!Sub '${AWS::Region}', 'ap-northeast-1']]
   cEnableContainers: !Equals [!Ref UseContainers, 'Enabled']
+  cEnableEC2: !Not [ !Condition cEnableContainers ]
   cEnableApprovalEmails: !Not [!Equals [!Ref EmailApprovals, '']]
   cEnableSlackApprovals: !Not [!Equals [!Ref SlackApprovalsWebhook, '']]
   cEnableEmailNotications: !Not [!Equals [!Ref OperationsEmail, '']]
@@ -449,24 +450,8 @@ Resources:
           - Sid: Allow administration of the key
             Effect: Allow
             Principal:
-              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:'
             Action: '*'
-            Resource: '*'
-          # Allow EncryptLambda function to use the key
-          - Effect: Allow
-            Action:
-              - kms:Encrypt
-            Principal:
-              AWS: !GetAtt 'EncryptLambdaRole.Arn'
-            Resource: '*'
-          # TODO: This can be set in the key! but we don't have it here
-          - Effect: Allow
-            Action:
-              - kms:Decrypt
-            Principal:
-              AWS:
-                - !GetAtt 'EC2InstanceRole.Arn'
-                - !GetAtt 'TaskRole.Arn'
             Resource: '*'
   MyKeyAlias:
     Type: AWS::KMS::Alias
@@ -1276,6 +1261,7 @@ Resources:
   #####################################################################################
   EC2SecurityGroup:
     Type: AWS::EC2::SecurityGroup
+    Condition: cEnableEC2
     Properties:
       GroupDescription: Enable HTTP access via port 80 and SSH access.
       VpcId: !Ref VPC
@@ -1289,6 +1275,7 @@ Resources:
           Value: !Sub '${AWS::StackName}-EC2'
   EC2InstanceRole:
     Type: AWS::IAM::Role
+    Condition: cEnableEC2
     Properties:
       RoleName: !Sub '${AWS::StackName}-EC2-InstanceRole'
       AssumeRolePolicyDocument:
@@ -1327,11 +1314,13 @@ Resources:
       Path: /
   EC2InstanceRoleInstanceProfile:
     Type: AWS::IAM::InstanceProfile
+    Condition: cEnableEC2
     Properties:
       Path: /
       Roles: [!Ref EC2InstanceRole]
   EC2AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
+    Condition: cEnableEC2
     Properties:
       VPCZoneIdentifier:
         - !Ref publicSubnet01
@@ -1363,6 +1352,7 @@ Resources:
           WillReplace: true
   EC2LaunchConfig:
     Type: AWS::AutoScaling::LaunchConfiguration
+    Condition: cEnableEC2
     Metadata:
       AWS::CloudFormation::Init:
         config:
