@@ -448,6 +448,18 @@
         "Enable"
       ]
     },
+    "cMinInstancesGreaterThanOne":{
+      "Fn::Not": [
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "InstanceMinCount"
+            },
+            1
+          ]
+        }
+      ]
+    },
     "cSpotPriceGreaterThanZero": {
       "Fn::Not": [
         {
@@ -2707,12 +2719,22 @@
         }
       },
       "UpdatePolicy": {
-        "AutoScalingRollingUpdate": {
-          "MinInstancesInService": "1",
-          "MaxBatchSize": "1",
-          "PauseTime": "PT15M",
-          "WaitOnResourceSignals": "true"
-        }
+        "Fn::If":[
+          "cMinInstancesGreaterThanOne",
+          {
+            "AutoScalingRollingUpdate": {
+              "MinInstancesInService": "1",
+              "MaxBatchSize": "1",
+              "PauseTime": "PT15M",
+              "WaitOnResourceSignals": "true"
+            }
+          },
+          {
+            "AutoScalingReplacingUpdate" : {
+              "WillReplace" : "true"
+            }
+          }
+        ]
       }
     },
     "WebServerScaleUpPolicy": {
@@ -3536,7 +3558,7 @@
         "ApplicationName": {
           "Ref": "CodeDeployApplication"
         },
-        "DeploymentConfigName": "CodeDeployDefault.HalfAtATime",
+        "DeploymentConfigName": "CodeDeployDefault.OneAtATime",
         "AutoScalingGroups": [
           {
             "Ref": "AutoScalingGroup"

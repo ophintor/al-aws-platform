@@ -397,6 +397,7 @@ Conditions:
   cEnableELBLogging: !Equals [!Ref ELBLogging, 'Enable']
   cEnableELBtoElasticSearch: !And [!Condition cEnableElasticSearchLogs, !Condition cEnableELBLogging]
   cEnableLogCloudTrail: !Equals [!Ref LogCloudTrail, 'Enable']
+  cMinInstancesGreaterThanOne: !Not [!Equals [!Ref InstanceMinCount, 1]]
   cSpotPriceGreaterThanZero: !Not [!Equals [!Ref SpotPricing, 0]]
   cEnableSpotInstances: !And
     - !Equals [!Ref UseSpotInstances, 'Enable']
@@ -985,9 +986,15 @@ Resources:
     CreationPolicy:
       ResourceSignal:
         Timeout: PT15M
-    UpdatePolicy:
-      AutoScalingReplacingUpdate:
-        WillReplace: true
+    UpdatePolicy: !If
+      - cMinInstancesGreaterThanOne
+      - AutoScalingRollingUpdate:
+          MinInstancesInService: '1'
+          MaxBatchSize: '1'
+          PauseTime: PT15M
+          WaitOnResourceSignals: 'true'
+      - AutoScalingReplacingUpdate:
+          WillReplace: true
   ECSLaunchConfig:
     Type: AWS::AutoScaling::LaunchConfiguration
     Metadata:
@@ -1397,9 +1404,15 @@ Resources:
     CreationPolicy:
       ResourceSignal:
         Timeout: PT15M
-    UpdatePolicy:
-      AutoScalingReplacingUpdate:
-        WillReplace: true
+    UpdatePolicy: !If
+      - cMinInstancesGreaterThanOne
+      - AutoScalingRollingUpdate:
+          MinInstancesInService: '1'
+          MaxBatchSize: '1'
+          PauseTime: PT15M
+          WaitOnResourceSignals: 'true'
+      - AutoScalingReplacingUpdate:
+          WillReplace: true
   EC2LaunchConfig:
     Type: AWS::AutoScaling::LaunchConfiguration
     Metadata:
@@ -1887,7 +1900,7 @@ Resources:
     Type: AWS::CodeDeploy::DeploymentGroup
     Properties:
       ApplicationName: !Ref CodeDeployApplication
-      DeploymentConfigName: 'CodeDeployDefault.HalfAtATime'
+      DeploymentConfigName: 'CodeDeployDefault.OneAtATime'
       AutoScalingGroups: [!Ref EC2AutoScalingGroup]
       ServiceRoleArn: !GetAtt 'CodeDeployTrustRole.Arn'
   CodePipelineServiceRole:
