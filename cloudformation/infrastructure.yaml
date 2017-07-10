@@ -422,7 +422,7 @@ Resources:
   VPC:
     Type: AWS::EC2::VPC
     Properties:
-      CidrBlock: '10.250.0.0/16'
+      CidrBlock: '10.0.0.0/16'
       InstanceTenancy: 'default'
       Tags:
         - Key: Name
@@ -431,7 +431,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      CidrBlock: 10.250.0.0/24
+      CidrBlock: 10.0.1.0/24
       AvailabilityZone: !Select [0, !GetAZs '']
       MapPublicIpOnLaunch: True
       Tags:
@@ -441,7 +441,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      CidrBlock: 10.250.2.0/24
+      CidrBlock: 10.0.2.0/24
       AvailabilityZone: !Select [1, !GetAZs '']
       MapPublicIpOnLaunch: True
       Tags:
@@ -451,7 +451,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      CidrBlock: 10.250.100.0/24
+      CidrBlock: 10.0.101.0/24
       AvailabilityZone: !Select [0, !GetAZs '']
       Tags:
         - Key: Name
@@ -460,7 +460,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      CidrBlock: 10.250.101.0/24
+      CidrBlock: 10.0.102.0/24
       AvailabilityZone: !Select [1, !GetAZs '']
       Tags:
         - Key: Name
