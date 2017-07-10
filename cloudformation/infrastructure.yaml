@@ -2824,7 +2824,7 @@ Resources:
   #####################################################################################
   # Mapping Log groups to the Lambda that ships them to Elasticsearch
   Trail:
-    DependsOn: TrailBucketPolicy
+    DependsOn: LogStoreS3LocationPolicy
     Condition: cEnableLogCloudTrail
     Properties:
       CloudWatchLogsLogGroupArn: !GetAtt 'TrailLogGroup.Arn'
@@ -2832,34 +2832,8 @@ Resources:
       IncludeGlobalServiceEvents: true
       IsLogging: true
       IsMultiRegionTrail: true
-      S3BucketName: !Ref TrailBucket
+      S3BucketName: !Ref LogStoreS3Location
     Type: AWS::CloudTrail::Trail
-  TrailBucket:
-    DeletionPolicy: Retain
-    Condition: cEnableLogCloudTrail
-    Properties: {}
-    Type: AWS::S3::Bucket
-  TrailBucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Condition: cEnableLogCloudTrail
-    Properties:
-      Bucket: !Ref TrailBucket
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Action: s3:GetBucketAcl
-            Effect: Allow
-            Principal:
-              Service: cloudtrail.amazonaws.com
-            Resource: !Sub 'arn:aws:s3:::${TrailBucket}'
-          - Action: s3:PutObject
-            Condition:
-              StringEquals:
-                s3:x-amz-acl: bucket-owner-full-control
-            Effect: Allow
-            Principal:
-              Service: cloudtrail.amazonaws.com
-            Resource: !Sub 'arn:aws:s3:::${TrailBucket}/AWSLogs/${AWS::AccountId}/*'
   TrailLogGroup:
     Properties:
       LogGroupName: !Sub '/aws/cloudtrail/${AWS::StackName}'
