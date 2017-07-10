@@ -300,6 +300,13 @@ Parameters:
     Default: ''
     NoEcho: true
     Type: String
+  LambdaCodeBuildLogging:
+    Description: Enable/Disable logging for Lambda and CodeBuild.
+    AllowedValues:
+      - Enable
+      - Disable
+    Default: Enable
+    Type: String
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
@@ -350,6 +357,7 @@ Metadata:
           - ElasticsearchLogs
           - ElasticsearchStack
           - LogCloudTrail
+          - LambdaCodeBuildLogging
     ParameterLabels:
       AppPort:
         default: Application TCP Port
@@ -379,6 +387,8 @@ Metadata:
         default: Enable ELB Logging
       LogCloudTrail:
         default: Enable CloudTrail logging
+      LambdaCodeBuildLogging:
+        default: Enable Lambda and CodeBuild logging
       UseSpotInstances:
         default: Use Spot Instances
       SpotPricing:
@@ -397,6 +407,7 @@ Conditions:
   cEnableELBLogging: !Equals [!Ref ELBLogging, 'Enable']
   cEnableELBtoElasticSearch: !And [!Condition cEnableElasticSearchLogs, !Condition cEnableELBLogging]
   cEnableLogCloudTrail: !Equals [!Ref LogCloudTrail, 'Enable']
+  cMinInstancesGreaterThanOne: !Not [!Equals [!Ref InstanceMinCount, 1]]
   cSpotPriceGreaterThanZero: !Not [!Equals [!Ref SpotPricing, 0]]
   cEnableSpotInstances: !And
     - !Equals [!Ref UseSpotInstances, 'Enable']
@@ -409,6 +420,9 @@ Conditions:
   cEnableApprovalEmails: !Not [!Equals [!Ref EmailApprovals, '']]
   cEnableSlackApprovals: !Not [!Equals [!Ref SlackApprovalsWebhook, '']]
   cEnableEmailNotications: !Not [!Equals [!Ref OperationsEmail, '']]
+  cEnableLambdaCodeBuildLogging: !Equals [!Ref LambdaCodeBuildLogging, 'Enable']
+  cEnableLambdaAndELBLogging: !And [!Condition cEnableLambdaCodeBuildLogging, !Condition cEnableELBLogging]
+  cEnableSlackAndLambdaLogging: !And [!Condition cEnableSlackApprovals, !Condition cEnableLambdaCodeBuildLogging]
 
 # Resources documentation
 # http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-template-resource-type-ref.html
@@ -464,6 +478,7 @@ Resources:
   EncryptLambdaLogsGroup:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Delete
+    Condition: cEnableLambdaCodeBuildLogging
     Properties:
       LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-set-param-store'
       RetentionInDays: 1
@@ -747,7 +762,7 @@ Resources:
       SourceAccount: !Ref 'AWS::AccountId'
   ELBLogsToCWLambdaLogGroup:
     Type: AWS::Logs::LogGroup
-    Condition: cEnableELBLogging
+    Condition: cEnableLambdaAndELBLogging
     DeletionPolicy: Delete
     Properties:
       LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-elblogs-to-cw-migration'
@@ -982,9 +997,15 @@ Resources:
     CreationPolicy:
       ResourceSignal:
         Timeout: PT15M
-    UpdatePolicy:
-      AutoScalingReplacingUpdate:
-        WillReplace: true
+    UpdatePolicy: !If
+      - cMinInstancesGreaterThanOne
+      - AutoScalingRollingUpdate:
+          MinInstancesInService: '1'
+          MaxBatchSize: '1'
+          PauseTime: PT15M
+          WaitOnResourceSignals: 'true'
+      - AutoScalingReplacingUpdate:
+          WillReplace: true
   ECSLaunchConfig:
     Type: AWS::AutoScaling::LaunchConfiguration
     Metadata:
@@ -1359,9 +1380,15 @@ Resources:
     CreationPolicy:
       ResourceSignal:
         Timeout: PT15M
-    UpdatePolicy:
-      AutoScalingReplacingUpdate:
-        WillReplace: true
+    UpdatePolicy: !If
+      - cMinInstancesGreaterThanOne
+      - AutoScalingRollingUpdate:
+          MinInstancesInService: '1'
+          MaxBatchSize: '1'
+          PauseTime: PT15M
+          WaitOnResourceSignals: 'true'
+      - AutoScalingReplacingUpdate:
+          WillReplace: true
   EC2LaunchConfig:
     Type: AWS::AutoScaling::LaunchConfiguration
     Metadata:
@@ -1677,30 +1704,34 @@ Resources:
   CodeBuildArtifactLogGroup:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Delete
+    Condition: cEnableLambdaCodeBuildLogging
     Properties:
       LogGroupName: !Sub '/aws/codebuild/${AWS::StackName}-build'
       RetentionInDays: 1
   CodePipelineTestArtifactLogGroup:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Delete
+    Condition: cEnableLambdaCodeBuildLogging
     Properties:
       LogGroupName: !Sub '/aws/codebuild/${AWS::StackName}-test'
       RetentionInDays: 1
   IntegrationTestArtifactLogGroup:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Delete
+    Condition: cEnableLambdaCodeBuildLogging
     Properties:
       LogGroupName: !Sub '/aws/codebuild/${AWS::StackName}-integration-test'
       RetentionInDays: 1
   CodeBuildDockerImageLogGroup:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Delete
+    Condition: cEnableLambdaCodeBuildLogging
     Properties:
       LogGroupName: !Sub '/aws/codebuild/${AWS::StackName}-ecs-image'
       RetentionInDays: 1
   CodeBuildArtifact:
     Type: AWS::CodeBuild::Project
-    DependsOn: [CodeRepo, CodeBuildRole, CodeBuildArtifactLogGroup]
+    DependsOn: [CodeRepo, CodeBuildRole]
     Properties:
       Name: !Sub '${AWS::StackName}-build'
       Description: A description about my project
@@ -1730,7 +1761,7 @@ Resources:
       TimeoutInMinutes: 300  # 5min
   CodePipelineTestArtifact:
     Type: AWS::CodeBuild::Project
-    DependsOn: [CodeRepo, CodeBuildRole, CodePipelineTestArtifactLogGroup]
+    DependsOn: [CodeRepo, CodeBuildRole]
     Properties:
       Name: !Sub '${AWS::StackName}-test'
       Description: A description about my project
@@ -1758,7 +1789,7 @@ Resources:
       TimeoutInMinutes: 300 # 5min
   IntegrationTestArtifact:
     Type: AWS::CodeBuild::Project
-    DependsOn: [CodeRepo, CodeBuildRole, IntegrationTestArtifactLogGroup]
+    DependsOn: [CodeRepo, CodeBuildRole]
     Properties:
       Name: !Sub '${AWS::StackName}-integration-test'
       Description: A description about my project
@@ -1797,7 +1828,7 @@ Resources:
       TimeoutInMinutes: 300 # 5min
   CodeBuildDockerImage:
     Type: AWS::CodeBuild::Project
-    DependsOn: [CodeRepo, CodeBuildRole, CodeBuildDockerImageLogGroup]
+    DependsOn: [CodeRepo, CodeBuildRole]
     Properties:
       Name: !Sub '${AWS::StackName}-ecs-image'
       Description: A description about my project
@@ -1850,7 +1881,7 @@ Resources:
     Type: AWS::CodeDeploy::DeploymentGroup
     Properties:
       ApplicationName: !Ref CodeDeployApplication
-      DeploymentConfigName: 'CodeDeployDefault.HalfAtATime'
+      DeploymentConfigName: 'CodeDeployDefault.OneAtATime'
       AutoScalingGroups: [!Ref EC2AutoScalingGroup]
       ServiceRoleArn: !GetAtt 'CodeDeployTrustRole.Arn'
   CodePipelineServiceRole:
@@ -2245,6 +2276,7 @@ Resources:
   LogMigrationLambdaLogGroup:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Delete
+    Condition: cEnableLambdaAndELBLogging
     Properties:
       LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-log-migration'
       RetentionInDays: 1
@@ -2921,6 +2953,7 @@ Resources:
   LogStreamerLogsGroup:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Delete
+    Condition: cEnableLambdaCodeBuildLogging
     Properties:
       LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-es-log-streamer'
       RetentionInDays: 1
@@ -3018,7 +3051,7 @@ Resources:
   SlackLambdaLogsGroup:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Delete
-    Condition: cEnableSlackApprovals
+    Condition: cEnableSlackAndLambdaLogging
     Properties:
       LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-slack-notifications'
       RetentionInDays: 1
