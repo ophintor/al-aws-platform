@@ -530,8 +530,28 @@ Resources:
           - Sid: Allow administration of the key
             Effect: Allow
             Principal:
-              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:'
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
             Action: '*'
+            Resource: '*'
+          - Effect: Allow
+            Action:
+              - kms:Encrypt
+            Principal:
+              AWS: !GetAtt 'EncryptLambdaRole.Arn'
+            Resource: '*'
+          # TODO: This can be set in the key! but we don't have it here
+          - Effect: Allow
+            Action:
+              - kms:Decrypt
+            Principal:
+              AWS: !If
+                - cEnableEC2
+                - !GetAtt 'EC2InstanceRole.Arn'
+                - Ref: AWS::NoValue
+              AWS: !If
+                - cEnableContainers
+                - !GetAtt 'TaskRole.Arn'
+                - Ref: AWS::NoValue
             Resource: '*'
   MyKeyAlias:
     Type: AWS::KMS::Alias
@@ -687,11 +707,11 @@ Resources:
       GroupDescription: Allow Internal access to RDS Instances
       VpcId: !Ref VPC
       SecurityGroupIngress:
-        - SourceSecurityGroupId: !Ref ECSSecurityGroup
-          FromPort: !FindInMap [DBEngines, !Ref 'DBEngine', port]
-          ToPort: !FindInMap [DBEngines, !Ref 'DBEngine', port]
-          IpProtocol: tcp
-        - SourceSecurityGroupId: !Ref EC2SecurityGroup
+        # - SourceSecurityGroupId: !Ref ECSSecurityGroup
+        #   FromPort: !FindInMap [DBEngines, !Ref 'DBEngine', port]
+        #   ToPort: !FindInMap [DBEngines, !Ref 'DBEngine', port]
+        #   IpProtocol: tcp
+        - SourceSecurityGroupId: !Ref AppSecurityGroup
           FromPort: !FindInMap [DBEngines, !Ref 'DBEngine', port]
           ToPort: !FindInMap [DBEngines, !Ref 'DBEngine', port]
           IpProtocol: tcp
@@ -1022,6 +1042,7 @@ Resources:
   #####################################################################################
   ContainerCluster:
     Type: AWS::ECS::Cluster
+    Condition: cEnableContainers
     Properties:
       ClusterName: !Sub '${AWS::StackName}-cluster'
   ECSAutoScalingNotifications:
@@ -1034,6 +1055,7 @@ Resources:
   # complete example http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/quickref-ecs.html
   ECSAutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
+    Condition: cEnableContainers
     Properties:
       VPCZoneIdentifier:
         - !Ref publicSubnet01
@@ -1073,6 +1095,7 @@ Resources:
           WillReplace: true
   ECSLaunchConfig:
     Type: AWS::AutoScaling::LaunchConfiguration
+    Condition: cEnableContainers
     Metadata:
       AWS::CloudFormation::Init:
         config:
@@ -1146,6 +1169,7 @@ Resources:
           /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource ECSAutoScalingGroup --region ${AWS::Region}
   ECSSecurityGroup:
     Type: AWS::EC2::SecurityGroup
+    Condition: cEnableContainers
     Properties:
       GroupDescription: ECS Security Group
       VpcId: !Ref VPC
@@ -1159,11 +1183,13 @@ Resources:
           Value: !Sub '${AWS::StackName}-ECS'
   ECSInstanceProfile:
     Type: AWS::IAM::InstanceProfile
+    Condition: cEnableContainers
     Properties:
       Path: /
       Roles: [!Ref ECSInstanceRole]
   ECSInstanceRole:
     Type: AWS::IAM::Role
+    Condition: cEnableContainers
     Properties:
       RoleName: !Sub '${AWS::StackName}-ECSInstanceRole'
       AssumeRolePolicyDocument:
@@ -1203,6 +1229,7 @@ Resources:
                 Resource: '*'
   ECSServiceRole:
     Type: AWS::IAM::Role
+    Condition: cEnableContainers
     Properties:
       RoleName: !Sub '${AWS::StackName}-ECS-Service'
       AssumeRolePolicyDocument:
@@ -1228,6 +1255,7 @@ Resources:
                 Resource: '*'
   MyRepository:
     Type: AWS::ECR::Repository
+    Condition: cEnableContainers
     Properties:
       RepositoryName: !Sub '${AWS::StackName}-containerimage'
       RepositoryPolicyText:
@@ -1249,6 +1277,7 @@ Resources:
   # Create Log Group to setup the retention time of ECS task logs
   TaskRole:
     Type: AWS::IAM::Role
+    Condition: cEnableContainers
     Properties:
       RoleName: !Sub '${AWS::StackName}-ecs-task-role'
       AssumeRolePolicyDocument:
@@ -1290,6 +1319,7 @@ Resources:
                   - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}.app.*'
   ECSScaleUpPolicy:
     Type: AWS::AutoScaling::ScalingPolicy
+    Condition: cEnableContainers
     Properties:
       AdjustmentType: ChangeInCapacity
       AutoScalingGroupName: !Ref ECSAutoScalingGroup
@@ -1297,6 +1327,7 @@ Resources:
       ScalingAdjustment: 1
   ECSScaleDownPolicy:
     Type: AWS::AutoScaling::ScalingPolicy
+    Condition: cEnableContainers
     Properties:
       AdjustmentType: ChangeInCapacity
       AutoScalingGroupName: !Ref ECSAutoScalingGroup
@@ -1304,6 +1335,7 @@ Resources:
       ScalingAdjustment: -1
   CPUAlarmHigh:
     Type: AWS::CloudWatch::Alarm
+    Condition: cEnableContainers
     Properties:
       AlarmDescription: Scale-up ECS cluster if CPU > 90% for 10 minutes
       MetricName: CPUUtilization
@@ -1319,6 +1351,7 @@ Resources:
       ComparisonOperator: GreaterThanThreshold
   CPUAlarmLow:
     Type: AWS::CloudWatch::Alarm
+    Condition: cEnableContainers
     Properties:
       AlarmDescription: Scale-down ECS cluster if CPU < 70% for 10 minutes
       MetricName: CPUUtilization
@@ -1339,20 +1372,6 @@ Resources:
   #####################################################################################
   # Start of EC2 Auto Scaling
   #####################################################################################
-  EC2SecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Condition: cEnableEC2
-    Properties:
-      GroupDescription: Enable HTTP access via port 80 and SSH access.
-      VpcId: !Ref VPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: !Ref AppPort
-          ToPort: !Ref AppPort
-          CidrIp: 0.0.0.0/0
-      Tags:
-        - Key: Name
-          Value: !Sub '${AWS::StackName}-EC2'
   EC2InstanceRole:
     Type: AWS::IAM::Role
     Condition: cEnableEC2
@@ -1502,7 +1521,7 @@ Resources:
       SpotPrice: !If [cEnableSpotInstances, '0.05', !Ref 'AWS::NoValue']
       InstanceType: !Ref InstanceType
       KeyName: !Ref KeyPairName
-      SecurityGroups: [!Ref EC2SecurityGroup]
+      SecurityGroups: [!Ref AppSecurityGroup]
       IamInstanceProfile: !Ref EC2InstanceRoleInstanceProfile
       InstanceMonitoring: true
       UserData:
@@ -1617,6 +1636,13 @@ Resources:
           IpProtocol: tcp
           FromPort: 80
           ToPort: 80
+        - !If
+          - cEnableEC2
+          - CidrIp: 0.0.0.0/0
+            IpProtocol: tcp
+            FromPort: !Ref AppPort
+            ToPort: !Ref AppPort
+          - !Ref 'AWS::NoValue'
         - !If
           - cEnableHTTPS
           - CidrIp: 0.0.0.0/0
@@ -1875,6 +1901,7 @@ Resources:
       TimeoutInMinutes: 300 # 5min
   CodeBuildDockerImage:
     Type: AWS::CodeBuild::Project
+    Condition: cEnableContainers
     DependsOn: [CodeRepo, CodeBuildRole]
     Properties:
       Name: !Sub '${AWS::StackName}-ecs-image'
@@ -1901,6 +1928,7 @@ Resources:
       TimeoutInMinutes: 300 # 5min
   CodeDeployTrustRole:
     Type: AWS::IAM::Role
+    Condition: cEnableEC2
     Properties:
       RoleName: !Sub '${AWS::StackName}-CodeDeploy'
       AssumeRolePolicyDocument:
@@ -1924,8 +1952,10 @@ Resources:
       Path: /
   CodeDeployApplication:
     Type: AWS::CodeDeploy::Application
+    Condition: cEnableEC2
   CodeDeployApplicationdeploymentGroup:
     Type: AWS::CodeDeploy::DeploymentGroup
+    Condition: cEnableEC2
     Properties:
       ApplicationName: !Ref CodeDeployApplication
       DeploymentConfigName: 'CodeDeployDefault.OneAtATime'
@@ -2050,9 +2080,9 @@ Resources:
   CodePipeline:
     Type: AWS::CodePipeline::Pipeline
     DependsOn:
-      - ContainerCluster
+#      - ContainerCluster
       - AppTargetGroup
-      - ECSServiceRole
+#      - ECSServiceRole
       - DBInstance
     Properties:
       Name: !Sub '${AWS::StackName}-pipeline'
@@ -2097,64 +2127,73 @@ Resources:
               Configuration:
                 ProjectName: !Ref CodePipelineTestArtifact
               RunOrder: 2
-            - Name: BuildDockerImage
-              InputArtifacts:
-                - Name: SourceOutput
-              ActionTypeId:
-                Category: Build
-                Owner: AWS
-                Version: 1
-                Provider: CodeBuild
-              OutputArtifacts:
-                - Name: DockerImageOutput
-              Configuration:
-                ProjectName: !Ref CodeBuildDockerImage
+            - !If
+              - cEnableContainers
+              - Name: BuildDockerImage
+                InputArtifacts:
+                  - Name: SourceOutput
+                ActionTypeId:
+                  Category: Build
+                  Owner: AWS
+                  Version: 1
+                  Provider: CodeBuild
+                OutputArtifacts:
+                  - Name: DockerImageOutput
+                Configuration:
+                  ProjectName: !Ref CodeBuildDockerImage
+              - !Ref 'AWS::NoValue'
         - Name: Beta
           Actions:
-            - Name: BetaEC2
-              InputArtifacts:
-                - Name: BuildArtifact
-              ActionTypeId:
-                Category: Deploy
-                Owner: AWS
-                Version: 1
-                Provider: CodeDeploy
-              Configuration:
-                ApplicationName: !Ref CodeDeployApplication
-                DeploymentGroupName: !Ref CodeDeployApplicationdeploymentGroup
-            - Name: BetaECS
-              ActionTypeId:
-                Category: Deploy
-                Owner: AWS
-                Version: 1
-                Provider: CloudFormation
-              Configuration:
-                ChangeSetName: Deploy
-                ActionMode: CREATE_UPDATE
-                StackName: !Sub '${AWS::StackName}-ContainerApp'
-                Capabilities: CAPABILITY_NAMED_IAM
-                TemplatePath: SourceOutput::cloudformation/containerapp.template.yaml
-                RoleArn: !GetAtt 'CloudFormationExecutionRole.Arn'
-                # Can't be a YAML object:  Value of property Configuration must be an object with String (or simple type) properties
-                # ParameterOverrides
-                #   ECSTargetGroup: !Ref ECSTargetGroup
-                #   ECSServiceRole: !Ref ECSServiceRole
-                #   DBAddress: !GetAtt 'DBInstance.Endpoint.Address'
-                ParameterOverrides: !Sub |
-                  {
-                    "ParamsPrefix": "${AWS::StackName}",
-                    "Cluster": "${ContainerCluster}",
-                    "CloudwatchLogsGroup": "${LogGroupAppLog}",
-                    "DockerImageTag": { "Fn::GetParam" : ["DockerImageOutput", "build.json", "tag"] },
-                    "DockerImage": "${AWS::StackName}-containerimage",
-                    "TaskRole": "${TaskRole}",
-                    "ECSTargetGroup": "${AppTargetGroup}",
-                    "ECSServiceRole": "${ECSServiceRole}",
-                    "DBAddress": "${DBInstance.Endpoint.Address}"
-                  }
-              InputArtifacts:
-                - Name: DockerImageOutput
-                - Name: SourceOutput
+            - !If
+              - cEnableEC2
+              - Name: BetaEC2
+                InputArtifacts:
+                  - Name: BuildArtifact
+                ActionTypeId:
+                  Category: Deploy
+                  Owner: AWS
+                  Version: 1
+                  Provider: CodeDeploy
+                Configuration:
+                  ApplicationName: !Ref CodeDeployApplication
+                  DeploymentGroupName: !Ref CodeDeployApplicationdeploymentGroup
+              - !Ref 'AWS::NoValue'
+            - !If
+              - cEnableContainers
+              - Name: BetaECS
+                ActionTypeId:
+                  Category: Deploy
+                  Owner: AWS
+                  Version: 1
+                  Provider: CloudFormation
+                Configuration:
+                  ChangeSetName: Deploy
+                  ActionMode: CREATE_UPDATE
+                  StackName: !Sub '${AWS::StackName}-ContainerApp'
+                  Capabilities: CAPABILITY_NAMED_IAM
+                  TemplatePath: SourceOutput::cloudformation/containerapp.template.yaml
+                  RoleArn: !GetAtt 'CloudFormationExecutionRole.Arn'
+                  # Can't be a YAML object:  Value of property Configuration must be an object with String (or simple type) properties
+                  # ParameterOverrides
+                  #   ECSTargetGroup: !Ref ECSTargetGroup
+                  #   ECSServiceRole: !Ref ECSServiceRole
+                  #   DBAddress: !GetAtt 'DBInstance.Endpoint.Address'
+                  ParameterOverrides: !Sub |
+                    {
+                      "ParamsPrefix": "${AWS::StackName}",
+                      "Cluster": "${ContainerCluster}",
+                      "CloudwatchLogsGroup": "${LogGroupAppLog}",
+                      "DockerImageTag": { "Fn::GetParam" : ["DockerImageOutput", "build.json", "tag"] },
+                      "DockerImage": "${AWS::StackName}-containerimage",
+                      "TaskRole": "${TaskRole}",
+                      "ECSTargetGroup": "${AppTargetGroup}",
+                      "ECSServiceRole": "${ECSServiceRole}",
+                      "DBAddress": "${DBInstance.Endpoint.Address}"
+                    }
+                InputArtifacts:
+                  - Name: DockerImageOutput
+                  - Name: SourceOutput
+              - !Ref 'AWS::NoValue'
         - Name: IntegrationTests
           Actions:
             - Name: HTTP
