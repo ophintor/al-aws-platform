@@ -17,6 +17,7 @@ PARAMS=$(aws --region "${AWS_REGION}" ssm get-parameters-by-path --path "/${STAC
 IFS_SAVE=$IFS
 IFS=$'\n'
 for param in $PARAMS ; do
+        # shellcheck disable=SC2181
         [ "$?" -eq "0" ] || continue
         IFS=$IFS_SAVE
         read -r key value <<< "${param}"
