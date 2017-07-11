@@ -12,17 +12,16 @@ STACK_NAME=$(aws ec2 describe-tags \
 	--region "${AWS_REGION}" \
 )
 
-# This version exports automatically all the parameteres that the application have access
-# TODO: use NextToken to iterate parameteres
-rm -f ENV_VARIABLES.sh 2> /dev/null
-PARAMS=$(aws --region "${AWS_REGION}" ssm describe-parameters --max-results 50 --query 'Parameters[*].{Name:Name}' --output text)
+# This version exports automatically all the parameters that the application has access
+PARAMS=$(aws --region "${AWS_REGION}" ssm get-parameters-by-path --path "/${STACK_NAME}/db" --with-decryption --output text --query 'Parameters[].[Name,Value]')
+IFS_SAVE=$IFS
+IFS=$'\n'
 for param in $PARAMS ; do
-	value=$(aws --region "${AWS_REGION}" ssm get-parameters --names "${param}" --with-decryption --output text --query 'Parameters[0].Value' 2>/dev/null)
-	# shellcheck disable=SC2181
-	[ "$?" -eq "0" ] || continue
-	param="$(echo "${param}" | sed "s/^${STACK_NAME}.//g" | tr '[:lower:].' '[:upper:]_')"
-	echo "${param}"="${value}" >> ENV_VARIABLES.sh
-	export "${param}"="${value}"
+        [ "$?" -eq "0" ] || continue
+        IFS=$IFS_SAVE
+        read -r key value <<< "${param}"
+        key="$(echo "${key}" | sed "s/^\/${STACK_NAME}.//g" | tr '[:lower:]/' '[:upper:]_')"
+        export "${key}"="${value}"
 done
 
 # This version uses Instance tags to map env vars to a parameter value using its name

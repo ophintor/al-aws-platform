@@ -683,7 +683,18 @@
               ],
               "Resource": [
                 {
-                  "Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}.*"
+                  "Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}/db/*"
+                }
+              ]
+            },
+            {
+              "Effect": "Allow",
+              "Action": [
+                "ssm:GetParametersByPath"
+              ],
+              "Resource": [
+                {
+                  "Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}/db"
                 }
               ]
             },
@@ -783,7 +794,7 @@
               ],
               "Resource": [
                 {
-                  "Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}.*"
+                  "Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}/db/*"
                 }
               ]
             }
@@ -2849,8 +2860,7 @@
       "Version": "1.0",
       "DependsOn": [
         "MyKey",
-        "MyKeyAlias",
-        "DBInstance"
+        "MyKeyAlias"
       ],
       "Properties": {
         "ServiceToken": {
@@ -2860,16 +2870,7 @@
           ]
         },
         "Name": {
-          "Fn::Join": [
-            ".",
-            [
-              {
-                "Ref": "AWS::StackName"
-              },
-              "db",
-              "username"
-            ]
-          ]
+          "Fn::Sub": "/${AWS::StackName}/db/username"
         },
         "Value": {
           "Ref": "DBUsername"
@@ -2884,8 +2885,7 @@
       "Version": "1.0",
       "DependsOn": [
         "MyKey",
-        "MyKeyAlias",
-        "DBInstance"
+        "MyKeyAlias"
       ],
       "Properties": {
         "ServiceToken": {
@@ -2895,16 +2895,7 @@
           ]
         },
         "Name": {
-          "Fn::Join": [
-            ".",
-            [
-              {
-                "Ref": "AWS::StackName"
-              },
-              "db",
-              "password"
-            ]
-          ]
+          "Fn::Sub": "/${AWS::StackName}/db/password"
         },
         "Value": {
           "Ref": "DBPassword"
@@ -2919,8 +2910,7 @@
       "Version": "1.0",
       "DependsOn": [
         "MyKey",
-        "MyKeyAlias",
-        "DBInstance"
+        "MyKeyAlias"
       ],
       "Properties": {
         "ServiceToken": {
@@ -2930,16 +2920,7 @@
           ]
         },
         "Name": {
-          "Fn::Join": [
-            ".",
-            [
-              {
-                "Ref": "AWS::StackName"
-              },
-              "db",
-              "name"
-            ]
-          ]
+          "Fn::Sub": "/${AWS::StackName}/db/name"
         },
         "Value": {
           "Ref": "DBName"
@@ -2965,16 +2946,7 @@
           ]
         },
         "Name": {
-          "Fn::Join": [
-            ".",
-            [
-              {
-                "Ref": "AWS::StackName"
-              },
-              "db",
-              "connectionstring"
-            ]
-          ]
+          "Fn::Sub": "/${AWS::StackName}/db/connectionstring"
         },
         "Value": {
           "Fn::GetAtt": [
@@ -3048,11 +3020,12 @@
                 {
                   "Effect": "Allow",
                   "Action": [
-                    "ssm:GetParameters"
+                    "ssm:GetParameters",
+                    "ssm:GetParametersByPath"
                   ],
                   "Resource": [
                     {
-                      "Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}.*"
+                      "Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}/*"
                     }
                   ]
                 },
@@ -3119,18 +3092,19 @@
                   ],
                   "Resource": [
                     {
-                      "Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}.*"
+                      "Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}/*"
                     }
                   ]
                 },
                 {
                   "Effect": "Allow",
                   "Action": [
-                    "ssm:GetParameters"
+                    "ssm:GetParameters",
+                    "ssm:GetParametersByPath"
                   ],
                   "Resource": [
                     {
-                      "Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}.*"
+                      "Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}/*"
                     }
                   ]
                 },
@@ -3221,18 +3195,19 @@
                   ],
                   "Resource": [
                     {
-                      "Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}.*"
+                      "Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}/*"
                     }
                   ]
                 },
                 {
                   "Effect": "Allow",
                   "Action": [
-                    "ssm:GetParameters"
+                    "ssm:GetParameters",
+                    "ssm:GetParametersByPath"
                   ],
                   "Resource": [
                     {
-                      "Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}.*"
+                      "Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}/*"
                     }
                   ]
                 },

@@ -45,11 +45,11 @@ SCRIPT=$(cat <<-EOF
 	export AWS_REGION=\$(curl "http://169.254.169.254/latest/dynamic/instance-identity/document" 2>/dev/null | grep region | awk -F\" '{print \$4}') ;
 	echo -e "\n\e[91mCommands:\e[0m" ;
 	echo -e "\e[33m"
-	echo "aws --region \${AWS_REGION} ssm put-parameter  --name \"${STACK_NAME}.db.password\" --value \"password\" --type SecureString" ;
-	echo "aws --region \${AWS_REGION} ssm get-parameters --name \"${STACK_NAME}.db.password\" --with-decryption" ;
+	echo "aws --region \${AWS_REGION} ssm put-parameter  --name \"/${STACK_NAME}/db/password\" --value \"password\" --type SecureString" ;
+	echo "aws --region \${AWS_REGION} ssm get-parameters --name \"/${STACK_NAME}/db/password\" --with-decryption" ;
 	echo
-	echo "aws --region \${AWS_REGION} ssm put-parameter  --name \"${STACK_NAME}.app.pass\"    --value \"password\" --type SecureString" ;
-	echo "aws --region \${AWS_REGION} ssm get-parameters --name \"${STACK_NAME}.app.pass\"" ;
+	echo "aws --region \${AWS_REGION} ssm put-parameter  --name \"/${STACK_NAME}/app/pass\"    --value \"password\" --type SecureString" ;
+	echo "aws --region \${AWS_REGION} ssm get-parameters --name \"/${STACK_NAME}/app/pass\"" ;
 	echo -e "\e[0m\n" ;
 	docker exec -it \${CONTAINER_ID} /bin/bash
 EOF

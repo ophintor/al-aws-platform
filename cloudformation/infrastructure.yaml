@@ -581,10 +581,10 @@ Resources:
                 Action:
                   - ssm:PutParameter
                 Resource:
-                  - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}.db.*'
+                  - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}/db/*'
                   # Used on AWS console to test the function ^.^
-                  - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}.fn.test'
-                  - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}.slack.*'
+                  - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}/fn.test'
+                  - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}/slack/*'
   EncryptLambda:
     Type: AWS::Lambda::Function
     DependsOn: MyKeyAlias
@@ -666,7 +666,7 @@ Resources:
     Properties:
       ServiceToken: !GetAtt 'EncryptLambda.Arn'
       KeyId: !Sub 'alias/${AWS::StackName}-masterkey'
-      ParameterStoreName: !Sub '${AWS::StackName}.db.password'
+      ParameterStoreName: !Sub '/${AWS::StackName}/db/password'
       Value: !Ref DBPassword
       Description: DataBase password
       Type: 'SecureString'
@@ -717,21 +717,21 @@ Resources:
   StoreDBAddress:
     Type: AWS::SSM::Parameter
     Properties:
-      Name: !Sub '${AWS::StackName}.db.connectionstring'
+      Name: !Sub '/${AWS::StackName}/db/connectionstring'
       Value: !GetAtt 'DBInstance.Endpoint.Address'
       Description: DataBase Address
       Type: 'String'
   StoreDBUsername:
     Type: AWS::SSM::Parameter
     Properties:
-      Name: !Sub '${AWS::StackName}.db.username'
+      Name: !Sub '/${AWS::StackName}/db/username'
       Value: !Ref DBUsername
       Description: DataBase username
       Type: 'String'
   StoreDBName:
     Type: AWS::SSM::Parameter
     Properties:
-      Name: !Sub '${AWS::StackName}.db.name'
+      Name: !Sub '/${AWS::StackName}/db/name'
       Value: !Ref DBName
       Description: DataBase Name
       Type: 'String'
@@ -1340,7 +1340,12 @@ Resources:
                 Action:
                   - ssm:GetParameters
                 Resource:
-                  - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}.db.*'
+                  - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}/db/*'
+              - Effect: Allow
+                Action:
+                  - ssm:GetParametersByPath
+                Resource:
+                  - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}/db'
         - PolicyName: parameter-store-app
           PolicyDocument:
             Version: '2012-10-17'
@@ -1348,9 +1353,10 @@ Resources:
               - Effect: Allow
                 Action:
                   - ssm:GetParameters
+                  - ssm:GetParametersByPath
                   - ssm:PutParameter
                 Resource:
-                  - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}.app.*'
+                  - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}/app/*'
   ECSScaleUpPolicy:
     Type: AWS::AutoScaling::ScalingPolicy
     Properties:
@@ -1449,7 +1455,12 @@ Resources:
                 Action:
                   - ssm:GetParameters
                 Resource:
-                  - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}.db.*'
+                  - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}/db/*'
+              - Effect: Allow
+                Action:
+                  - ssm:GetParametersByPath
+                Resource:
+                  - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}/db'
               # Allow describe parameters to automate config process
               - Effect: Allow
                 Action:
@@ -2196,7 +2207,7 @@ Resources:
                 #   DBAddress: !GetAtt 'DBInstance.Endpoint.Address'
                 ParameterOverrides: !Sub |
                   {
-                    "ParamsPrefix": "${AWS::StackName}",
+                    "ParamsPrefix": "/${AWS::StackName}",
                     "Cluster": "${ContainerCluster}",
                     "CloudwatchLogsGroup": "${LogGroupAppLog}",
                     "DockerImageTag": { "Fn::GetParam" : ["DockerImageOutput", "build.json", "tag"] },
@@ -3165,14 +3176,14 @@ Resources:
                 Action:
                   - ssm:GetParameters
                 Resource:
-                  - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}.slack.*'
+                  - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}/slack/*'
   StoreEncryptedSlackWebhook:
     Type: Custom::SetParameterStore
     Condition: cEnableSlackApprovals
     Properties:
       ServiceToken: !GetAtt 'EncryptLambda.Arn'
       KeyId: !Sub 'alias/${AWS::StackName}-masterkey'
-      ParameterStoreName: !Sub '${AWS::StackName}.slack.webhooks'
+      ParameterStoreName: !Sub '/${AWS::StackName}/slack/webhooks'
       Value: !Ref SlackApprovalsWebhook
       Description: Webhook URL for approvals notifications
       Type: 'SecureString'

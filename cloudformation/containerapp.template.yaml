@@ -52,11 +52,11 @@ Resources:
           Memory: '300'
           Environment:
             - Name: SSM_DB_USERNAME
-              Value: !Sub "${ParamsPrefix}.db.username"
+              Value: !Sub "${ParamsPrefix}/db/username"
             - Name: SSM_DB_PASSWORD
-              Value: !Sub "${ParamsPrefix}.db.password"
+              Value: !Sub "${ParamsPrefix}/db/password"
             - Name: SSM_DB_NAME
-              Value: !Sub "${ParamsPrefix}.db.name"
+              Value: !Sub "${ParamsPrefix}/db/name"
             - Name: DB_CONNECTIONSTRING
               Value: !Ref DBAddress
           PortMappings:
