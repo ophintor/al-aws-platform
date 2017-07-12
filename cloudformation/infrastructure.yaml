@@ -293,8 +293,8 @@ Parameters:
     Default: ''
     NoEcho: true
     Type: String
-  LambdaCodeBuildLogging:
-    Description: Enable/Disable logging for Lambda and CodeBuild.
+  LambdaLogging:
+    Description: Enable/Disable logging for Lambda.
     AllowedValues:
       - Enable
       - Disable
@@ -349,7 +349,7 @@ Metadata:
           - ElasticsearchLogs
           - ElasticsearchStack
           - LogCloudTrail
-          - LambdaCodeBuildLogging
+          - LambdaLogging
     ParameterLabels:
       AppPort:
         default: Application TCP Port
@@ -377,7 +377,7 @@ Metadata:
         default: Enable ELB Logging
       LogCloudTrail:
         default: Enable CloudTrail logging
-      LambdaCodeBuildLogging:
+      LambdaLogging:
         default: Enable Lambda and CodeBuild logging
       UseSpotInstances:
         default: Use Spot Instances
@@ -409,9 +409,9 @@ Conditions:
   cEnableApprovalEmails: !Not [!Equals [!Ref EmailApprovals, '']]
   cEnableSlackApprovals: !Not [!Equals [!Ref SlackApprovalsWebhook, '']]
   cEnableEmailNotications: !Not [!Equals [!Ref OperationsEmail, '']]
-  cEnableLambdaCodeBuildLogging: !Equals [!Ref LambdaCodeBuildLogging, 'Enable']
-  cEnableLambdaAndELBLogging: !And [!Condition cEnableLambdaCodeBuildLogging, !Condition cEnableELBLogging]
-  cEnableSlackAndLambdaLogging: !And [!Condition cEnableSlackApprovals, !Condition cEnableLambdaCodeBuildLogging]
+  cEnableLambdaLogging: !Equals [!Ref LambdaLogging, 'Enable']
+  cEnableLambdaAndELBLogging: !And [!Condition cEnableLambdaLogging, !Condition cEnableELBLogging]
+  cEnableSlackAndLambdaLogging: !And [!Condition cEnableSlackApprovals, !Condition cEnableLambdaLogging]
 
 # Resources documentation
 # http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-template-resource-type-ref.html
@@ -547,7 +547,7 @@ Resources:
   EncryptLambdaLogsGroup:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Delete
-    Condition: cEnableLambdaCodeBuildLogging
+    Condition: cEnableLambdaLogging
     Properties:
       LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-set-param-store'
       RetentionInDays: 1
@@ -1814,34 +1814,30 @@ Resources:
   CodeBuildArtifactLogGroup:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Delete
-    Condition: cEnableLambdaCodeBuildLogging
     Properties:
       LogGroupName: !Sub '/aws/codebuild/${AWS::StackName}-build'
       RetentionInDays: 1
   CodePipelineTestArtifactLogGroup:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Delete
-    Condition: cEnableLambdaCodeBuildLogging
     Properties:
       LogGroupName: !Sub '/aws/codebuild/${AWS::StackName}-test'
       RetentionInDays: 1
   IntegrationTestArtifactLogGroup:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Delete
-    Condition: cEnableLambdaCodeBuildLogging
     Properties:
       LogGroupName: !Sub '/aws/codebuild/${AWS::StackName}-integration-test'
       RetentionInDays: 1
   CodeBuildDockerImageLogGroup:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Delete
-    Condition: cEnableLambdaCodeBuildLogging
     Properties:
       LogGroupName: !Sub '/aws/codebuild/${AWS::StackName}-ecs-image'
       RetentionInDays: 1
   CodeBuildArtifact:
     Type: AWS::CodeBuild::Project
-    DependsOn: [CodeRepo, CodeBuildRole]
+    DependsOn: [CodeRepo, CodeBuildRole, CodeBuildArtifactLogGroup]
     Properties:
       Name: !Sub '${AWS::StackName}-build'
       Description: A description about my project
@@ -1871,7 +1867,7 @@ Resources:
       TimeoutInMinutes: 300  # 5min
   CodePipelineTestArtifact:
     Type: AWS::CodeBuild::Project
-    DependsOn: [CodeRepo, CodeBuildRole]
+    DependsOn: [CodeRepo, CodeBuildRole, CodePipelineTestArtifactLogGroup]
     Properties:
       Name: !Sub '${AWS::StackName}-test'
       Description: A description about my project
@@ -1899,7 +1895,7 @@ Resources:
       TimeoutInMinutes: 300 # 5min
   IntegrationTestArtifact:
     Type: AWS::CodeBuild::Project
-    DependsOn: [CodeRepo, CodeBuildRole]
+    DependsOn: [CodeRepo, CodeBuildRole, IntegrationTestArtifactLogGroup]
     Properties:
       Name: !Sub '${AWS::StackName}-integration-test'
       Description: A description about my project
@@ -1938,7 +1934,7 @@ Resources:
       TimeoutInMinutes: 300 # 5min
   CodeBuildDockerImage:
     Type: AWS::CodeBuild::Project
-    DependsOn: [CodeRepo, CodeBuildRole]
+    DependsOn: [CodeRepo, CodeBuildRole, CodeBuildDockerImageLogGroup]
     Properties:
       Name: !Sub '${AWS::StackName}-ecs-image'
       Description: A description about my project
@@ -3039,7 +3035,7 @@ Resources:
   LogStreamerLogsGroup:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Delete
-    Condition: cEnableLambdaCodeBuildLogging
+    Condition: cEnableLambdaLogging
     Properties:
       LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-es-log-streamer'
       RetentionInDays: 1
