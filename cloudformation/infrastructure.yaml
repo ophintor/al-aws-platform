@@ -713,10 +713,10 @@ Resources:
       GroupDescription: Allow Internal access to RDS Instances
       VpcId: !Ref VPC
       SecurityGroupIngress:
-        # - SourceSecurityGroupId: !Ref ECSSecurityGroup
-        #   FromPort: !FindInMap [DBEngines, !Ref 'DBEngine', port]
-        #   ToPort: !FindInMap [DBEngines, !Ref 'DBEngine', port]
-        #   IpProtocol: tcp
+        - SourceSecurityGroupId: !Ref ECSSecurityGroup
+          FromPort: !FindInMap [DBEngines, !Ref 'DBEngine', port]
+          ToPort: !FindInMap [DBEngines, !Ref 'DBEngine', port]
+          IpProtocol: tcp
         - SourceSecurityGroupId: !Ref AppSecurityGroup
           FromPort: !FindInMap [DBEngines, !Ref 'DBEngine', port]
           ToPort: !FindInMap [DBEngines, !Ref 'DBEngine', port]
@@ -1184,6 +1184,10 @@ Resources:
           IpProtocol: tcp
           FromPort: 31000
           ToPort: 61000
+        - CidrIp: !Ref 'SSHLocation'
+          IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-ECS'
