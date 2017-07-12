@@ -539,20 +539,26 @@ Resources:
             Principal:
               AWS: !GetAtt 'EncryptLambdaRole.Arn'
             Resource: '*'
-          # TODO: This can be set in the key! but we don't have it here
-          - Effect: Allow
-            Action:
-              - kms:Decrypt
-            Principal:
-              AWS: !If
-                - cEnableEC2
-                - !GetAtt 'EC2InstanceRole.Arn'
-                - Ref: AWS::NoValue
-              AWS: !If
-                - cEnableContainers
-                - !GetAtt 'TaskRole.Arn'
-                - Ref: AWS::NoValue
-            Resource: '*'
+          - !If
+            - cEnableEC2
+            - Effect: Allow
+              Action:
+                - kms:Decrypt
+              Principal:
+                AWS:
+                  - !GetAtt 'EC2InstanceRole.Arn'
+              Resource: '*'
+            - !Ref 'AWS::NoValue'
+          - !If
+            - cEnableContainers
+            - Effect: Allow
+              Action:
+                - kms:Decrypt
+              Principal:
+                AWS:
+                  - !GetAtt 'TaskRole.Arn'
+              Resource: '*'
+            - !Ref 'AWS::NoValue'
   MyKeyAlias:
     Type: AWS::KMS::Alias
     Properties:
