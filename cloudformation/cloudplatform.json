@@ -74,6 +74,15 @@
             "ClusterSize",
             "IPAccess"
           ]
+        },
+        {
+          "Label": {
+            "default": "Add Users (Optional):"
+          },
+          "Parameters": [
+            "DevUser",
+            "AuditUser"
+          ]
         }
       ],
       "ParameterLabels": {
@@ -115,6 +124,12 @@
         },
         "SpotPricing": {
           "default": "Spot Instance Bid Price"
+        },
+        "DevUser": {
+          "default": "Development User"
+        },
+        "AuditUser": {
+          "default": "Audit User"
         }
       }
     }
@@ -319,6 +334,22 @@
       "ConstraintDescription": "Must be a Positive Number between 0 and 1",
       "MinValue": 0,
       "MaxValue": 1
+    },
+    "DevUser": {
+      "Type": "String",
+      "Description": "Add a User to Development Group",
+      "AllowedPattern": "[\\w+=,.@-]*",
+      "ConstraintDescription": "Can contain a combination alphanumeric and [+=,.@-] characters.",
+      "MaxLength": "64",
+      "MinLength": "0"
+    },
+    "AuditUser": {
+      "Type": "String",
+      "Description": "Add a User to Audit Group",
+      "AllowedPattern": "[\\w+=,.@-]*",
+      "ConstraintDescription": "Can contain a combination alphanumeric and [+=,.@-] characters.",
+      "MaxLength": "64",
+      "MinLength": "0"
     }
   },
   "Mappings": {
@@ -367,28 +398,57 @@
       }
     },
     "MasterSizing": {
-        "elasticsearch": {
-            "Large": "m3.medium.elasticsearch",
-            "Medium": "m3.medium.elasticsearch",
-            "Small": "t2.small.elasticsearch",
-            "Tiny": "t2.small.elasticsearch"
-        }
+      "elasticsearch": {
+        "Large": "m3.medium.elasticsearch",
+        "Medium": "m3.medium.elasticsearch",
+        "Small": "t2.small.elasticsearch",
+        "Tiny": "t2.small.elasticsearch"
+      }
     },
     "instanceCount": {
-        "elasticsearch": {
-            "Large": "10",
-            "Medium": "4",
-            "Small": "2",
-            "Tiny": "2"
-        }
+      "elasticsearch": {
+        "Large": "10",
+        "Medium": "4",
+        "Small": "2",
+        "Tiny": "2"
+      }
     },
     "instanceSizing": {
-        "elasticsearch": {
-            "Large": "r3.8xlarge.elasticsearch",
-            "Medium": "r3.2xlarge.elasticsearch",
-            "Small": "m3.large.elasticsearch",
-            "Tiny": "t2.medium.elasticsearch"
-        }
+      "elasticsearch": {
+        "Large": "r3.8xlarge.elasticsearch",
+        "Medium": "r3.2xlarge.elasticsearch",
+        "Small": "m3.large.elasticsearch",
+        "Tiny": "t2.medium.elasticsearch"
+      }
+    },
+    "ELBId": {
+      "us-west-1": {
+        "Id": "027434742980"
+      },
+      "us-west-2": {
+        "Id": "797873946194"
+      },
+      "us-east-1": {
+        "Id": "127311923021"
+      },
+      "us-east-2": {
+        "Id": "033677994240"
+      },
+      "eu-west-1": {
+        "Id": "156460612806"
+      },
+      "eu-central-1": {
+        "Id": "054676820928"
+      },
+      "ap-southeast-1": {
+        "Id": "114774131450"
+      },
+      "ap-southeast-2": {
+        "Id": "783225319266"
+      },
+      "ap-northeast-1": {
+        "Id": "582318560864"
+      }
     }
   },
   "Conditions": {
@@ -529,6 +589,30 @@
                 "ap-northeast-1"
               ]
             }
+          ]
+        }
+      ]
+    },
+    "cDevUserExists": {
+      "Fn::Not": [
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "DevUser"
+            },
+            ""
+          ]
+        }
+      ]
+    },
+    "cAuditUserExists": {
+      "Fn::Not": [
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "AuditUser"
+            },
+            ""
           ]
         }
       ]
@@ -859,32 +943,44 @@
               "Resource": "*"
             },
             {
-              "Sid": "Allow use of the key",
-              "Effect": "Allow",
-              "Principal": {
-                "AWS": {
-                  "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:user/devuser"
-                }
-              },
-              "Action": [
-                "kms:Encrypt",
-                "kms:Decrypt",
-                "kms:GenerateDataKey"
-              ],
-              "Resource": "*"
+              "Fn::If": [
+                "cDevUserExists",
+                {
+                  "Sid": "Allow use of the key",
+                  "Effect": "Allow",
+                  "Principal": {
+                    "AWS": {
+                      "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:user/${DevUser}"
+                    }
+                  },
+                  "Action": [
+                    "kms:Encrypt",
+                    "kms:Decrypt",
+                    "kms:GenerateDataKey"
+                  ],
+                  "Resource": "*"
+                },
+                { "Ref": "AWS::NoValue" }
+              ]
             },
             {
-              "Sid": "Allow use of the key",
-              "Effect": "Allow",
-              "Principal": {
-                "AWS": {
-                  "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:user/qauser"
-                }
-              },
-              "Action": [
-                "kms:Decrypt"
-              ],
-              "Resource": "*"
+              "Fn::If": [
+                "cAuditUserExists",
+                {
+                  "Sid": "Allow use of the key",
+                  "Effect": "Allow",
+                  "Principal": {
+                    "AWS": {
+                      "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:user/${AuditUser}"
+                    }
+                  },
+                  "Action": [
+                    "kms:Decrypt"
+                  ],
+                  "Resource": "*"
+                },
+                { "Ref": "AWS::NoValue" }
+              ]
             }
           ]
         }
@@ -1396,7 +1492,28 @@
               "Effect": "Allow",
               "Action": [ "s3:*" ],
               "Resource": [ { "Fn::Sub": "arn:aws:s3:::${AWS::StackName}-elb-logs/*" } ],
-              "Principal": "*"
+              "Principal": {
+                "AWS": [
+                  {
+                    "Fn::FindInMap": [ "ELBId", { "Ref": "AWS::Region" }, "Id" ]
+                  }
+                ]
+              }
+            },
+            {
+              "Effect": "Allow",
+              "Action": [
+                "s3:Get*",
+                "s3:List*"
+              ],
+              "Resource": [ { "Fn::Sub": "arn:aws:s3:::${AWS::StackName}-elb-logs/*" } ],
+              "Principal": {
+                "AWS": [
+                  {
+                    "Fn::Sub": "${ELBLogLambdaRole.Arn}"
+                  }
+                ]
+              }
             }
           ]
         }
@@ -2979,73 +3096,6 @@
         "GroupDescription": "Frontend Access"
       }
     },
-    "QAGroup": {
-      "Type": "AWS::IAM::Group",
-      "Properties": {
-        "GroupName": {
-          "Fn::Sub": "${AWS::StackName}-QA"
-        },
-        "ManagedPolicyArns": [
-          "arn:aws:iam::aws:policy/IAMReadOnlyAccess",
-          "arn:aws:iam::aws:policy/IAMUserSSHKeys"
-        ],
-        "Policies": [
-          {
-            "PolicyName": {
-              "Fn::Sub": "${AWS::StackName}-QA-Policy"
-            },
-            "PolicyDocument": {
-              "Version": "2012-10-17",
-              "Statement": [
-                {
-                  "Effect": "Allow",
-                  "Action": [
-                    "codecommit:BatchGetRepositories",
-                    "codecommit:List*"
-                  ],
-                  "Resource": "*"
-                },
-                {
-                  "Effect": "Allow",
-                  "Action": [
-                    "codecommit:Get*",
-                    "codecommit:GitPull"
-                  ],
-                  "Resource": [
-                    {
-                      "Fn::Sub": "arn:aws:codecommit:${AWS::Region}:${AWS::AccountId}:${AWS::StackName}-application"
-                    }
-                  ]
-                },
-                {
-                  "Effect": "Allow",
-                  "Action": [
-                    "ssm:GetParameters",
-                    "ssm:GetParametersByPath"
-                  ],
-                  "Resource": [
-                    {
-                      "Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}/*"
-                    }
-                  ]
-                },
-                {
-                  "Effect": "Allow",
-                  "Action": [
-                    "ssm:DescribeParameters"
-                  ],
-                  "Resource": [
-                    {
-                      "Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:*"
-                    }
-                  ]
-                }
-              ]
-            }
-          }
-        ]
-      }
-    },
     "DevGroup": {
       "Type": "AWS::IAM::Group",
       "Properties": {
@@ -3126,9 +3176,9 @@
                     "logs:DescribeLogStreams"
                   ],
                   "Resource": [
-                    {
-                      "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${AWS::StackName}:*"
-                    }
+                    { "Fn::Sub": "${LogGroupAppLog.Arn}" },
+                    { "Fn::Sub": "${LogGroupAppErrorLog.Arn }" },
+                    { "Fn::Sub": "${CodeBuildLogGroup.Arn}" }
                   ],
                   "Effect": "Allow"
                 },
@@ -3142,6 +3192,13 @@
                     }
                   ],
                   "Effect": "Allow"
+                },
+                {
+                  "Action": [
+                    "ec2:DescribeAvailabilityZones"
+                  ],
+                  "Effect": "Allow",
+                  "Resource": "*"
                 }
               ]
             }
@@ -3149,11 +3206,11 @@
         ]
       }
     },
-    "SecGroup": {
+    "AuditGroup": {
       "Type": "AWS::IAM::Group",
       "Properties": {
         "GroupName": {
-          "Fn::Sub": "${AWS::StackName}-Sec"
+          "Fn::Sub": "${AWS::StackName}-Audit"
         },
         "ManagedPolicyArns": [
           "arn:aws:iam::aws:policy/IAMReadOnlyAccess",
@@ -3162,7 +3219,7 @@
         "Policies": [
           {
             "PolicyName": {
-              "Fn::Sub": "${AWS::StackName}_sec_policy"
+              "Fn::Sub": "${AWS::StackName}_audit_policy"
             },
             "PolicyDocument": {
               "Version": "2012-10-17",
@@ -3179,8 +3236,7 @@
                   "Effect": "Allow",
                   "Action": [
                     "codecommit:Get*",
-                    "codecommit:GitPull",
-                    "codecommit:GitPush"
+                    "codecommit:GitPull"
                   ],
                   "Resource": [
                     {
@@ -3224,14 +3280,31 @@
                 },
                 {
                   "Action": [
+                    "logs:DescribeLogStreams",
                     "logs:GetLogEvents",
+                    "logs:FilterLogEvents",
                     "logs:DescribeMetricFilters",
-                    "logs:DescribeLogStreams"
+                    "logs:PutMetricFilter",
+                    "logs:TestMetricFilter",
+                    "logs:DescribeSubscriptionFilters",
+                    "logs:PutSubscriptionFilter"
                   ],
                   "Resource": [
-                    {
-                      "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${AWS::StackName}:*"
-                    }
+                    { "Fn::Sub": "${CodeBuildLogGroup.Arn}" },
+                    { "Fn::Sub": "${ELBLogsToCWLambdaLogGroup.Arn}" },
+                    { "Fn::Sub": "${LogGroupAppErrorLog.Arn}" },
+                    { "Fn::Sub": "${LogGroupAppLog.Arn}" },
+                    { "Fn::Sub": "${LogGroupCloudInit.Arn}" },
+                    { "Fn::Sub": "${LogGroupELBLog.Arn}" },
+                    { "Fn::Sub": "${LogGroupSysLog.Arn}" },
+                    { "Fn::Sub": "${LogGroupVPCFlowLog.Arn}" },
+                    { "Fn::Sub": "${LogMigrationLambdaLogGroup.Arn}" },
+                    { "Fn::Sub": "${ParameterStoreLambdaLogGroup.Arn}" },
+                    { "Fn::If": ["cEnableCloudTrail", { "Fn::Sub": "${LogGroupCloudTrail.Arn}" }, { "Ref": "AWS::NoValue" }]},
+                    { "Fn::If": ["cEnableES", { "Fn::Sub": "${CodeBuildKibanaLogGroup.Arn}" }, { "Ref": "AWS::NoValue" }]},
+                    { "Fn::If": ["cEnableES", { "Fn::Sub": "${LogStreamerLogGroup.Arn}" }, { "Ref": "AWS::NoValue" }]},
+                    { "Fn::If": ["cEnableES", { "Fn::Sub": "${SnapshotRepoCreateLambdaLogGroup.Arn}" }, { "Ref": "AWS::NoValue" }]},
+                    { "Fn::If": ["cEnableES", { "Fn::Sub": "${SnapshotCreateLambdaLogGroup.Arn}" }, { "Ref": "AWS::NoValue" }]}
                   ],
                   "Effect": "Allow"
                 },
@@ -3245,6 +3318,40 @@
                     }
                   ],
                   "Effect": "Allow"
+                },
+                {
+                  "Action": [
+                    "cloudwatch:describeAlarms",
+                    "cloudwatch:listMetrics"
+                  ],
+                  "Resource": [
+                    { "Fn::Sub": "arn:aws:events:${AWS::Region}:${AWS::AccountId}:*:*" }
+                  ],
+                  "Effect": "Allow"
+                },
+                {
+                  "Action": [
+                    "cloudwatch:describeAlarmHistory",
+                    "cloudwatch:getMetricData",
+                    "cloudwatch:getMetricDataForAccounts",
+                    "cloudwatch:getMetricStatistics"
+                  ],
+                  "Resource": [
+                    { "Fn::Sub": "arn:aws:cloudwatch:${AWS::Region}:${AWS::AccountId}:alarm:${AWS::StackName}*" }
+                  ],
+                  "Effect": "Allow"
+                },
+                {
+                  "Action": [
+                    "cloudwatch:getMetricData",
+                    "cloudwatch:getMetricStatistics",
+                    "s3:ListAllMyBuckets",
+                    "s3:GetBucketLocation",
+                    "s3:ListBucket",
+                    "ec2:DescribeAvailabilityZones"
+                  ],
+                  "Effect": "Allow",
+                  "Resource": "*"
                 }
               ]
             }
@@ -3254,34 +3361,25 @@
     },
     "AddUsersToDevGroup": {
       "Type": "AWS::IAM::UserToGroupAddition",
+      "Condition": "cDevUserExists",
       "Properties": {
         "GroupName": {
           "Ref": "DevGroup"
         },
         "Users": [
-          "devuser"
-        ]
-      }
-    },
-    "AddUsersToQAGroup": {
-      "Type": "AWS::IAM::UserToGroupAddition",
-      "Properties": {
-        "GroupName": {
-          "Ref": "QAGroup"
-        },
-        "Users": [
-          "qauser"
+          { "Ref": "DevUser" }
         ]
       }
     },
     "AddUsersToSecGroup": {
       "Type": "AWS::IAM::UserToGroupAddition",
+      "Condition": "cAuditUserExists",
       "Properties": {
         "GroupName": {
-          "Ref": "SecGroup"
+          "Ref": "AuditGroup"
         },
         "Users": [
-          "secureuser"
+          { "Ref": "AuditUser" }
         ]
       }
     },
@@ -3662,7 +3760,30 @@
                   "Fn::Sub": "arn:aws:s3:::${AWS::StackName}-artifacts/*"
                 }
               ],
-              "Principal": "*"
+              "Principal": {
+                "AWS": [
+                  { "Fn::Sub": "${CodePipelineServiceRole.Arn}" },
+                  { "Fn::Sub": "${CodeBuildRole.Arn}" }
+                ]
+              }
+            },
+            {
+              "Effect": "Allow",
+              "Action": [
+                "s3:Get*",
+                "s3:List*"
+              ],
+              "Resource": [
+                {
+                  "Fn::Sub": "arn:aws:s3:::${AWS::StackName}-artifacts"
+                },
+                {
+                  "Fn::Sub": "arn:aws:s3:::${AWS::StackName}-artifacts/*"
+                }
+              ],
+              "Principal": {
+                "AWS": { "Fn::Sub": "${InstanceRole.Arn}" }
+              }
             }
           ]
         }
