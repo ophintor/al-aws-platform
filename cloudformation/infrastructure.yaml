@@ -804,23 +804,23 @@ Resources:
             Action:
               - 'sts:AssumeRole'
       Policies:
-        PolicyName: ELBLogLambdaRolePolicy
-        PolicyDocument:
-          Statement:
-            - Effect: Allow
-              Action:
-                - 'logs:CreateLogStream'
-                - 'logs:PutLogEvents'
-                - 'logs:DescribeLogGroups'
-                - 'logs:DescribeLogStreams'
-              Resource:
-                - !Sub '${LogGroupELBLog.Arn}'
-                - !Sub '${ELBLogsToCWLambdaLogGroup.Arn}'
-            - Effect: Allow
-              Action:
-                - 's3:GetObject'
-              Resource:
-                - !Sub 'arn:aws:s3:::${AWS::StackName}-elb-logs/*'
+        - PolicyName: ELBLogLambdaRolePolicy
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                  - 'logs:DescribeLogGroups'
+                  - 'logs:DescribeLogStreams'
+                Resource:
+                  - !Sub '${LogGroupELBLog.Arn}'
+                  - !Sub '${ELBLogsToCWLambdaLogGroup.Arn}'
+              - Effect: Allow
+                Action:
+                  - 's3:GetObject'
+                Resource:
+                  - !Sub 'arn:aws:s3:::${AWS::StackName}-elb-logs/*'
   ELBLogLambdaInvokePermission:
     Type: AWS::Lambda::Permission
     Condition: cEnableELBLogging
