@@ -803,7 +803,7 @@ Resources:
                 - 'lambda.amazonaws.com'
             Action:
               - 'sts:AssumeRole'
-      Properties:
+      Policies:
         PolicyName: ELBLogLambdaRolePolicy
         PolicyDocument:
           Statement:
