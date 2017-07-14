@@ -2994,43 +2994,9 @@ Resources:
       DestinationArn: !GetAtt 'LogStreamer.Arn'
       FilterPattern: !FindInMap [FilterPatternLookup, ELBLogs, Pattern]
       LogGroupName: !Sub '${AWS::StackName}-elblog'
-
-  LogRole:
-    Condition: cEnableElasticSearchLogs
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Action:
-              - sts:AssumeRole
-            Principal:
-              Service:
-                - ec2.amazonaws.com
-      Path: /
-      Policies:
-        - PolicyDocument:
-            Statement:
-              - Action:
-                  - logs:Create*
-                  - logs:PutLogEvents
-                  - s3:GetObject
-                Effect: Allow
-                Resource:
-                  - arn:aws:logs:*:*:*
-                  - arn:aws:s3:::*
-            Version: '2012-10-17'
-          PolicyName: LogRolePolicy
-    Type: AWS::IAM::Role
-
-  LogRoleInstanceProfile:
-    Condition: cEnableElasticSearchLogs
-    Properties:
-      Path: /
-      Roles:
-        - !Ref LogRole
-    Type: AWS::IAM::InstanceProfile
-
+  ####################################################
+  # VPC FLOW LOGS
+  ####################################################
   # Exported so service stacks can stream logs to it.
   LogStreamerLogsGroup:
     Type: AWS::Logs::LogGroup
