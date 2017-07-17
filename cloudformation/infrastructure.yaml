@@ -80,21 +80,15 @@ Mappings:
       id: 156460612806
 
 Outputs:
-  EC2URL:
+  WebsiteURL:
     Description: Website
     Value: !Join ['', [
       !If [cEnableHTTPS, 'https://', 'http://'],
-      !If [cEnableDNS, !Sub 'ec2.${AWS::StackName}.al-labs.co.uk', !Sub '${AppLoadBalancer.DNSName}']]
+      !If [cEnableDNS, !Sub '${AWS::StackName}.al-labs.co.uk', !Sub '${AppLoadBalancer.DNSName}']]
     ]
   RepoURL:
     Description: Git Repository
     Value: !GetAtt 'CodeRepo.CloneUrlSsh'
-  ECSURL:
-    Description: ECS LB URL
-    Value: !Join ['', [
-      !If [cEnableHTTPS, 'https://', 'http://'],
-      !If [cEnableDNS, !Sub 'ecs.${AWS::StackName}.al-labs.co.uk', !Sub '${AppLoadBalancer.DNSName}']]
-    ]
   PipelineUrl:
     Value: !Sub 'https://console.aws.amazon.com/codepipeline/home?region=${AWS::Region}#/view/${CodePipeline}'
   # These exported values are sent in every request by the lambda function, not sure where they get included
@@ -713,10 +707,13 @@ Resources:
       GroupDescription: Allow Internal access to RDS Instances
       VpcId: !Ref VPC
       SecurityGroupIngress:
-        - SourceSecurityGroupId: !Ref ECSSecurityGroup
-          FromPort: !FindInMap [DBEngines, !Ref 'DBEngine', port]
-          ToPort: !FindInMap [DBEngines, !Ref 'DBEngine', port]
-          IpProtocol: tcp
+        - !If
+          - cEnableContainers
+          - SourceSecurityGroupId: !Ref ECSSecurityGroup
+            FromPort: !FindInMap [DBEngines, !Ref 'DBEngine', port]
+            ToPort: !FindInMap [DBEngines, !Ref 'DBEngine', port]
+            IpProtocol: tcp
+          - !Ref 'AWS::NoValue'
         - SourceSecurityGroupId: !Ref AppSecurityGroup
           FromPort: !FindInMap [DBEngines, !Ref 'DBEngine', port]
           ToPort: !FindInMap [DBEngines, !Ref 'DBEngine', port]
@@ -2833,23 +2830,15 @@ Resources:
   #####################################################################################
   # Start of Public DNS
   #####################################################################################
-  EC2LBCertifcate:
+  LBCertifcate:
     Type: AWS::CertificateManager::Certificate
     Properties:
-      DomainName: !Sub 'ec2.${AWS::StackName}.al-labs.co.uk'
+      DomainName: !Sub '${AWS::StackName}.al-labs.co.uk'
       DomainValidationOptions:
-        - DomainName: !Sub 'ec2.${AWS::StackName}.al-labs.co.uk'
+        - DomainName: !Sub '${AWS::StackName}.al-labs.co.uk'
           ValidationDomain: 'al-labs.co.uk'
     Condition: cEnableHTTPS
-  ECSLBCertifcate:
-    Type: AWS::CertificateManager::Certificate
-    Properties:
-      DomainName: !Sub 'ecs.${AWS::StackName}.al-labs.co.uk'
-      DomainValidationOptions:
-        - DomainName: !Sub 'ecs.${AWS::StackName}.al-labs.co.uk'
-          ValidationDomain: 'al-labs.co.uk'
-    Condition: cEnableHTTPS
-  EC2ALBHTTPSListener:
+  ALBHTTPSListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
       DefaultActions:
@@ -2859,19 +2848,7 @@ Resources:
       Port: 443
       Protocol: HTTPS
       Certificates:
-        - CertificateArn: !Ref EC2LBCertifcate
-    Condition: cEnableHTTPS
-  ECSALBHTTPSListener:
-    Type: AWS::ElasticLoadBalancingV2::Listener
-    Properties:
-      DefaultActions:
-        - Type: forward
-          TargetGroupArn: !Ref AppTargetGroup
-      LoadBalancerArn: !Ref AppLoadBalancer
-      Port: 443
-      Protocol: HTTPS
-      Certificates:
-        - CertificateArn: !Ref ECSLBCertifcate
+        - CertificateArn: !Ref LBCertifcate
     Condition: cEnableHTTPS
   DNSRecord:
     Type: AWS::Route53::RecordSetGroup
@@ -2879,13 +2856,7 @@ Resources:
       HostedZoneName: al-labs.co.uk.
       Comment: Zone apex alias targeted to myELB LoadBalancer.
       RecordSets:
-        # One subdoamin for each type
-        - Name: !Sub 'ec2.${AWS::StackName}.al-labs.co.uk.'
-          Type: A
-          AliasTarget:
-            HostedZoneId: !GetAtt 'AppLoadBalancer.CanonicalHostedZoneID'
-            DNSName: !GetAtt 'AppLoadBalancer.DNSName'
-        - Name: !Sub 'ecs.${AWS::StackName}.al-labs.co.uk.'
+        - Name: !Sub '${AWS::StackName}.al-labs.co.uk.'
           Type: A
           AliasTarget:
             HostedZoneId: !GetAtt 'AppLoadBalancer.CanonicalHostedZoneID'
