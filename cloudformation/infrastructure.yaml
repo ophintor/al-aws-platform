@@ -411,7 +411,7 @@ Conditions:
     - !Not [!Equals [!Sub '${AWS::Region}', 'ap-southeast-2']]
     - !Not [!Equals [!Sub '${AWS::Region}', 'ap-northeast-1']]
   cEnableContainers: !Equals [!Ref UseContainers, 'Enabled']
-  cEnableEC2: !Not [ !Condition cEnableContainers ]
+  cEnableEC2: !Not [!Condition cEnableContainers]
   cEnableApprovalEmails: !Not [!Equals [!Ref EmailApprovals, '']]
   cEnableSlackApprovals: !Not [!Equals [!Ref SlackApprovalsWebhook, '']]
   cEnableEmailNotications: !Not [!Equals [!Ref OperationsEmail, '']]
@@ -439,7 +439,7 @@ Resources:
       VpcId: !Ref VPC
       CidrBlock: 10.0.1.0/24
       AvailabilityZone: !Select [0, !GetAZs '']
-      MapPublicIpOnLaunch: True
+      MapPublicIpOnLaunch: 'True'
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-PublicSubnet01'
@@ -449,7 +449,7 @@ Resources:
       VpcId: !Ref VPC
       CidrBlock: 10.0.2.0/24
       AvailabilityZone: !Select [1, !GetAZs '']
-      MapPublicIpOnLaunch: True
+      MapPublicIpOnLaunch: 'True'
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-PublicSubnet02'
