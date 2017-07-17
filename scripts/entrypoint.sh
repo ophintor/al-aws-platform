@@ -43,7 +43,7 @@ for v in ${!SSM_*} ; do
 	echo "Processing env var: ${v}"
 	NEW_VAR=${v/#SSM_/}
 	echo "exporting env var: ${NEW_VAR}"
-	export "${NEW_VAR}"="$(aws --region "${AWS_REGION}" ssm get-parameters --names "${!v}" --with-decryption --output text --query 'Parameters[0].Value')"
+	export "${NEW_VAR}"="$(aws --region "${AWS_REGION}" ssm get-parameters --names "/${!v}" --with-decryption --output text --query 'Parameters[0].Value')"
 done
 
 # Run the command
