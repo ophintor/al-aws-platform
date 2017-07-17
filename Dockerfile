@@ -25,4 +25,4 @@ RUN echo $(date) > ./build.date
 EXPOSE 3000
 
 # CMD [ "/entrypoint.sh", "node", "server.js" ]
-CMD chmod u+x scripts/sql_schema.sh; /entrypoint.sh scripts/sql_schema.sh; /entrypoint.sh node server.js
+CMD chmod u+x scripts/sql_schema.sh; /entrypoint.sh /app/scripts/sql_schema.sh; /entrypoint.sh node server.js
