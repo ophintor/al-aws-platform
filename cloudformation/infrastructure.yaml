@@ -1449,6 +1449,9 @@ Resources:
                   - s3:Get*
                   - codepipeline:*
                   - rds:DescribeDBInstances
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
                 Resource: '*'
               # Allow fetch from Parameters Store in a specific name space
               - Effect: Allow
