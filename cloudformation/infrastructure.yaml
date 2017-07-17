@@ -71,13 +71,13 @@ Mappings:
   # http://docs.aws.amazon.com/elasticloadbalancing/latest/classic/enable-access-logs.html#enable-access-logs-console
   AWSELBAccountID:
     us-east-1:
-      id: 127311923021
+      id: "127311923021"
     us-east-2:
-      id: 033677994240
+      id: "033677994240"
     us-west-2:
-      id: 797873946194
+      id: "797873946194"
     eu-west-1:
-      id: 156460612806
+      id: "156460612806"
 
 Outputs:
   WebsiteURL:
@@ -294,8 +294,8 @@ Parameters:
     Default: ''
     NoEcho: true
     Type: String
-  LambdaCodeBuildLogging:
-    Description: Enable/Disable logging for Lambda and CodeBuild.
+  LambdaLogging:
+    Description: Enable/Disable logging for Lambda.
     AllowedValues:
       - Enable
       - Disable
@@ -351,7 +351,7 @@ Metadata:
           - ElasticsearchLogs
           - ElasticsearchStack
           - LogCloudTrail
-          - LambdaCodeBuildLogging
+          - LambdaLogging
     ParameterLabels:
       AppPort:
         default: Application TCP Port
@@ -381,7 +381,7 @@ Metadata:
         default: Enable ELB Logging
       LogCloudTrail:
         default: Enable CloudTrail logging
-      LambdaCodeBuildLogging:
+      LambdaLogging:
         default: Enable Lambda and CodeBuild logging
       UseSpotInstances:
         default: Use Spot Instances
@@ -415,9 +415,9 @@ Conditions:
   cEnableApprovalEmails: !Not [!Equals [!Ref EmailApprovals, '']]
   cEnableSlackApprovals: !Not [!Equals [!Ref SlackApprovalsWebhook, '']]
   cEnableEmailNotications: !Not [!Equals [!Ref OperationsEmail, '']]
-  cEnableLambdaCodeBuildLogging: !Equals [!Ref LambdaCodeBuildLogging, 'Enable']
-  cEnableLambdaAndELBLogging: !And [!Condition cEnableLambdaCodeBuildLogging, !Condition cEnableELBLogging]
-  cEnableSlackAndLambdaLogging: !And [!Condition cEnableSlackApprovals, !Condition cEnableLambdaCodeBuildLogging]
+  cEnableLambdaLogging: !Equals [!Ref LambdaLogging, 'Enable']
+  cEnableLambdaAndELBLogging: !And [!Condition cEnableLambdaLogging, !Condition cEnableELBLogging]
+  cEnableSlackAndLambdaLogging: !And [!Condition cEnableSlackApprovals, !Condition cEnableLambdaLogging]
 
 # Resources documentation
 # http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-template-resource-type-ref.html
@@ -563,7 +563,7 @@ Resources:
   EncryptLambdaLogsGroup:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Delete
-    Condition: cEnableLambdaCodeBuildLogging
+    Condition: cEnableLambdaLogging
     Properties:
       LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-set-param-store'
       RetentionInDays: 1
@@ -597,10 +597,10 @@ Resources:
                 Action:
                   - ssm:PutParameter
                 Resource:
-                  - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}.db.*'
+                  - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}/db/*'
                   # Used on AWS console to test the function ^.^
-                  - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}.fn.test'
-                  - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}.slack.*'
+                  - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}/fn.test'
+                  - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}/slack/*'
   EncryptLambda:
     Type: AWS::Lambda::Function
     DependsOn: MyKeyAlias
@@ -682,7 +682,7 @@ Resources:
     Properties:
       ServiceToken: !GetAtt 'EncryptLambda.Arn'
       KeyId: !Sub 'alias/${AWS::StackName}-masterkey'
-      ParameterStoreName: !Sub '${AWS::StackName}.db.password'
+      ParameterStoreName: !Sub '/${AWS::StackName}/db/password'
       Value: !Ref DBPassword
       Description: DataBase password
       Type: 'SecureString'
@@ -736,21 +736,21 @@ Resources:
   StoreDBAddress:
     Type: AWS::SSM::Parameter
     Properties:
-      Name: !Sub '${AWS::StackName}.db.connectionstring'
+      Name: !Sub '/${AWS::StackName}/db/connectionstring'
       Value: !GetAtt 'DBInstance.Endpoint.Address'
       Description: DataBase Address
       Type: 'String'
   StoreDBUsername:
     Type: AWS::SSM::Parameter
     Properties:
-      Name: !Sub '${AWS::StackName}.db.username'
+      Name: !Sub '/${AWS::StackName}/db/username'
       Value: !Ref DBUsername
       Description: DataBase username
       Type: 'String'
   StoreDBName:
     Type: AWS::SSM::Parameter
     Properties:
-      Name: !Sub '${AWS::StackName}.db.name'
+      Name: !Sub '/${AWS::StackName}/db/name'
       Value: !Ref DBName
       Description: DataBase Name
       Type: 'String'
@@ -822,24 +822,24 @@ Resources:
                 - 'lambda.amazonaws.com'
             Action:
               - 'sts:AssumeRole'
-      Properties:
-        PolicyName: ELBLogLambdaRolePolicy
-        PolicyDocument:
-          Statement:
-            - Effect: Allow
-              Action:
-                - 'logs:CreateLogStream'
-                - 'logs:PutLogEvents'
-                - 'logs:DescribeLogGroups'
-                - 'logs:DescribeLogStreams'
-              Resource:
-                - !Sub '${LogGroupELBLog.Arn}'
-                - !Sub '${ELBLogsToCWLambdaLogGroup.Arn}'
-            - Effect: Allow
-              Action:
-                - 's3:GetObject'
-              Resource:
-                - !Sub 'arn:aws:s3:::${AWS::StackName}-elb-logs/*'
+      Policies:
+        - PolicyName: ELBLogLambdaRolePolicy
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                  - 'logs:DescribeLogGroups'
+                  - 'logs:DescribeLogStreams'
+                Resource:
+                  - !Sub '${LogGroupELBLog.Arn}'
+                  - !Sub '${ELBLogsToCWLambdaLogGroup.Arn}'
+              - Effect: Allow
+                Action:
+                  - 's3:GetObject'
+                Resource:
+                  - !Sub 'arn:aws:s3:::${AWS::StackName}-elb-logs/*'
   ELBLogLambdaInvokePermission:
     Type: AWS::Lambda::Permission
     Condition: cEnableELBLogging
@@ -1313,7 +1313,12 @@ Resources:
                 Action:
                   - ssm:GetParameters
                 Resource:
-                  - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}.db.*'
+                  - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}/db/*'
+              - Effect: Allow
+                Action:
+                  - ssm:GetParametersByPath
+                Resource:
+                  - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}/db'
         - PolicyName: parameter-store-app
           PolicyDocument:
             Version: '2012-10-17'
@@ -1321,9 +1326,10 @@ Resources:
               - Effect: Allow
                 Action:
                   - ssm:GetParameters
+                  - ssm:GetParametersByPath
                   - ssm:PutParameter
                 Resource:
-                  - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}.app.*'
+                  - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}/app/*'
   ECSScaleUpPolicy:
     Type: AWS::AutoScaling::ScalingPolicy
     Condition: cEnableContainers
@@ -1404,19 +1410,34 @@ Resources:
                   - s3:Get*
                   - codepipeline:*
                   - rds:DescribeDBInstances
+                  - cloudwatch:PutMetricData
+                  - cloudwatch:GetMetricStatistics
+                  - cloudwatch:ListMetrics
                 Resource: '*'
               # Allow fetch from Parameters Store in a specific name space
               - Effect: Allow
                 Action:
                   - ssm:GetParameters
                 Resource:
-                  - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}.db.*'
+                  - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}/db/*'
+              - Effect: Allow
+                Action:
+                  - ssm:GetParametersByPath
+                Resource:
+                  - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}/db'
               # Allow describe parameters to automate config process
               - Effect: Allow
                 Action:
                   - ssm:DescribeParameters
                 Resource:
                   - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:*'
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource:
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${AWS::StackName}*:*'
       Path: /
   EC2InstanceRoleInstanceProfile:
     Type: AWS::IAM::InstanceProfile
@@ -1784,34 +1805,30 @@ Resources:
   CodeBuildArtifactLogGroup:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Delete
-    Condition: cEnableLambdaCodeBuildLogging
     Properties:
       LogGroupName: !Sub '/aws/codebuild/${AWS::StackName}-build'
       RetentionInDays: 1
   CodePipelineTestArtifactLogGroup:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Delete
-    Condition: cEnableLambdaCodeBuildLogging
     Properties:
       LogGroupName: !Sub '/aws/codebuild/${AWS::StackName}-test'
       RetentionInDays: 1
   IntegrationTestArtifactLogGroup:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Delete
-    Condition: cEnableLambdaCodeBuildLogging
     Properties:
       LogGroupName: !Sub '/aws/codebuild/${AWS::StackName}-integration-test'
       RetentionInDays: 1
   CodeBuildDockerImageLogGroup:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Delete
-    Condition: cEnableLambdaCodeBuildLogging
     Properties:
       LogGroupName: !Sub '/aws/codebuild/${AWS::StackName}-ecs-image'
       RetentionInDays: 1
   CodeBuildArtifact:
     Type: AWS::CodeBuild::Project
-    DependsOn: [CodeRepo, CodeBuildRole]
+    DependsOn: [CodeRepo, CodeBuildRole, CodeBuildArtifactLogGroup]
     Properties:
       Name: !Sub '${AWS::StackName}-build'
       Description: A description about my project
@@ -1841,7 +1858,7 @@ Resources:
       TimeoutInMinutes: 300  # 5min
   CodePipelineTestArtifact:
     Type: AWS::CodeBuild::Project
-    DependsOn: [CodeRepo, CodeBuildRole]
+    DependsOn: [CodeRepo, CodeBuildRole, CodePipelineTestArtifactLogGroup]
     Properties:
       Name: !Sub '${AWS::StackName}-test'
       Description: A description about my project
@@ -1869,7 +1886,7 @@ Resources:
       TimeoutInMinutes: 300 # 5min
   IntegrationTestArtifact:
     Type: AWS::CodeBuild::Project
-    DependsOn: [CodeRepo, CodeBuildRole]
+    DependsOn: [CodeRepo, CodeBuildRole, IntegrationTestArtifactLogGroup]
     Properties:
       Name: !Sub '${AWS::StackName}-integration-test'
       Description: A description about my project
@@ -2087,9 +2104,7 @@ Resources:
   CodePipeline:
     Type: AWS::CodePipeline::Pipeline
     DependsOn:
-#      - ContainerCluster
       - AppTargetGroup
-#      - ECSServiceRole
       - DBInstance
     Properties:
       Name: !Sub '${AWS::StackName}-pipeline'
@@ -2870,7 +2885,7 @@ Resources:
   #####################################################################################
   # Mapping Log groups to the Lambda that ships them to Elasticsearch
   Trail:
-    DependsOn: TrailBucketPolicy
+    DependsOn: LogStoreS3LocationPolicy
     Condition: cEnableLogCloudTrail
     Properties:
       CloudWatchLogsLogGroupArn: !GetAtt 'TrailLogGroup.Arn'
@@ -2878,34 +2893,8 @@ Resources:
       IncludeGlobalServiceEvents: true
       IsLogging: true
       IsMultiRegionTrail: true
-      S3BucketName: !Ref TrailBucket
+      S3BucketName: !Ref LogStoreS3Location
     Type: AWS::CloudTrail::Trail
-  TrailBucket:
-    DeletionPolicy: Retain
-    Condition: cEnableLogCloudTrail
-    Properties: {}
-    Type: AWS::S3::Bucket
-  TrailBucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Condition: cEnableLogCloudTrail
-    Properties:
-      Bucket: !Ref TrailBucket
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Action: s3:GetBucketAcl
-            Effect: Allow
-            Principal:
-              Service: cloudtrail.amazonaws.com
-            Resource: !Sub 'arn:aws:s3:::${TrailBucket}'
-          - Action: s3:PutObject
-            Condition:
-              StringEquals:
-                s3:x-amz-acl: bucket-owner-full-control
-            Effect: Allow
-            Principal:
-              Service: cloudtrail.amazonaws.com
-            Resource: !Sub 'arn:aws:s3:::${TrailBucket}/AWSLogs/${AWS::AccountId}/*'
   TrailLogGroup:
     Properties:
       LogGroupName: !Sub '/aws/cloudtrail/${AWS::StackName}'
@@ -2979,48 +2968,14 @@ Resources:
       DestinationArn: !GetAtt 'LogStreamer.Arn'
       FilterPattern: !FindInMap [FilterPatternLookup, ELBLogs, Pattern]
       LogGroupName: !Sub '${AWS::StackName}-elblog'
-
-  LogRole:
-    Condition: cEnableElasticSearchLogs
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Action:
-              - sts:AssumeRole
-            Principal:
-              Service:
-                - ec2.amazonaws.com
-      Path: /
-      Policies:
-        - PolicyDocument:
-            Statement:
-              - Action:
-                  - logs:Create*
-                  - logs:PutLogEvents
-                  - s3:GetObject
-                Effect: Allow
-                Resource:
-                  - arn:aws:logs:*:*:*
-                  - arn:aws:s3:::*
-            Version: '2012-10-17'
-          PolicyName: LogRolePolicy
-    Type: AWS::IAM::Role
-
-  LogRoleInstanceProfile:
-    Condition: cEnableElasticSearchLogs
-    Properties:
-      Path: /
-      Roles:
-        - !Ref LogRole
-    Type: AWS::IAM::InstanceProfile
-
+  ####################################################
+  # VPC FLOW LOGS
+  ####################################################
   # Exported so service stacks can stream logs to it.
   LogStreamerLogsGroup:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Delete
-    Condition: cEnableLambdaCodeBuildLogging
+    Condition: cEnableLambdaLogging
     Properties:
       LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-es-log-streamer'
       RetentionInDays: 1
@@ -3157,14 +3112,14 @@ Resources:
                 Action:
                   - ssm:GetParameters
                 Resource:
-                  - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}.slack.*'
+                  - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}/slack/*'
   StoreEncryptedSlackWebhook:
     Type: Custom::SetParameterStore
     Condition: cEnableSlackApprovals
     Properties:
       ServiceToken: !GetAtt 'EncryptLambda.Arn'
       KeyId: !Sub 'alias/${AWS::StackName}-masterkey'
-      ParameterStoreName: !Sub '${AWS::StackName}.slack.webhooks'
+      ParameterStoreName: !Sub '/${AWS::StackName}/slack/webhooks'
       Value: !Ref SlackApprovalsWebhook
       Description: Webhook URL for approvals notifications
       Type: 'SecureString'
