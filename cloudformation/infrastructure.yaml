@@ -542,9 +542,6 @@ Resources:
                 AWS:
                   - !GetAtt 'EC2InstanceRole.Arn'
               Resource: '*'
-            - !Ref 'AWS::NoValue'
-          - !If
-            - cEnableContainers
             - Effect: Allow
               Action:
                 - kms:Decrypt
@@ -552,7 +549,6 @@ Resources:
                 AWS:
                   - !GetAtt 'TaskRole.Arn'
               Resource: '*'
-            - !Ref 'AWS::NoValue'
   MyKeyAlias:
     Type: AWS::KMS::Alias
     Properties:
