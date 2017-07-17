@@ -1449,9 +1449,9 @@ Resources:
                   - s3:Get*
                   - codepipeline:*
                   - rds:DescribeDBInstances
-                  - logs:CreateLogGroup
-                  - logs:CreateLogStream
-                  - logs:PutLogEvents
+                  - cloudwatch:PutMetricData
+                  - cloudwatch:GetMetricStatistics
+                  - cloudwatch:ListMetrics
                 Resource: '*'
               # Allow fetch from Parameters Store in a specific name space
               - Effect: Allow
@@ -1470,6 +1470,13 @@ Resources:
                   - ssm:DescribeParameters
                 Resource:
                   - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:*'
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource:
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${AWS::StackName}*:*'
       Path: /
   EC2InstanceRoleInstanceProfile:
     Type: AWS::IAM::InstanceProfile
