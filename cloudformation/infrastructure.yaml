@@ -1253,7 +1253,7 @@ Resources:
       Subnets:
         - !Ref publicSubnet01
         - !Ref publicSubnet02
-      SecurityGroups: [!Ref ECSALBSecurityGroup]
+      SecurityGroups: [!Ref AppSecurityGroup]
       Tags:
         - Key: custom:cloudformation:depends-on
           Value: !If [cEnableAdvancedLogging, !Ref ELBAccessLogsBucketPolicy, !Ref 'AWS::NoValue']
