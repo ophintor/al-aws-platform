@@ -709,11 +709,10 @@ Resources:
             FromPort: !FindInMap [DBEngines, !Ref 'DBEngine', port]
             ToPort: !FindInMap [DBEngines, !Ref 'DBEngine', port]
             IpProtocol: tcp
-          - !Ref 'AWS::NoValue'
-        - SourceSecurityGroupId: !Ref AppSecurityGroup
-          FromPort: !FindInMap [DBEngines, !Ref 'DBEngine', port]
-          ToPort: !FindInMap [DBEngines, !Ref 'DBEngine', port]
-          IpProtocol: tcp
+          - SourceSecurityGroupId: !Ref AppSecurityGroup
+            FromPort: !FindInMap [DBEngines, !Ref 'DBEngine', port]
+            ToPort: !FindInMap [DBEngines, !Ref 'DBEngine', port]
+            IpProtocol: tcp
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-DB'
