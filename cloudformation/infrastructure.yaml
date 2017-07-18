@@ -1622,7 +1622,7 @@ Resources:
   AppLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: !Sub '${AWS::StackName}-App-LoadBalancer'
+      Name: !Sub '${AWS::StackName}-LB'
       Scheme: internet-facing
       LoadBalancerAttributes:
         - Key: idle_timeout.timeout_seconds
@@ -1640,7 +1640,7 @@ Resources:
   AppTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: !Sub '${AWS::StackName}-AppTargetGroup'
+      Name: !Sub '${AWS::StackName}-TG'
       Port: !Ref AppPort
       Protocol: HTTP
       VpcId: !Ref VPC
