@@ -100,6 +100,13 @@ Outputs:
         !Sub '${ElasticsearchStack}-DomainEndpointES'
 
 Parameters:
+  AdvancedLogging:
+    Description: Enable/Disable Advanced logging
+    AllowedValues:
+      - Enable
+      - Disable
+    Default: Disable
+    Type: String
   AppPort:
     ConstraintDescription: must be a valid TCP port number (1-65535)
     Default: 3000
@@ -222,20 +229,6 @@ Parameters:
     Default: 0.0.0.0/0
     AllowedPattern: (\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})
     ConstraintDescription: Must be a valid IP CIDR range of the form x.x.x.x/x.
-  ELBLogging:
-    Description: Enable / Disable LoadBalancers logging
-    AllowedValues:
-      - Enable
-      - Disable
-    Default: Disable
-    Type: String
-  LogCloudTrail:
-    Type: String
-    Description: Enable / Disable CloudTrail logging
-    AllowedValues:
-      - Enable
-      - Disable
-    Default: Disable
   OperatingSystem:
     AllowedValues:
       - Ubuntu16x04
@@ -294,13 +287,6 @@ Parameters:
     Default: ''
     NoEcho: true
     Type: String
-  LambdaLogging:
-    Description: Enable/Disable logging for Lambda.
-    AllowedValues:
-      - Enable
-      - Disable
-    Default: Enable
-    Type: String
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
@@ -347,12 +333,12 @@ Metadata:
       - Label:
           default: 'Logging: '
         Parameters:
-          - ELBLogging
+          - AdvancedLogging
           - ElasticsearchLogs
           - ElasticsearchStack
-          - LogCloudTrail
-          - LambdaLogging
     ParameterLabels:
+      AdvancedLogging:
+        default: Enable Advanced Logging Features
       AppPort:
         default: Application TCP Port
       DBName:
@@ -377,12 +363,6 @@ Metadata:
         default: Deploy Elasticsearch
       ElasticsearchStack:
         default: Central Logging Elasticsearch Stack Name
-      ELBLogging:
-        default: Enable ELB Logging
-      LogCloudTrail:
-        default: Enable CloudTrail logging
-      LambdaLogging:
-        default: Enable Lambda and CodeBuild logging
       UseSpotInstances:
         default: Use Spot Instances
       SpotPricing:
@@ -398,11 +378,10 @@ Conditions:
   cEnableDNS: !Equals [!Ref UseDNS, 'Enable']
   cEnableHTTPS: !Equals [!Ref UseHTTPS, 'Enable']
   cEnableElasticSearchLogs: !Equals [!Ref ElasticsearchLogs, 'Enable']
-  cEnableELBLogging: !Equals [!Ref ELBLogging, 'Enable']
-  cEnableELBtoElasticSearch: !And [!Condition cEnableElasticSearchLogs, !Condition cEnableELBLogging]
-  cEnableLogCloudTrail: !Equals [!Ref LogCloudTrail, 'Enable']
+  cEnableELBtoElasticSearch: !And [!Condition cEnableElasticSearchLogs, !Condition cEnableAdvancedLogging]
   cMinInstancesGreaterThanOne: !Not [!Equals [!Ref InstanceMinCount, 1]]
   cSpotPriceGreaterThanZero: !Not [!Equals [!Ref SpotPricing, 0]]
+  cEnableAdvancedLogging: !Equals [!Ref AdvancedLogging, 'Enable']
   cEnableSpotInstances: !And
     - !Equals [!Ref UseSpotInstances, 'Enable']
     - !Condition cSpotPriceGreaterThanZero
@@ -415,9 +394,7 @@ Conditions:
   cEnableApprovalEmails: !Not [!Equals [!Ref EmailApprovals, '']]
   cEnableSlackApprovals: !Not [!Equals [!Ref SlackApprovalsWebhook, '']]
   cEnableEmailNotications: !Not [!Equals [!Ref OperationsEmail, '']]
-  cEnableLambdaLogging: !Equals [!Ref LambdaLogging, 'Enable']
-  cEnableLambdaAndELBLogging: !And [!Condition cEnableLambdaLogging, !Condition cEnableELBLogging]
-  cEnableSlackAndLambdaLogging: !And [!Condition cEnableSlackApprovals, !Condition cEnableLambdaLogging]
+  cEnableSlackAndLambdaLogging: !And [!Condition cEnableSlackApprovals, !Condition cEnableAdvancedLogging]
 
 # Resources documentation
 # http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-template-resource-type-ref.html
@@ -559,7 +536,7 @@ Resources:
   EncryptLambdaLogsGroup:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Delete
-    Condition: cEnableLambdaLogging
+    Condition: cEnableAdvancedLogging
     Properties:
       LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-set-param-store'
       RetentionInDays: 1
@@ -758,8 +735,9 @@ Resources:
   ####################################################################################
   ELBAccessLogsBucket:
     Type: AWS::S3::Bucket
+    DependsOn: "ELBLogsToCWLambda"
     DeletionPolicy: Retain
-    Condition: cEnableELBLogging
+    Condition: cEnableAdvancedLogging
     Properties:
       BucketName: !Sub '${AWS::StackName}-elb-logs'
       NotificationConfiguration:
@@ -778,7 +756,7 @@ Resources:
                 TransitionInDays: 60
   ELBAccessLogsBucketPolicy:
     Type: AWS::S3::BucketPolicy
-    Condition: cEnableELBLogging
+    Condition: cEnableAdvancedLogging
     Properties:
       Bucket: !Ref ELBAccessLogsBucket
       PolicyDocument:
@@ -797,14 +775,14 @@ Resources:
               - s3:PutObject
   LogGroupELBLog:
     Type: AWS::Logs::LogGroup
-    Condition: cEnableELBLogging
+    Condition: cEnableAdvancedLogging
     DeletionPolicy: Delete
     Properties:
       LogGroupName: !Sub '${AWS::StackName}-elblog'
       RetentionInDays: 7
   ELBLogLambdaRole:
     Type: AWS::IAM::Role
-    Condition: cEnableELBLogging
+    Condition: cEnableAdvancedLogging
     Metadata:
       Comment: ELBLogLambdaRole allows Lambda to read from S3 and write to CloudWatch.
     Properties:
@@ -837,7 +815,7 @@ Resources:
                   - !Sub 'arn:aws:s3:::${AWS::StackName}-elb-logs/*'
   ELBLogLambdaInvokePermission:
     Type: AWS::Lambda::Permission
-    Condition: cEnableELBLogging
+    Condition: cEnableAdvancedLogging
     Properties:
       FunctionName: !GetAtt 'ELBLogsToCWLambda.Arn'
       Action: lambda:InvokeFunction
@@ -845,14 +823,14 @@ Resources:
       SourceAccount: !Ref 'AWS::AccountId'
   ELBLogsToCWLambdaLogGroup:
     Type: AWS::Logs::LogGroup
-    Condition: cEnableLambdaAndELBLogging
+    Condition: cEnableAdvancedLogging
     DeletionPolicy: Delete
     Properties:
       LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-elblogs-to-cw-migration'
       RetentionInDays: 1
   ELBLogsToCWLambda:
     Type: AWS::Lambda::Function
-    Condition: cEnableELBLogging
+    Condition: cEnableAdvancedLogging
     DependsOn: ELBLogLambdaRole
     Properties:
       FunctionName: !Sub '${AWS::StackName}-elblogs-to-cw-migration'
@@ -1113,19 +1091,25 @@ Resources:
               owner: root
               group: root
             /etc/awslogs/awslogs.conf:
-              content: !Sub |
-                [general]
-                state_file = /var/lib/awslogs/agent-state
-                [cloud-init-outputlog]
-                file = /var/log/cloud-init-output.log
-                log_group_name =  ${LogGroupCloudInit}
-                log_stream_name = cloudinit.outputlog-{instance_id}
-                datetime_format = %d/%b/%Y:%H:%M:%S
-                [system-log]
-                file = /var/log/messages
-                log_group_name =  ${LogGroupSysLog}
-                log_stream_name = syslog-{instance_id}
-                datetime_format = %b %d %H:%M:%S
+              content: !Join
+                - \n
+                - - !Sub |
+                    [general]
+                    state_file = /var/lib/awslogs/agent-state
+                    [cloud-init-outputlog]
+                    file = /var/log/cloud-init-output.log
+                    log_group_name =  ${LogGroupCloudInit}
+                    log_stream_name = cloudinit.outputlog-{instance_id}
+                    datetime_format = %d/%b/%Y:%H:%M:%S
+                  - !If
+                    - cEnableAdvancedLogging
+                    - !Sub |
+                      [system-log]
+                      file = /var/log/syslog
+                      log_group_name =  ${LogGroupSysLog}
+                      log_stream_name = syslog-{instance_id}
+                      datetime_format = %b %d %H:%M:%S
+                    - !Ref AWS::NoValue
               mode: '000400'
               owner: root
               group: root
@@ -1255,6 +1239,41 @@ Resources:
                   - 'ec2:Describe*'
                   - 'ec2:AuthorizeSecurityGroupIngress'
                 Resource: '*'
+  ECSALB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub '${AWS::StackName}-ECS-LB'
+      Scheme: internet-facing
+      LoadBalancerAttributes:
+        - Key: idle_timeout.timeout_seconds
+          Value: 30
+        - !If [cEnableAdvancedLogging, {Key: access_logs.s3.enabled, Value: true}, !Ref 'AWS::NoValue']
+        - !If [cEnableAdvancedLogging, {Key: access_logs.s3.bucket, Value: !Ref ELBAccessLogsBucket}, !Ref 'AWS::NoValue']
+        - !If [cEnableAdvancedLogging, {Key: access_logs.s3.prefix, Value: 'ECS-ELB'}, !Ref 'AWS::NoValue']
+      Subnets:
+        - !Ref publicSubnet01
+        - !Ref publicSubnet02
+      SecurityGroups: [!Ref ECSALBSecurityGroup]
+      Tags:
+        - Key: custom:cloudformation:depends-on
+          Value: !If [cEnableAdvancedLogging, !Ref ELBAccessLogsBucketPolicy, !Ref 'AWS::NoValue']
+  ECSTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckPath: /
+      Name: !Sub '${AWS::StackName}-ECSTargetGroup'
+      Port: !Ref AppPort
+      Protocol: HTTP
+      VpcId: !Ref VPC
+  ALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref ECSTargetGroup
+      LoadBalancerArn: !Ref ECSALB
+      Port: 80
+      Protocol: HTTP
   MyRepository:
     Type: AWS::ECR::Repository
     Condition: cEnableContainers
@@ -1491,29 +1510,30 @@ Resources:
               libdatetime-perl: []
           files:
             /tmp/cwlogs/logstreams.conf:
-              content: !Sub |
-                [general]
-                state_file= /var/awslogs/agent-state
-                [nodejs-serverlog]
-                file = /tmp/server.log
-                log_group_name =  ${LogGroupAppLog}
-                log_stream_name = nodejs.serverlog-{instance_id}
-                datetime_format = %d/%b/%Y:%H:%M:%S
-                # [nodejs-errorlog]
-                # file = /tmp/server.err
-                # log_group_name =  ${!LogGroupAppErrorLog}
-                # log_stream_name = nodejs.errorlog-{instance_id}
-                # datetime_format = %d/%b/%Y:%H:%M:%S
-                [cloud-init-outputlog]
-                file = /var/log/cloud-init-output.log
-                log_group_name =  ${LogGroupCloudInit}
-                log_stream_name = cloudinit.outputlog-{instance_id}
-                datetime_format = %d/%b/%Y:%H:%M:%S
-                [system-log]
-                file = /var/log/syslog
-                log_group_name =  ${LogGroupSysLog}
-                log_stream_name = syslog-{instance_id}
-                datetime_format = %b %d %H:%M:%S
+              content: !Join
+                - ""
+                - - !Sub |
+                    [general]
+                    state_file= /var/awslogs/agent-state
+                    [nodejs-serverlog]
+                    file = /tmp/server.log
+                    log_group_name =  ${LogGroupAppLog}
+                    log_stream_name = nodejs.serverlog-{instance_id}
+                    datetime_format = %d/%b/%Y:%H:%M:%S
+                    [cloud-init-outputlog]
+                    file = /var/log/cloud-init-output.log
+                    log_group_name =  ${LogGroupCloudInit}
+                    log_stream_name = cloudinit.outputlog-{instance_id}
+                    datetime_format = %d/%b/%Y:%H:%M:%S
+                  - !If
+                    - cEnableAdvancedLogging
+                    - !Sub |
+                      [system-log]
+                      file = /var/log/syslog
+                      log_group_name =  ${LogGroupSysLog}
+                      log_stream_name = syslog-{instance_id}
+                      datetime_format = %b %d %H:%M:%S
+                    - !Ref AWS::NoValue
               mode: '000400'
               owner: root
               group: root
@@ -1619,16 +1639,16 @@ Resources:
       LoadBalancerAttributes:
         - Key: idle_timeout.timeout_seconds
           Value: '30'
-        - !If [cEnableELBLogging, {Key: access_logs.s3.enabled, Value: true}, !Ref 'AWS::NoValue']
-        - !If [cEnableELBLogging, {Key: access_logs.s3.bucket, Value: !Ref ELBAccessLogsBucket}, !Ref 'AWS::NoValue']
-        - !If [cEnableELBLogging, {Key: access_logs.s3.prefix, Value: 'App-ELB'}, !Ref 'AWS::NoValue']
+        - !If [cEnableAdvancedLogging, {Key: access_logs.s3.enabled, Value: true}, !Ref 'AWS::NoValue']
+        - !If [cEnableAdvancedLogging, {Key: access_logs.s3.bucket, Value: !Ref ELBAccessLogsBucket}, !Ref 'AWS::NoValue']
+        - !If [cEnableAdvancedLogging, {Key: access_logs.s3.prefix, Value: 'EC2-ELB'}, !Ref 'AWS::NoValue']
       Subnets:
         - !Ref publicSubnet01
         - !Ref publicSubnet02
       SecurityGroups: [!Ref AppSecurityGroup]
       Tags:
         - Key: custom:cloudformation:depends-on
-          Value: !If [cEnableELBLogging, !Ref ELBAccessLogsBucketPolicy, !Ref 'AWS::NoValue']
+          Value: !If [cEnableAdvancedLogging, !Ref ELBAccessLogsBucketPolicy, !Ref 'AWS::NoValue']
   AppTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
@@ -2270,6 +2290,7 @@ Resources:
   LogGroupSysLog:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Delete
+    Condition: cEnableAdvancedLogging
     Properties:
       LogGroupName: !Sub '${AWS::StackName}-syslog'
       RetentionInDays: 7
@@ -2379,7 +2400,7 @@ Resources:
   LogMigrationLambdaLogGroup:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Delete
-    Condition: cEnableLambdaAndELBLogging
+    Condition: cEnableAdvancedLogging
     Properties:
       LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-log-migration'
       RetentionInDays: 1
@@ -2566,7 +2587,7 @@ Resources:
         - MetricNamespace: !Sub '${AWS::StackName}-CloudTrailMetrics'
           MetricName: SecurityGroupEventCount
           MetricValue: '1'
-    Condition: cEnableLogCloudTrail
+    Condition: cEnableAdvancedLogging
   SecurityGroupChangesAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -2582,7 +2603,7 @@ Resources:
       Period: '300'
       Statistic: Sum
       Threshold: '1'
-    Condition: cEnableLogCloudTrail
+    Condition: cEnableAdvancedLogging
   NetworkAclChangesMetricFilter:
     Type: AWS::Logs::MetricFilter
     Properties:
@@ -2595,7 +2616,7 @@ Resources:
         - MetricNamespace: !Sub '${AWS::StackName}-CloudTrailMetrics'
           MetricName: NetworkAclEventCount
           MetricValue: '1'
-    Condition: cEnableLogCloudTrail
+    Condition: cEnableAdvancedLogging
   NetworkAclChangesAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -2611,7 +2632,7 @@ Resources:
       Period: '300'
       Statistic: Sum
       Threshold: '1'
-    Condition: cEnableLogCloudTrail
+    Condition: cEnableAdvancedLogging
   GatewayChangesMetricFilter:
     Type: AWS::Logs::MetricFilter
     Properties:
@@ -2624,7 +2645,7 @@ Resources:
         - MetricNamespace: !Sub '${AWS::StackName}-CloudTrailMetrics'
           MetricName: GatewayEventCount
           MetricValue: '1'
-    Condition: cEnableLogCloudTrail
+    Condition: cEnableAdvancedLogging
   GatewayChangesAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -2640,7 +2661,7 @@ Resources:
       Period: '300'
       Statistic: Sum
       Threshold: '1'
-    Condition: cEnableLogCloudTrail
+    Condition: cEnableAdvancedLogging
   VpcChangesMetricFilter:
     Type: AWS::Logs::MetricFilter
     Properties:
@@ -2655,7 +2676,7 @@ Resources:
         - MetricNamespace: !Sub '${AWS::StackName}-CloudTrailMetrics'
           MetricName: VpcEventCount
           MetricValue: '1'
-    Condition: cEnableLogCloudTrail
+    Condition: cEnableAdvancedLogging
   VpcChangesAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -2671,7 +2692,7 @@ Resources:
       Period: '300'
       Statistic: Sum
       Threshold: '1'
-    Condition: cEnableLogCloudTrail
+    Condition: cEnableAdvancedLogging
   EC2InstanceChangesMetricFilter:
     Type: AWS::Logs::MetricFilter
     Properties:
@@ -2683,7 +2704,7 @@ Resources:
         - MetricNamespace: !Sub '${AWS::StackName}-CloudTrailMetrics'
           MetricName: EC2InstanceEventCount
           MetricValue: '1'
-    Condition: cEnableLogCloudTrail
+    Condition: cEnableAdvancedLogging
   EC2InstanceChangesAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -2699,7 +2720,7 @@ Resources:
       Period: '300'
       Statistic: Sum
       Threshold: '1'
-    Condition: cEnableLogCloudTrail
+    Condition: cEnableAdvancedLogging
   EC2LargeInstanceChangesMetricFilter:
     Type: AWS::Logs::MetricFilter
     Properties:
@@ -2710,7 +2731,7 @@ Resources:
         - MetricNamespace: !Sub '${AWS::StackName}-CloudTrailMetrics'
           MetricName: EC2LargeInstanceEventCount
           MetricValue: '1'
-    Condition: cEnableLogCloudTrail
+    Condition: cEnableAdvancedLogging
   EC2LargeInstanceChangesAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -2726,7 +2747,7 @@ Resources:
       Period: '300'
       Statistic: Sum
       Threshold: '1'
-    Condition: cEnableLogCloudTrail
+    Condition: cEnableAdvancedLogging
   CloudTrailChangesMetricFilter:
     Type: AWS::Logs::MetricFilter
     Properties:
@@ -2738,7 +2759,7 @@ Resources:
         - MetricNamespace: !Sub '${AWS::StackName}-CloudTrailMetrics'
           MetricName: CloudTrailEventCount
           MetricValue: '1'
-    Condition: cEnableLogCloudTrail
+    Condition: cEnableAdvancedLogging
   CloudTrailChangesAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -2754,7 +2775,7 @@ Resources:
       Period: '300'
       Statistic: Sum
       Threshold: '1'
-    Condition: cEnableLogCloudTrail
+    Condition: cEnableAdvancedLogging
   ConsoleSignInFailuresMetricFilter:
     Type: AWS::Logs::MetricFilter
     Properties:
@@ -2765,7 +2786,7 @@ Resources:
         - MetricNamespace: !Sub '${AWS::StackName}-CloudTrailMetrics'
           MetricName: ConsoleSignInFailureCount
           MetricValue: '1'
-    Condition: cEnableLogCloudTrail
+    Condition: cEnableAdvancedLogging
   ConsoleSignInFailuresAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -2781,7 +2802,7 @@ Resources:
       Period: '300'
       Statistic: Sum
       Threshold: '3'
-    Condition: cEnableLogCloudTrail
+    Condition: cEnableAdvancedLogging
   AuthorizationFailuresMetricFilter:
     Type: AWS::Logs::MetricFilter
     Properties:
@@ -2792,7 +2813,7 @@ Resources:
         - MetricNamespace: !Sub '${AWS::StackName}-CloudTrailMetrics'
           MetricName: AuthorizationFailureCount
           MetricValue: '1'
-    Condition: cEnableLogCloudTrail
+    Condition: cEnableAdvancedLogging
   AuthorizationFailuresAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -2807,7 +2828,7 @@ Resources:
       Period: '300'
       Statistic: Sum
       Threshold: '1'
-    Condition: cEnableLogCloudTrail
+    Condition: cEnableAdvancedLogging
   IAMPolicyChangesMetricFilter:
     Type: AWS::Logs::MetricFilter
     Properties:
@@ -2817,7 +2838,7 @@ Resources:
         - MetricNamespace: !Sub '${AWS::StackName}-CloudTrailMetrics'
           MetricName: IAMPolicyEventCount
           MetricValue: '1'
-    Condition: cEnableLogCloudTrail
+    Condition: cEnableAdvancedLogging
   IAMPolicyChangesAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -2832,7 +2853,7 @@ Resources:
       Period: '300'
       Statistic: Sum
       Threshold: '1'
-    Condition: cEnableLogCloudTrail
+    Condition: cEnableAdvancedLogging
   #####################################################################################
   # End of Metrics and Filters
   #####################################################################################
@@ -2881,7 +2902,7 @@ Resources:
   # Mapping Log groups to the Lambda that ships them to Elasticsearch
   Trail:
     DependsOn: LogStoreS3LocationPolicy
-    Condition: cEnableLogCloudTrail
+    Condition: cEnableAdvancedLogging
     Properties:
       CloudWatchLogsLogGroupArn: !GetAtt 'TrailLogGroup.Arn'
       CloudWatchLogsRoleArn: !GetAtt 'TrailLogGroupRole.Arn'
@@ -2896,7 +2917,7 @@ Resources:
       RetentionInDays: 7
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Delete
-    Condition: cEnableLogCloudTrail
+    Condition: cEnableAdvancedLogging
   TrailLogGroupRole:
     Properties:
       AssumeRolePolicyDocument:
@@ -2919,7 +2940,7 @@ Resources:
             Version: '2012-10-17'
           PolicyName: cloudtrail-policy
     Type: AWS::IAM::Role
-    Condition: cEnableLogCloudTrail
+    Condition: cEnableAdvancedLogging
   #####################################################################################
   # End of CloudTrail to CloudWatch
   #####################################################################################
@@ -2970,7 +2991,7 @@ Resources:
   LogStreamerLogsGroup:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Delete
-    Condition: cEnableLambdaLogging
+    Condition: cEnableAdvancedLogging
     Properties:
       LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-es-log-streamer'
       RetentionInDays: 1
@@ -3119,12 +3140,6 @@ Resources:
       Description: Webhook URL for approvals notifications
       Type: 'SecureString'
       Overwrite: true
-  SlackNotificationsLogsGroup:
-    Type: AWS::Logs::LogGroup
-    DeletionPolicy: Delete
-    Properties:
-      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-slack-notifications'
-      RetentionInDays: 1
   SlackNotificationsLambda:
     Type: AWS::Lambda::Function
     DependsOn: MyKeyAlias
