@@ -569,6 +569,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - ssm:PutParameter
+                  - ssm:DeleteParameter
                 Resource:
                   - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}/db/*'
                   # Used on AWS console to test the function ^.^
@@ -583,81 +584,65 @@ Resources:
       Role: !GetAtt 'EncryptLambdaRole.Arn'
       Code:
         ZipFile: |
-          import base64
-          import uuid
-          import httplib
-          import urlparse
-          import json
-          import boto3
-          import logging
-          import cfnresponse
-
-          # Configure logging
-          logger = logging.getLogger()
-          logger.setLevel(logging.INFO)
-
-          def lambda_handler(event, context):
-            logger.info('got event{}'.format(event))
-            logger.info('got context{}'.format(context))
-
-            response = {
-              'StackId': event['StackId'],
-              'RequestId': event['RequestId'],
-              'LogicalResourceId': event['LogicalResourceId'],
-              'Status': 'SUCCESS'
-            }
-            status = cfnresponse.SUCCESS
-            data = {}
-
-            #Delete action is a NoOp
-            if event['RequestType'] == 'Delete':
-              data['message'] = 'Delete Event. Nothing to do!'
-              cfnresponse.send(event, context, status, data)
-              return
-
-            # WIP
-            if event['RequestType'] == 'Update':
-              data['message'] = 'Update Event. Nothing to do!'
-              cfnresponse.send(event, context, status, data)
-              return
-
-            try:
-              ResourceProperties = event['ResourceProperties']
-
-              # Save value into parameter store
-              psClient = boto3.client('ssm')
-              a = {
-                'Name': ResourceProperties['ParameterStoreName'],
-                'Value': ResourceProperties['Value'],
-                'Type': ResourceProperties['Type'],
-                'Overwrite': bool(ResourceProperties['Overwrite']) if 'Overwrite' in ResourceProperties else False,
+          var AWS = require('aws-sdk');
+          var response = require('cfn-response');
+          exports.lambda_handler = function (event, context) {
+            try {
+              var ssm = new AWS.SSM();
+              if(event.RequestType == 'Delete') {
+                var params = {
+                  Name: event.ResourceProperties.Name
+                }
+                ssm.deleteParameter(params, function(err, data) {
+                  console.log('Delete Called');
+                  if (err){
+                    console.log('Error: ',err, err.stack); // an error occurred
+                  }
+                  else{
+                    console.log('Successfully Deleted Parameter: ',data);           // successful response
+                  }
+                });
+                response.send(event, context, response.SUCCESS);
               }
-
-              if 'Description' in ResourceProperties:
-                a['Description'] = ResourceProperties['Description']
-
-              if 'KeyId' in ResourceProperties:
-                a['KeyId'] =  ResourceProperties['KeyId']
-
-              psClient.put_parameter(**a)
-
-              data['message'] = 'The value was successfully encrypted'
-            except Exception as e:
-              logger.error(e)
-              status = cfnresponse.FAILED
-              data['message'] = 'Encryption Failed - See CloudWatch logs for the Lamba function backing the custom resource for details'
-
-            cfnresponse.send(event, context, status, data)
-      Runtime: python2.7
+              else {
+                var params = {
+                  Name: event.ResourceProperties.Name,
+                  Type: event.ResourceProperties.Type,
+                  Description: event.ResourceProperties.Description,
+                  Value: event.ResourceProperties.Value,
+                  KeyId: event.ResourceProperties.KeyId,
+                  Overwrite: true
+                };
+                ssm.putParameter(params, function(err, data) {
+                    if (err){
+                      console.log('Error: ',err, err.stack); // an error occurred
+                      response.send(event, context, response.FAILED);
+                    }
+                    else{
+                      console.log('Successfully Put Parameter: ',data);           // successful response
+                      response.send(event, context, response.SUCCESS);
+                    }
+                });
+              }
+            }
+            catch (err) {
+              console.log('General Error.');
+              console.log(err);
+              response.send(event, context, response.FAILED);
+            }
+          };
+      Runtime: nodejs4.3
       Timeout: 25
   StoreEncryptedDBPassword:
     Type: Custom::SetParameterStore
+    DependsOn:
+      - MyKeyAlias
     Properties:
       ServiceToken: !GetAtt 'EncryptLambda.Arn'
       KeyId: !Sub 'alias/${AWS::StackName}-masterkey'
-      ParameterStoreName: !Sub '/${AWS::StackName}/db/password'
+      Name: !Sub '/${AWS::StackName}/db/password'
       Value: !Ref DBPassword
-      Description: DataBase password
+      Description: 'Database Password'
       Type: 'SecureString'
       Overwrite: true
   ####################################################################################
@@ -707,6 +692,7 @@ Resources:
       DBSubnetGroupName: !Ref DBSubnetGroup
   StoreDBAddress:
     Type: AWS::SSM::Parameter
+    DeletionPolicy: Delete
     Properties:
       Name: !Sub '/${AWS::StackName}/db/connectionstring'
       Value: !GetAtt 'DBInstance.Endpoint.Address'
@@ -714,6 +700,7 @@ Resources:
       Type: 'String'
   StoreDBUsername:
     Type: AWS::SSM::Parameter
+    DeletionPolicy: Delete
     Properties:
       Name: !Sub '/${AWS::StackName}/db/username'
       Value: !Ref DBUsername
@@ -721,6 +708,7 @@ Resources:
       Type: 'String'
   StoreDBName:
     Type: AWS::SSM::Parameter
+    DeletionPolicy: Delete
     Properties:
       Name: !Sub '/${AWS::StackName}/db/name'
       Value: !Ref DBName
@@ -3135,9 +3123,9 @@ Resources:
     Properties:
       ServiceToken: !GetAtt 'EncryptLambda.Arn'
       KeyId: !Sub 'alias/${AWS::StackName}-masterkey'
-      ParameterStoreName: !Sub '/${AWS::StackName}/slack/webhooks'
+      Name: !Sub '/${AWS::StackName}/slack/webhooks'
       Value: !Ref SlackApprovalsWebhook
-      Description: Webhook URL for approvals notifications
+      Description: 'Webhook URL for approvals notifications'
       Type: 'SecureString'
       Overwrite: true
   SlackNotificationsLambda:

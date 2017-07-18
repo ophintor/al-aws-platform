@@ -62,7 +62,7 @@ declare -a LOG_GROUPS=(
 	"${STACK_NAME}-cloudinitoutput"
 	"${STACK_NAME}-cloudtrail"
 	"${STACK_NAME}-elblog"
-	"${STACK_NAME}-syslog"  
+	"${STACK_NAME}-syslog"
 )
 
 LOG_GROUPS+=(
@@ -99,15 +99,18 @@ for bucketName in "${S3_BUCKETS[@]}"; do
 done
 
 # Cleanup Parameter Store
-# NOTE: parameter "namespace" are splited using ',' (dot) and so we use it to
+# NOTE: parameter "namespace" are splited using '/' (slash) and so we use it to
 # delimit the <STACK_NAME>
-SSM_PARAMS=$(aws ssm describe-parameters \
-	--region "${REGION}" \
-	--query "Parameters[?starts_with(Name, \`${STACK_NAME}.\`)].{Name:Name}" \
-	--output text
-)
-for param in ${SSM_PARAMS} ; do
-	aws ssm delete-parameter \
-		--region "${REGION}" \
-		--name "${param}"
-done
+
+# NOTE: The Parameter store lambda now self cleans the parameter store on delete. This delete operation is no longer needed in the cleanup script.
+
+# SSM_PARAMS=$(aws ssm describe-parameters \
+# 	--region "${REGION}" \
+# 	--query "Parameters[?starts_with(Name, \`${STACK_NAME}.\`)].{Name:Name}" \
+# 	--output text
+# )
+# for param in ${SSM_PARAMS} ; do
+# 	aws ssm delete-parameter \
+# 		--region "${REGION}" \
+# 		--name "${param}"
+# done
