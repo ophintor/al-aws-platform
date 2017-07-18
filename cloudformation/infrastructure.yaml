@@ -80,21 +80,15 @@ Mappings:
       id: "156460612806"
 
 Outputs:
-  EC2URL:
+  WebsiteURL:
     Description: Website
     Value: !Join ['', [
       !If [cEnableHTTPS, 'https://', 'http://'],
-      !If [cEnableDNS, !Sub 'ec2.${AWS::StackName}.al-labs.co.uk', !Sub '${EC2ALB.DNSName}']]
+      !If [cEnableDNS, !Sub '${AWS::StackName}.al-labs.co.uk', !Sub '${AppLoadBalancer.DNSName}']]
     ]
   RepoURL:
     Description: Git Repository
     Value: !GetAtt 'CodeRepo.CloneUrlSsh'
-  ECSURL:
-    Description: ECS LB URL
-    Value: !Join ['', [
-      !If [cEnableHTTPS, 'https://', 'http://'],
-      !If [cEnableDNS, !Sub 'ecs.${AWS::StackName}.al-labs.co.uk', !Sub '${ECSALB.DNSName}']]
-    ]
   PipelineUrl:
     Value: !Sub 'https://console.aws.amazon.com/codepipeline/home?region=${AWS::Region}#/view/${CodePipeline}'
   # These exported values are sent in every request by the lambda function, not sure where they get included
@@ -178,6 +172,13 @@ Parameters:
     MaxLength: 64
     MinLength: 0
     Type: String
+  UseContainers:
+    Description: Use Docker Containers
+    Type: String
+    Default: Disabled
+    AllowedValues:
+      - Enabled
+      - Disabled
   InstanceType:
     AllowedValues:
       - t2.micro
@@ -311,6 +312,7 @@ Metadata:
         Parameters:
           - UseSpotInstances
           - SpotPricing
+          - UseContainers
           - InstanceType
           - OperatingSystem
           - InstanceCount
@@ -355,6 +357,8 @@ Metadata:
         default: Use HTTPS
       UseDNS:
         default: Use DNS
+      UseContainers:
+        default: Use Docker Containers
       ElasticsearchLogs:
         default: Deploy Elasticsearch
       ElasticsearchStack:
@@ -385,6 +389,8 @@ Conditions:
     - !Not [!Equals [!Sub '${AWS::Region}', 'ap-southeast-1']]
     - !Not [!Equals [!Sub '${AWS::Region}', 'ap-southeast-2']]
     - !Not [!Equals [!Sub '${AWS::Region}', 'ap-northeast-1']]
+  cEnableContainers: !Equals [!Ref UseContainers, 'Enabled']
+  cEnableEC2: !Not [!Condition cEnableContainers]
   cEnableApprovalEmails: !Not [!Equals [!Ref EmailApprovals, '']]
   cEnableSlackApprovals: !Not [!Equals [!Ref SlackApprovalsWebhook, '']]
   cEnableEmailNotications: !Not [!Equals [!Ref OperationsEmail, '']]
@@ -410,7 +416,7 @@ Resources:
       VpcId: !Ref VPC
       CidrBlock: 10.0.1.0/24
       AvailabilityZone: !Select [0, !GetAZs '']
-      MapPublicIpOnLaunch: True
+      MapPublicIpOnLaunch: 'True'
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-PublicSubnet01'
@@ -420,7 +426,7 @@ Resources:
       VpcId: !Ref VPC
       CidrBlock: 10.0.2.0/24
       AvailabilityZone: !Select [1, !GetAZs '']
-      MapPublicIpOnLaunch: True
+      MapPublicIpOnLaunch: 'True'
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-PublicSubnet02'
@@ -498,22 +504,28 @@ Resources:
               AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
             Action: '*'
             Resource: '*'
-          # Allow EncryptLambda function to use the key
           - Effect: Allow
             Action:
               - kms:Encrypt
             Principal:
               AWS: !GetAtt 'EncryptLambdaRole.Arn'
             Resource: '*'
-          # TODO: This can be set in the key! but we don't have it here
-          - Effect: Allow
-            Action:
-              - kms:Decrypt
-            Principal:
-              AWS:
-                - !GetAtt 'EC2InstanceRole.Arn'
-                - !GetAtt 'TaskRole.Arn'
-            Resource: '*'
+          - !If
+            - cEnableEC2
+            - Effect: Allow
+              Action:
+                - kms:Decrypt
+              Principal:
+                AWS:
+                  - !GetAtt 'EC2InstanceRole.Arn'
+              Resource: '*'
+            - Effect: Allow
+              Action:
+                - kms:Decrypt
+              Principal:
+                AWS:
+                  - !GetAtt 'TaskRole.Arn'
+              Resource: '*'
   MyKeyAlias:
     Type: AWS::KMS::Alias
     Properties:
@@ -668,14 +680,16 @@ Resources:
       GroupDescription: Allow Internal access to RDS Instances
       VpcId: !Ref VPC
       SecurityGroupIngress:
-        - SourceSecurityGroupId: !Ref ECSSecurityGroup
-          FromPort: !FindInMap [DBEngines, !Ref 'DBEngine', port]
-          ToPort: !FindInMap [DBEngines, !Ref 'DBEngine', port]
-          IpProtocol: tcp
-        - SourceSecurityGroupId: !Ref EC2SecurityGroup
-          FromPort: !FindInMap [DBEngines, !Ref 'DBEngine', port]
-          ToPort: !FindInMap [DBEngines, !Ref 'DBEngine', port]
-          IpProtocol: tcp
+        - !If
+          - cEnableContainers
+          - SourceSecurityGroupId: !Ref ECSSecurityGroup
+            FromPort: !FindInMap [DBEngines, !Ref 'DBEngine', port]
+            ToPort: !FindInMap [DBEngines, !Ref 'DBEngine', port]
+            IpProtocol: tcp
+          - SourceSecurityGroupId: !Ref AppSecurityGroup
+            FromPort: !FindInMap [DBEngines, !Ref 'DBEngine', port]
+            ToPort: !FindInMap [DBEngines, !Ref 'DBEngine', port]
+            IpProtocol: tcp
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-DB'
@@ -1004,6 +1018,7 @@ Resources:
   #####################################################################################
   ContainerCluster:
     Type: AWS::ECS::Cluster
+    Condition: cEnableContainers
     Properties:
       ClusterName: !Sub '${AWS::StackName}-cluster'
   ECSAutoScalingNotifications:
@@ -1016,6 +1031,7 @@ Resources:
   # complete example http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/quickref-ecs.html
   ECSAutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
+    Condition: cEnableContainers
     Properties:
       VPCZoneIdentifier:
         - !Ref publicSubnet01
@@ -1055,6 +1071,7 @@ Resources:
           WillReplace: true
   ECSLaunchConfig:
     Type: AWS::AutoScaling::LaunchConfiguration
+    Condition: cEnableContainers
     Metadata:
       AWS::CloudFormation::Init:
         config:
@@ -1134,6 +1151,7 @@ Resources:
           /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource ECSAutoScalingGroup --region ${AWS::Region}
   ECSSecurityGroup:
     Type: AWS::EC2::SecurityGroup
+    Condition: cEnableContainers
     Properties:
       GroupDescription: ECS Security Group
       VpcId: !Ref VPC
@@ -1149,33 +1167,15 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-ECS'
-  ECSALBSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: ECS LB Security Group
-      VpcId: !Ref VPC
-      SecurityGroupIngress:
-        - CidrIp: 0.0.0.0/0
-          IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-        - !If
-          - cEnableHTTPS
-          - CidrIp: 0.0.0.0/0
-            IpProtocol: tcp
-            FromPort: 443
-            ToPort: 443
-          - !Ref 'AWS::NoValue'
-      Tags:
-        - Key: Name
-          Value: !Sub '${AWS::StackName}-ECS-LB'
   ECSInstanceProfile:
     Type: AWS::IAM::InstanceProfile
+    Condition: cEnableContainers
     Properties:
       Path: /
       Roles: [!Ref ECSInstanceRole]
   ECSInstanceRole:
     Type: AWS::IAM::Role
+    Condition: cEnableContainers
     Properties:
       RoleName: !Sub '${AWS::StackName}-ECSInstanceRole'
       AssumeRolePolicyDocument:
@@ -1215,6 +1215,7 @@ Resources:
                 Resource: '*'
   ECSServiceRole:
     Type: AWS::IAM::Role
+    Condition: cEnableContainers
     Properties:
       RoleName: !Sub '${AWS::StackName}-ECS-Service'
       AssumeRolePolicyDocument:
@@ -1252,7 +1253,7 @@ Resources:
       Subnets:
         - !Ref publicSubnet01
         - !Ref publicSubnet02
-      SecurityGroups: [!Ref ECSALBSecurityGroup]
+      SecurityGroups: [!Ref AppSecurityGroup]
       Tags:
         - Key: custom:cloudformation:depends-on
           Value: !If [cEnableAdvancedLogging, !Ref ELBAccessLogsBucketPolicy, !Ref 'AWS::NoValue']
@@ -1275,6 +1276,7 @@ Resources:
       Protocol: HTTP
   MyRepository:
     Type: AWS::ECR::Repository
+    Condition: cEnableContainers
     Properties:
       RepositoryName: !Sub '${AWS::StackName}-containerimage'
       RepositoryPolicyText:
@@ -1293,9 +1295,10 @@ Resources:
               - ecr:InitiateLayerUpload
               - ecr:UploadLayerPart
               - ecr:CompleteLayerUpload
-  # Crate Log Group to setup the retention time of ECS task logs
+  # Create Log Group to setup the retention time of ECS task logs
   TaskRole:
     Type: AWS::IAM::Role
+    Condition: cEnableContainers
     Properties:
       RoleName: !Sub '${AWS::StackName}-ecs-task-role'
       AssumeRolePolicyDocument:
@@ -1343,6 +1346,7 @@ Resources:
                   - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}/app/*'
   ECSScaleUpPolicy:
     Type: AWS::AutoScaling::ScalingPolicy
+    Condition: cEnableContainers
     Properties:
       AdjustmentType: ChangeInCapacity
       AutoScalingGroupName: !Ref ECSAutoScalingGroup
@@ -1350,6 +1354,7 @@ Resources:
       ScalingAdjustment: 1
   ECSScaleDownPolicy:
     Type: AWS::AutoScaling::ScalingPolicy
+    Condition: cEnableContainers
     Properties:
       AdjustmentType: ChangeInCapacity
       AutoScalingGroupName: !Ref ECSAutoScalingGroup
@@ -1357,6 +1362,7 @@ Resources:
       ScalingAdjustment: -1
   CPUAlarmHigh:
     Type: AWS::CloudWatch::Alarm
+    Condition: cEnableContainers
     Properties:
       AlarmDescription: Scale-up ECS cluster if CPU > 90% for 10 minutes
       MetricName: CPUUtilization
@@ -1372,6 +1378,7 @@ Resources:
       ComparisonOperator: GreaterThanThreshold
   CPUAlarmLow:
     Type: AWS::CloudWatch::Alarm
+    Condition: cEnableContainers
     Properties:
       AlarmDescription: Scale-down ECS cluster if CPU < 70% for 10 minutes
       MetricName: CPUUtilization
@@ -1392,25 +1399,9 @@ Resources:
   #####################################################################################
   # Start of EC2 Auto Scaling
   #####################################################################################
-  EC2SecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: Enable HTTP access via port 80 and SSH access.
-      VpcId: !Ref VPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: !Ref AppPort
-          ToPort: !Ref AppPort
-          CidrIp: 0.0.0.0/0
-        - IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
-          CidrIp: !Ref 'SSHLocation'
-      Tags:
-        - Key: Name
-          Value: !Sub '${AWS::StackName}-EC2'
   EC2InstanceRole:
     Type: AWS::IAM::Role
+    Condition: cEnableEC2
     Properties:
       RoleName: !Sub '${AWS::StackName}-EC2-InstanceRole'
       AssumeRolePolicyDocument:
@@ -1464,11 +1455,13 @@ Resources:
       Path: /
   EC2InstanceRoleInstanceProfile:
     Type: AWS::IAM::InstanceProfile
+    Condition: cEnableEC2
     Properties:
       Path: /
       Roles: [!Ref EC2InstanceRole]
   EC2AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
+    Condition: cEnableEC2
     Properties:
       VPCZoneIdentifier:
         - !Ref publicSubnet01
@@ -1477,7 +1470,7 @@ Resources:
       MinSize: !Ref 'InstanceMinCount'
       MaxSize: !Ref 'InstanceMaxCount'
       DesiredCapacity: !Ref 'InstanceCount'
-      TargetGroupARNs: [!Ref EC2TG]
+      TargetGroupARNs: [!Ref AppTargetGroup]
       MetricsCollection:
         # No metrics specified, send all!
         # http://docs.aws.amazon.com/AutoScaling/latest/APIReference/API_EnableMetricsCollection.html
@@ -1500,6 +1493,7 @@ Resources:
           WillReplace: true
   EC2LaunchConfig:
     Type: AWS::AutoScaling::LaunchConfiguration
+    Condition: cEnableEC2
     Metadata:
       AWS::CloudFormation::Init:
         config:
@@ -1570,7 +1564,7 @@ Resources:
       SpotPrice: !If [cEnableSpotInstances, '0.05', !Ref 'AWS::NoValue']
       InstanceType: !Ref InstanceType
       KeyName: !Ref KeyPairName
-      SecurityGroups: [!Ref EC2SecurityGroup]
+      SecurityGroups: [!Ref AppSecurityGroup]
       IamInstanceProfile: !Ref EC2InstanceRoleInstanceProfile
       InstanceMonitoring: true
       UserData:
@@ -1628,30 +1622,19 @@ Resources:
 
           # All is well, so signal AutoScalingGroup.
           $(which cfn-signal) -e 0 --stack ${AWS::StackName} --resource EC2AutoScalingGroup --region ${AWS::Region}
-  EC2ALBSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: CodeDeploy LB Security Group
-      VpcId: !Ref VPC
-      SecurityGroupIngress:
-        - CidrIp: 0.0.0.0/0
-          IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-        - !If
-          - cEnableHTTPS
-          - CidrIp: 0.0.0.0/0
-            IpProtocol: tcp
-            FromPort: 443
-            ToPort: 443
-          - !Ref 'AWS::NoValue'
-      Tags:
-        - Key: Name
-          Value: !Sub '${AWS::StackName}-EC2-LB'
-  EC2ALB:
+
+  #####################################################################################
+  # End of EC2 Auto Scaling
+  #####################################################################################
+
+  #####################################################################################
+  # Common stuff between EC2/ECS
+  #####################################################################################
+
+  AppLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: !Sub '${AWS::StackName}-EC2-LB'
+      Name: !Sub '${AWS::StackName}-App-LoadBalancer'
       Scheme: internet-facing
       LoadBalancerAttributes:
         - Key: idle_timeout.timeout_seconds
@@ -1662,29 +1645,57 @@ Resources:
       Subnets:
         - !Ref publicSubnet01
         - !Ref publicSubnet02
-      SecurityGroups: [!Ref EC2ALBSecurityGroup]
+      SecurityGroups: [!Ref AppSecurityGroup]
       Tags:
         - Key: custom:cloudformation:depends-on
           Value: !If [cEnableAdvancedLogging, !Ref ELBAccessLogsBucketPolicy, !Ref 'AWS::NoValue']
-  EC2TG:
+  AppTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: !Sub '${AWS::StackName}-EC2TG'
+      Name: !Sub '${AWS::StackName}-AppTargetGroup'
       Port: !Ref AppPort
       Protocol: HTTP
       VpcId: !Ref VPC
-  EC2ALBListener:
+  AppLoadBalancerListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
       DefaultActions:
         - Type: forward
-          TargetGroupArn: !Ref EC2TG
-      LoadBalancerArn: !Ref EC2ALB
+          TargetGroupArn: !Ref AppTargetGroup
+      LoadBalancerArn: !Ref AppLoadBalancer
       Port: 80
       Protocol: HTTP
-  #####################################################################################
-  # End of EC2 Auto Scaling
-  #####################################################################################
+  AppSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: SSH, HTTP and HTTPS
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - CidrIp: !Ref 'SSHLocation'
+          IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+        - !If
+          - cEnableEC2
+          - CidrIp: 0.0.0.0/0
+            IpProtocol: tcp
+            FromPort: !Ref AppPort
+            ToPort: !Ref AppPort
+          - !Ref 'AWS::NoValue'
+        - !If
+          - cEnableHTTPS
+          - CidrIp: 0.0.0.0/0
+            IpProtocol: tcp
+            FromPort: 443
+            ToPort: 443
+          - !Ref 'AWS::NoValue'
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-app-security-group'
 
   #####################################################################################
   # Start of CI/CD
@@ -1906,7 +1917,7 @@ Resources:
         Image: aws/codebuild/nodejs:7.0.0
         EnvironmentVariables:
           - Name: API_URL
-            Value: !Sub 'http://${ECSALB.DNSName}/api'
+            Value: !Sub 'http://${AppLoadBalancer.DNSName}/api'
           - Name: DB_CONNECTIONSTRING
             Value: !Sub '${DBInstance.Endpoint.Address}'
           - Name: DB_USERNAME
@@ -1929,7 +1940,8 @@ Resources:
       TimeoutInMinutes: 300 # 5min
   CodeBuildDockerImage:
     Type: AWS::CodeBuild::Project
-    DependsOn: [CodeRepo, CodeBuildRole, CodeBuildDockerImageLogGroup]
+    Condition: cEnableContainers
+    DependsOn: [CodeRepo, CodeBuildRole]
     Properties:
       Name: !Sub '${AWS::StackName}-ecs-image'
       Description: A description about my project
@@ -1955,6 +1967,7 @@ Resources:
       TimeoutInMinutes: 300 # 5min
   CodeDeployTrustRole:
     Type: AWS::IAM::Role
+    Condition: cEnableEC2
     Properties:
       RoleName: !Sub '${AWS::StackName}-CodeDeploy'
       AssumeRolePolicyDocument:
@@ -1978,8 +1991,10 @@ Resources:
       Path: /
   CodeDeployApplication:
     Type: AWS::CodeDeploy::Application
+    Condition: cEnableEC2
   CodeDeployApplicationdeploymentGroup:
     Type: AWS::CodeDeploy::DeploymentGroup
+    Condition: cEnableEC2
     Properties:
       ApplicationName: !Ref CodeDeployApplication
       DeploymentConfigName: 'CodeDeployDefault.OneAtATime'
@@ -2104,9 +2119,7 @@ Resources:
   CodePipeline:
     Type: AWS::CodePipeline::Pipeline
     DependsOn:
-      - ContainerCluster
-      - ECSTargetGroup
-      - ECSServiceRole
+      - AppTargetGroup
       - DBInstance
     Properties:
       Name: !Sub '${AWS::StackName}-pipeline'
@@ -2151,66 +2164,73 @@ Resources:
               Configuration:
                 ProjectName: !Ref CodePipelineTestArtifact
               RunOrder: 2
-            - Name: BuildDockerImage
-              InputArtifacts:
-                - Name: SourceOutput
-              ActionTypeId:
-                Category: Build
-                Owner: AWS
-                Version: 1
-                Provider: CodeBuild
-              OutputArtifacts:
-                - Name: DockerImageOutput
-              Configuration:
-                ProjectName: !Ref CodeBuildDockerImage
+            - !If
+              - cEnableContainers
+              - Name: BuildDockerImage
+                InputArtifacts:
+                  - Name: SourceOutput
+                ActionTypeId:
+                  Category: Build
+                  Owner: AWS
+                  Version: 1
+                  Provider: CodeBuild
+                OutputArtifacts:
+                  - Name: DockerImageOutput
+                Configuration:
+                  ProjectName: !Ref CodeBuildDockerImage
+              - !Ref 'AWS::NoValue'
         - Name: Beta
           Actions:
-            - Name: BetaEC2
-              InputArtifacts:
-                - Name: BuildArtifact
-              ActionTypeId:
-                Category: Deploy
-                Owner: AWS
-                Version: 1
-                Provider: CodeDeploy
-              Configuration:
-                ApplicationName: !Ref CodeDeployApplication
-                DeploymentGroupName: !Ref CodeDeployApplicationdeploymentGroup
-            - Name: BetaECS
-              ActionTypeId:
-                Category: Deploy
-                Owner: AWS
-                Version: 1
-                Provider: CloudFormation
-              Configuration:
-                ChangeSetName: Deploy
-                ActionMode: CREATE_UPDATE
-                # StackName: !Ref StackName
-                StackName: !Sub '${AWS::StackName}-ContainerApp'
-                Capabilities: CAPABILITY_NAMED_IAM
-                # TemplatePath: Template::cloudformation.template.myapp.yaml
-                TemplatePath: SourceOutput::cloudformation/containerapp.template.yaml
-                RoleArn: !GetAtt 'CloudFormationExecutionRole.Arn'
-                # Can't be a YAML object:  Value of property Configuration must be an object with String (or simple type) properties
-                # ParameterOverrides
-                #   ECSTargetGroup: !Ref ECSTargetGroup
-                #   ECSServiceRole: !Ref ECSServiceRole
-                #   DBAddress: !GetAtt 'DBInstance.Endpoint.Address'
-                ParameterOverrides: !Sub |
-                  {
-                    "ParamsPrefix": "/${AWS::StackName}",
-                    "Cluster": "${ContainerCluster}",
-                    "CloudwatchLogsGroup": "${LogGroupAppLog}",
-                    "DockerImageTag": { "Fn::GetParam" : ["DockerImageOutput", "build.json", "tag"] },
-                    "DockerImage": "${AWS::StackName}-containerimage",
-                    "TaskRole": "${TaskRole}",
-                    "ECSTargetGroup": "${ECSTargetGroup}",
-                    "ECSServiceRole": "${ECSServiceRole}",
-                    "DBAddress": "${DBInstance.Endpoint.Address}"
-                  }
-              InputArtifacts:
-                - Name: DockerImageOutput
-                - Name: SourceOutput
+            - !If
+              - cEnableEC2
+              - Name: BetaEC2
+                InputArtifacts:
+                  - Name: BuildArtifact
+                ActionTypeId:
+                  Category: Deploy
+                  Owner: AWS
+                  Version: 1
+                  Provider: CodeDeploy
+                Configuration:
+                  ApplicationName: !Ref CodeDeployApplication
+                  DeploymentGroupName: !Ref CodeDeployApplicationdeploymentGroup
+              - !Ref 'AWS::NoValue'
+            - !If
+              - cEnableContainers
+              - Name: BetaECS
+                ActionTypeId:
+                  Category: Deploy
+                  Owner: AWS
+                  Version: 1
+                  Provider: CloudFormation
+                Configuration:
+                  ChangeSetName: Deploy
+                  ActionMode: CREATE_UPDATE
+                  StackName: !Sub '${AWS::StackName}-ContainerApp'
+                  Capabilities: CAPABILITY_NAMED_IAM
+                  TemplatePath: SourceOutput::cloudformation/containerapp.template.yaml
+                  RoleArn: !GetAtt 'CloudFormationExecutionRole.Arn'
+                  # Can't be a YAML object:  Value of property Configuration must be an object with String (or simple type) properties
+                  # ParameterOverrides
+                  #   ECSTargetGroup: !Ref ECSTargetGroup
+                  #   ECSServiceRole: !Ref ECSServiceRole
+                  #   DBAddress: !GetAtt 'DBInstance.Endpoint.Address'
+                  ParameterOverrides: !Sub |
+                    {
+                      "ParamsPrefix": "${AWS::StackName}",
+                      "Cluster": "${ContainerCluster}",
+                      "CloudwatchLogsGroup": "${LogGroupAppLog}",
+                      "DockerImageTag": { "Fn::GetParam" : ["DockerImageOutput", "build.json", "tag"] },
+                      "DockerImage": "${AWS::StackName}-containerimage",
+                      "TaskRole": "${TaskRole}",
+                      "ECSTargetGroup": "${AppTargetGroup}",
+                      "ECSServiceRole": "${ECSServiceRole}",
+                      "DBAddress": "${DBInstance.Endpoint.Address}"
+                    }
+                InputArtifacts:
+                  - Name: DockerImageOutput
+                  - Name: SourceOutput
+              - !Ref 'AWS::NoValue'
         - Name: IntegrationTests
           Actions:
             - Name: HTTP
@@ -2235,7 +2255,7 @@ Resources:
                 Provider: Manual
               Configuration:
                 NotificationArn: !Ref ApprovalTopic
-                CustomData: !Sub 'Approval or Reject this change after running Exploratory Tests: http://${EC2ALB.DNSName}/'
+                CustomData: !Sub 'Approval or Reject this change after running Exploratory Tests: http://${AppLoadBalancer.DNSName}/'
       ArtifactStore:
         Type: S3
         Location: !Ref ArtifactStoreS3Location
@@ -2841,45 +2861,25 @@ Resources:
   #####################################################################################
   # Start of Public DNS
   #####################################################################################
-  EC2LBCertifcate:
+  LBCertifcate:
     Type: AWS::CertificateManager::Certificate
     Properties:
-      DomainName: !Sub 'ec2.${AWS::StackName}.al-labs.co.uk'
+      DomainName: !Sub '${AWS::StackName}.al-labs.co.uk'
       DomainValidationOptions:
-        - DomainName: !Sub 'ec2.${AWS::StackName}.al-labs.co.uk'
+        - DomainName: !Sub '${AWS::StackName}.al-labs.co.uk'
           ValidationDomain: 'al-labs.co.uk'
     Condition: cEnableHTTPS
-  ECSLBCertifcate:
-    Type: AWS::CertificateManager::Certificate
-    Properties:
-      DomainName: !Sub 'ecs.${AWS::StackName}.al-labs.co.uk'
-      DomainValidationOptions:
-        - DomainName: !Sub 'ecs.${AWS::StackName}.al-labs.co.uk'
-          ValidationDomain: 'al-labs.co.uk'
-    Condition: cEnableHTTPS
-  EC2ALBHTTPSListener:
+  ALBHTTPSListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
       DefaultActions:
         - Type: forward
-          TargetGroupArn: !Ref EC2TG
-      LoadBalancerArn: !Ref EC2ALB
+          TargetGroupArn: !Ref AppTargetGroup
+      LoadBalancerArn: !Ref AppLoadBalancer
       Port: 443
       Protocol: HTTPS
       Certificates:
-        - CertificateArn: !Ref EC2LBCertifcate
-    Condition: cEnableHTTPS
-  ECSALBHTTPSListener:
-    Type: AWS::ElasticLoadBalancingV2::Listener
-    Properties:
-      DefaultActions:
-        - Type: forward
-          TargetGroupArn: !Ref ECSTargetGroup
-      LoadBalancerArn: !Ref ECSALB
-      Port: 443
-      Protocol: HTTPS
-      Certificates:
-        - CertificateArn: !Ref ECSLBCertifcate
+        - CertificateArn: !Ref LBCertifcate
     Condition: cEnableHTTPS
   DNSRecord:
     Type: AWS::Route53::RecordSetGroup
@@ -2887,17 +2887,11 @@ Resources:
       HostedZoneName: al-labs.co.uk.
       Comment: Zone apex alias targeted to myELB LoadBalancer.
       RecordSets:
-        # One subdoamin for each type
-        - Name: !Sub 'ec2.${AWS::StackName}.al-labs.co.uk.'
+        - Name: !Sub '${AWS::StackName}.al-labs.co.uk.'
           Type: A
           AliasTarget:
-            HostedZoneId: !GetAtt 'EC2ALB.CanonicalHostedZoneID'
-            DNSName: !GetAtt 'EC2ALB.DNSName'
-        - Name: !Sub 'ecs.${AWS::StackName}.al-labs.co.uk.'
-          Type: A
-          AliasTarget:
-            HostedZoneId: !GetAtt 'ECSALB.CanonicalHostedZoneID'
-            DNSName: !GetAtt 'ECSALB.DNSName'
+            HostedZoneId: !GetAtt 'AppLoadBalancer.CanonicalHostedZoneID'
+            DNSName: !GetAtt 'AppLoadBalancer.DNSName'
     Condition: cEnableDNS
   #####################################################################################
   # End of Public DNS
