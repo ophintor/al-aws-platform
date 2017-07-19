@@ -396,6 +396,7 @@ Conditions:
   cEnableSlackApprovals: !Not [!Equals [!Ref SlackApprovalsWebhook, '']]
   cEnableEmailNotications: !Not [!Equals [!Ref OperationsEmail, '']]
   cEnableSlackAndLambdaLogging: !And [!Condition cEnableSlackApprovals, !Condition cEnableAdvancedLogging]
+  cEnableEmailNoticationsAndLambdaLogging: !And [!Condition cEnableEmailNotications, !Condition cEnableAdvancedLogging]
 
 # Resources documentation
 # http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-template-resource-type-ref.html
@@ -2248,6 +2249,154 @@ Resources:
       ArtifactStore:
         Type: S3
         Location: !Ref ArtifactStoreS3Location
+  AddTargetWithTransformLambda:
+    Type: AWS::Lambda::Function
+    Condition: cEnableEmailNotications
+    Properties:
+      Handler: index.lambda_handler
+      FunctionName: !Sub ${AWS::StackName}-add-target-with-transform
+      Role: !Sub ${AddTargetWithTransformLambdaRole.Arn}
+      Runtime: nodejs4.3
+      Timeout: 25
+      Code:
+        ZipFile: |
+          var AWS = require('aws-sdk');
+          var response = require('cfn-response');
+          exports.lambda_handler = function (event, context) {
+            try {
+              var cloudwatchevents = new AWS.CloudWatchEvents();
+              if(event.RequestType == 'Delete') {
+                console.log('Delete Called');
+                var rmParams = {
+                  Rule: event.ResourceProperties.RuleName,
+                  Ids: [
+                    event.ResourceProperties.TargetId
+                  ]
+                };
+                cloudwatchevents.removeTargets(rmParams, function(err, data) {
+                  if (err){
+                    console.log(err, err.stack);
+                    response.send(event, context, response.FAILED);
+                  }
+                  else{
+                    console.log(data);
+                    response.send(event, context, response.SUCCESS);
+                  }
+                });
+              } else {
+                var params = {
+                  Rule: event.ResourceProperties.RuleName,
+                  Targets: [
+                    {
+                      Arn: event.ResourceProperties.TargetArn,
+                      Id: event.ResourceProperties.TargetId,
+                      InputTransformer: {
+                        InputPathsMap: {"build-id": "$.detail.build-id","project-name": "$.detail.project-name","build-status": "$.detail.build-status"},
+                        InputTemplate: '"Build <build-id> for build project <project-name> has reached the build status of <build-status>."',
+                      }
+                    }
+                  ]
+                };
+                cloudwatchevents.putTargets(params, function(err, data) {
+                  if (err){
+                    console.log(err, err.stack);
+                    response.send(event, context, response.FAILED);
+                  }
+                  else{
+                    console.log(data);
+                    response.send(event, context, response.SUCCESS);
+                  }
+                });
+              }
+            }
+            catch (err) {
+              console.log('General Error.');
+              console.log(err);
+              response.send(event, context, response.FAILED);
+            }
+          };
+  AddTargetWithTransformLambdaRole:
+    Type: AWS::IAM::Role
+    Condition: cEnableEmailNotications
+    Metadata:
+      Comment: Lambda role to allow AddTargetWithTransformLambda to setup an event rule target unsupported by CloudFormation
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: !Sub ${AWS::StackName}-PutTargetRule
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - events:PutTargets
+                  - events:RemoveTargets
+                Resource: !Sub ${CodeBuildNotificationsRule.Arn}
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource:
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}-add-target-with-transform'
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}-add-target-with-transform:*'
+  AddTargetWithTransformLambdaLogGroup:
+    Type: AWS::Logs::LogGroup
+    Condition: cEnableEmailNoticationsAndLambdaLogging
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-add-target-with-transform'
+      RetentionInDays: 1
+  AddTargetWithTransformation:
+    Type: AWS::CloudFormation::CustomResource
+    DependsOn: CodeBuildNotificationsRule
+    Condition: cEnableEmailNotications
+    Version: 1.0
+    Properties:
+      ServiceToken: !Sub ${AddTargetWithTransformLambda.Arn}
+      RuleName: !Sub ${CodeBuildNotificationsRule}
+      TargetArn: !Sub ${EmailNotificationTopic}
+      TargetId: !Sub ${EmailNotificationTopic.TopicName}
+  CodeBuildNotificationsRule:
+    Condition: cEnableEmailNotications
+    Type: AWS::Events::Rule
+    Properties:
+      Description: Notify subscribers when build steps are finished
+      Name: !Sub ${AWS::StackName}-CodeBuildNotificationsRule
+      EventPattern: !Join
+        - ""
+        - - !Sub |
+            {
+              "source": [
+                "aws.codebuild"
+              ],
+              "detail-type": [
+                "CodeBuild Build State Change"
+              ],
+              "detail": {
+                "build-status": [
+                  "SUCCEEDED",
+                  "FAILED",
+                  "STOPPED"
+                ],
+                "project-name": [
+                  "${CodeBuildArtifact}",
+                  "${CodePipelineTestArtifact}",
+          - !If
+            - cEnableContainers
+            - !Sub '"${CodeBuildDockerImage}",'
+            - !Ref AWS::NoValue
+          - !Sub |
+              "${IntegrationTestArtifact}"
+                  ]
+                }
+              }
+      State: ENABLED
   #####################################################################################
   # End of CI/CD
   #####################################################################################
@@ -2444,6 +2593,22 @@ Resources:
       Subscription:
         - Endpoint: !Ref OperationsEmail
           Protocol: email
+  EmailNotificationTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Condition: cEnableEmailNotications
+    Properties:
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: 'events.amazonaws.com'
+            Action:
+              - 'sns:Publish'
+            Resource:
+              - !Ref EmailNotificationTopic
+      Topics:
+        - !Ref EmailNotificationTopic
   ### LogGroupAppLog
   AppRestartMetricFilter:
     Type: AWS::Logs::MetricFilter
