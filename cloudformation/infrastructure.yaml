@@ -2440,12 +2440,24 @@ Resources:
         Version: '2012-10-17'
         Statement:
           - Effect: Allow
+            Sid: '__statement_ID1'
             Principal:
               Service: 'events.amazonaws.com'
             Action:
               - 'sns:Publish'
             Resource:
               - !Ref EmailNotificationTopic
+          - Effect: Allow
+            Sid: '__statement_ID2'
+            Principal:
+              AWS: '*'
+            Action:
+              - 'sns:Publish'
+            Resource:
+              - !Ref EmailNotificationTopic
+            Condition:
+              ArnLike:
+                AWS:SourceArn: !Sub "arn:aws:cloudwatch:*:${AWS::AccountId}:*"
       Topics:
         - !Ref EmailNotificationTopic
   ### LogGroupAppLog
@@ -2455,7 +2467,7 @@ Resources:
       LogGroupName: !Ref 'LogGroupAppLog'
       FilterPattern: App listening on port
       MetricTransformations:
-        - MetricNamespace: !Sub '${AWS::StackName}'
+        - MetricNamespace: !Sub '${AWS::StackName}-ApplicationMetrics'
           MetricName: App Restarts
           MetricValue: '1'
   AppGETsMetricFilter:
@@ -2464,7 +2476,7 @@ Resources:
       LogGroupName: !Ref 'LogGroupAppLog'
       FilterPattern: '[ip, timestamp, method=G, url, status_code,bytes,responsetime,useragent]'
       MetricTransformations:
-        - MetricNamespace: !Sub '${AWS::StackName}'
+        - MetricNamespace: !Sub '${AWS::StackName}-ApplicationMetrics'
           MetricName: GETs
           MetricValue: '1'
   AppPOSTsMetricFilter:
@@ -2473,7 +2485,7 @@ Resources:
       LogGroupName: !Ref 'LogGroupAppLog'
       FilterPattern: '[ip, timestamp, method=POST, url, status_code,bytes,responsetime,useragent]'
       MetricTransformations:
-        - MetricNamespace: !Sub '${AWS::StackName}'
+        - MetricNamespace: !Sub '${AWS::StackName}-ApplicationMetrics'
           MetricName: POSTs
           MetricValue: '1'
   AppDELETEsMetricFilter:
@@ -2482,7 +2494,7 @@ Resources:
       LogGroupName: !Ref 'LogGroupAppLog'
       FilterPattern: '[ip, timestamp, method=DELETE, url, status_code,bytes,responsetime,useragent]'
       MetricTransformations:
-        - MetricNamespace: !Sub '${AWS::StackName}'
+        - MetricNamespace: !Sub '${AWS::StackName}-ApplicationMetrics'
           MetricName: DELETEs
           MetricValue: '1'
   AppBytesOutMetricFilter:
@@ -2491,7 +2503,7 @@ Resources:
       LogGroupName: !Ref 'LogGroupAppLog'
       FilterPattern: '[ip, timestamp, method, url, status_code,bytes,responsetime,useragent]'
       MetricTransformations:
-        - MetricNamespace: !Sub '${AWS::StackName}'
+        - MetricNamespace: !Sub '${AWS::StackName}-ApplicationMetrics'
           MetricName: Bytes_Out
           MetricValue: $bytes
   App4xxsMetricFilter:
@@ -2500,7 +2512,7 @@ Resources:
       LogGroupName: !Ref 'LogGroupAppLog'
       FilterPattern: '[ip, timestamp, method, url, status_code=4*,bytes,responsetime,useragent]'
       MetricTransformations:
-        - MetricNamespace: !Sub '${AWS::StackName}'
+        - MetricNamespace: !Sub '${AWS::StackName}-ApplicationMetrics'
           MetricName: 4xx_error_count
           MetricValue: '1'
   App200sMetricFilter:
@@ -2509,7 +2521,7 @@ Resources:
       LogGroupName: !Ref 'LogGroupAppLog'
       FilterPattern: '[ip, timestamp, method, url, status_code=200,bytes,responsetime,useragent]'
       MetricTransformations:
-        - MetricNamespace: !Sub '${AWS::StackName}'
+        - MetricNamespace: !Sub '${AWS::StackName}-ApplicationMetrics'
           MetricName: HTTP OK
           MetricValue: '1'
   AppChromeUsersMetricFilter:
@@ -2518,7 +2530,7 @@ Resources:
       LogGroupName: !Ref 'LogGroupAppLog'
       FilterPattern: '[ip, timestamp, method, url, status_code,bytes,responsetime,useragent=*Chrome*]'
       MetricTransformations:
-        - MetricNamespace: !Sub '${AWS::StackName}'
+        - MetricNamespace: !Sub '${AWS::StackName}-ApplicationMetrics'
           MetricName: Chrome Users
           MetricValue: '1'
   AppFirefoxUsersMetricFilter:
@@ -2527,44 +2539,38 @@ Resources:
       LogGroupName: !Ref 'LogGroupAppLog'
       FilterPattern: '[ip, timestamp, method, url, status_code,bytes,responsetime,useragent=*Firefox*]'
       MetricTransformations:
-        - MetricNamespace: !Sub '${AWS::StackName}'
+        - MetricNamespace: !Sub '${AWS::StackName}-ApplicationMetrics'
           MetricName: Firefox Users
           MetricValue: '1'
   App4xxRateAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmDescription: Notify the Operator Email if the 4xx Error Rate is higher
-        than 5 every hour
+        than 5 every 5 minutes
       AlarmName: !Sub '${AWS::StackName}-4xx_Error_count_alarm'
       MetricName: 4xx_error_count
-      Namespace: !Sub '${AWS::StackName}'
+      Namespace: !Sub '${AWS::StackName}-ApplicationMetrics'
       Statistic: Sum
-      Period: '1800'
-      EvaluationPeriods: '2'
+      Period: '300'
+      EvaluationPeriods: '1'
       Threshold: '5'
       AlarmActions:
         - !If [cEnableEmailNotications, !Ref EmailNotificationTopic, !Ref 'AWS::NoValue']
-      Dimensions:
-        - Name: FilterName
-          Value: !Ref 'App4xxsMetricFilter'
       ComparisonOperator: GreaterThanThreshold
   AppBytesOutAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmDescription: Sample Alarm to demonstrate CloudWatch Alarms. Triggers when
-        Average Bytes out is greater than 1000 every 10 minutes
+        Average Bytes out is greater than 1000 every 5 minutes
       MetricName: Bytes_Out
       AlarmName: !Sub '${AWS::StackName}-Bytes_Out_Alarm'
-      Namespace: !Sub '${AWS::StackName}'
+      Namespace: !Sub '${AWS::StackName}-ApplicationMetrics'
       Statistic: Average
       Period: '300'
-      EvaluationPeriods: '2'
+      EvaluationPeriods: '1'
       Threshold: '1000'
       AlarmActions:
         - !If [cEnableEmailNotications, !Ref EmailNotificationTopic, !Ref 'AWS::NoValue']
-      Dimensions:
-        - Name: FilterName
-          Value: !Ref 'AppBytesOutMetricFilter'
       ComparisonOperator: GreaterThanThreshold
 
   ### TrailLogGroup
@@ -2590,7 +2596,7 @@ Resources:
       AlarmActions:
         - !If [cEnableEmailNotications, !Ref EmailNotificationTopic, !Ref 'AWS::NoValue']
       MetricName: SecurityGroupEventCount
-      Namespace: CloudTrailMetrics
+      Namespace: !Sub '${AWS::StackName}-CloudTrailMetrics'
       ComparisonOperator: GreaterThanOrEqualToThreshold
       EvaluationPeriods: '1'
       Period: '300'
@@ -2619,7 +2625,7 @@ Resources:
       AlarmActions:
         - !If [cEnableEmailNotications, !Ref EmailNotificationTopic, !Ref 'AWS::NoValue']
       MetricName: NetworkAclEventCount
-      Namespace: CloudTrailMetrics
+      Namespace: !Sub '${AWS::StackName}-CloudTrailMetrics'
       ComparisonOperator: GreaterThanOrEqualToThreshold
       EvaluationPeriods: '1'
       Period: '300'
@@ -2648,7 +2654,7 @@ Resources:
       AlarmActions:
         - !If [cEnableEmailNotications, !Ref EmailNotificationTopic, !Ref 'AWS::NoValue']
       MetricName: GatewayEventCount
-      Namespace: CloudTrailMetrics
+      Namespace: !Sub '${AWS::StackName}-CloudTrailMetrics'
       ComparisonOperator: GreaterThanOrEqualToThreshold
       EvaluationPeriods: '1'
       Period: '300'
@@ -2679,7 +2685,7 @@ Resources:
       AlarmActions:
         - !If [cEnableEmailNotications, !Ref EmailNotificationTopic, !Ref 'AWS::NoValue']
       MetricName: VpcEventCount
-      Namespace: CloudTrailMetrics
+      Namespace: !Sub '${AWS::StackName}-CloudTrailMetrics'
       ComparisonOperator: GreaterThanOrEqualToThreshold
       EvaluationPeriods: '1'
       Period: '300'
@@ -2707,7 +2713,7 @@ Resources:
       AlarmActions:
         - !If [cEnableEmailNotications, !Ref EmailNotificationTopic, !Ref 'AWS::NoValue']
       MetricName: EC2InstanceEventCount
-      Namespace: CloudTrailMetrics
+      Namespace: !Sub '${AWS::StackName}-CloudTrailMetrics'
       ComparisonOperator: GreaterThanOrEqualToThreshold
       EvaluationPeriods: '1'
       Period: '300'
@@ -2734,7 +2740,7 @@ Resources:
       AlarmActions:
         - !If [cEnableEmailNotications, !Ref EmailNotificationTopic, !Ref 'AWS::NoValue']
       MetricName: EC2LargeInstanceEventCount
-      Namespace: CloudTrailMetrics
+      Namespace: !Sub '${AWS::StackName}-CloudTrailMetrics'
       ComparisonOperator: GreaterThanOrEqualToThreshold
       EvaluationPeriods: '1'
       Period: '300'
@@ -2762,7 +2768,7 @@ Resources:
       AlarmActions:
         - !If [cEnableEmailNotications, !Ref EmailNotificationTopic, !Ref 'AWS::NoValue']
       MetricName: CloudTrailEventCount
-      Namespace: CloudTrailMetrics
+      Namespace: !Sub '${AWS::StackName}-CloudTrailMetrics'
       ComparisonOperator: GreaterThanOrEqualToThreshold
       EvaluationPeriods: '1'
       Period: '300'
@@ -2789,7 +2795,7 @@ Resources:
       AlarmActions:
         - !If [cEnableEmailNotications, !Ref EmailNotificationTopic, !Ref 'AWS::NoValue']
       MetricName: ConsoleSignInFailureCount
-      Namespace: CloudTrailMetrics
+      Namespace: !Sub '${AWS::StackName}-CloudTrailMetrics'
       ComparisonOperator: GreaterThanOrEqualToThreshold
       EvaluationPeriods: '1'
       Period: '300'
@@ -2815,7 +2821,7 @@ Resources:
       AlarmActions:
         - !If [cEnableEmailNotications, !Ref EmailNotificationTopic, !Ref 'AWS::NoValue']
       MetricName: AuthorizationFailureCount
-      Namespace: CloudTrailMetrics
+      Namespace: !Sub '${AWS::StackName}-CloudTrailMetrics'
       ComparisonOperator: GreaterThanOrEqualToThreshold
       EvaluationPeriods: '1'
       Period: '300'
@@ -2840,7 +2846,7 @@ Resources:
       AlarmActions:
         - !If [cEnableEmailNotications, !Ref EmailNotificationTopic, !Ref 'AWS::NoValue']
       MetricName: IAMPolicyEventCount
-      Namespace: CloudTrailMetrics
+      Namespace: !Sub '${AWS::StackName}-CloudTrailMetrics'
       ComparisonOperator: GreaterThanOrEqualToThreshold
       EvaluationPeriods: '1'
       Period: '300'
