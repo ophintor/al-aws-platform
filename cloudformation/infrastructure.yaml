@@ -2981,12 +2981,14 @@ Resources:
     Condition: cEnableAdvancedLogging
   TamperLambdaTrigger:
     DependsOn: TamperLambda
+    Condition: cEnableAdvancedLogging
     Type: "Custom::TamperLambdaTrigger"
     Properties:
       ServiceToken: !GetAtt TamperLambda.Arn
       TamperTrail: !Sub '${AWS::StackName}-TamperTrail'
   TamperLambda:
     DependsOn: TamperTrail
+    Condition: cEnableAdvancedLogging
     Type: "AWS::Lambda::Function"
     Properties:
       FunctionName: !Sub '${AWS::StackName}-TamperLambda'
@@ -3059,6 +3061,7 @@ Resources:
       Runtime: "python2.7"
   TamperLambdaRole:
     DependsOn: TamperTrail
+    Condition: cEnableAdvancedLogging
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
