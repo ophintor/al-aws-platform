@@ -42,6 +42,24 @@ Mappings:
     ap-northeast-1:
       ecs: ami-c393d6a4
   # Elasticsearch
+  MasterSizing:
+    elasticsearch:
+      Large: m3.medium.elasticsearch
+      Medium: m3.medium.elasticsearch
+      Small: t2.small.elasticsearch
+      Tiny: t2.small.elasticsearch
+  instanceCount:
+    elasticsearch:
+      Large: '6'
+      Medium: '4'
+      Small: '2'
+      Tiny: '2'
+  instanceSizing:
+    elasticsearch:
+      Large: r3.8xlarge.elasticsearch
+      Medium: r3.2xlarge.elasticsearch
+      Small: m3.large.elasticsearch
+      Tiny: t2.medium.elasticsearch
   ## Applied at the point CloudWatch log is sent to the LogStreamer Log Group
   FilterPatternLookup:
     CloudTrail:
@@ -94,10 +112,24 @@ Outputs:
   # These exported values are sent in every request by the lambda function, not sure where they get included
   # This value below is already exported but not being picked up by the lambda function
   DomainEndpoint:
-    Condition: cEnableElasticSearchLogs
+    Condition: cEnableES
+    Description: URL of domain endpoint - for lambda function
     Value:
-      Fn::ImportValue:
-        !Sub '${ElasticsearchStack}-DomainEndpointES'
+      !If
+      - cEnableESCentral
+      - Fn::ImportValue:
+          !Sub '${ElasticsearchStack}-DomainEndpointES'
+      - !Sub '${ElasticsearchAWSLogs.DomainEndpoint}'
+
+  KibanaURL:
+    Condition: cEnableES
+    Description: URL of the Kibana dashboard
+    Value:
+      !If
+      - cEnableESCentral
+      - Fn::ImportValue:
+          !Sub '${ElasticsearchStack}-KibanaURL'
+      - !Sub 'https://${ElasticsearchAWSLogs.DomainEndpoint}/_plugin/kibana/'
 
 Parameters:
   AdvancedLogging:
@@ -161,16 +193,35 @@ Parameters:
     Description: Which DB Engine to use
     Type: String
   ElasticsearchLogs:
-    Description: Enable/Disable Elasticsearch
+    Description: Enable/Disable Elasticsearch; Central Logging relies on a standalone stack with ES. Integrated starts an ES cluster as part of the stack's resources.
     AllowedValues:
-      - Enable
       - Disable
+      - Enable - Central
+      - Enable - Integrated
     Default: Disable
     Type: String
   ElasticsearchStack:
-    Description: Elasticstack to extend
+    Description: Central Logging ES Stack Name. (Required when using Central ES)
     MaxLength: 64
     MinLength: 0
+    Type: String
+  ClusterSize:
+    AllowedValues:
+      - Tiny
+      - Small
+      - Medium
+      - Large
+    Default: Tiny
+    Description: 'Amazon ES cluster size: small (2 data nodes), medium (4 data nodes),
+      large (6 data nodes)'
+    Type: String
+  IPAccess:
+    AllowedPattern: (\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})
+    ConstraintDescription: must be a valid IP CIDR range of the form x.x.x.x/x.
+    Description: IP address range that can access Elasticsearch
+    Default: 0.0.0.0/0
+    MaxLength: '18'
+    MinLength: '9'
     Type: String
   UseContainers:
     Description: Use Docker Containers
@@ -202,7 +253,7 @@ Parameters:
     Description: Number of Amazon EC2 instances to Launch. (Must be a number between
       1 and 4).
     Type: Number
-    Default: 2
+    Default: 1
     ConstraintDescription: Must be a number between 1 and 4.
     MinValue: 1
     MaxValue: 4
@@ -218,7 +269,7 @@ Parameters:
     Description: Minimum Number of Amazon EC2 instances in an autoscaling group. (Must
       be a number between 1 and 4).
     Type: Number
-    Default: 2
+    Default: 1
     ConstraintDescription: Must be a number between 1 and 4.
     MinValue: 1
     MaxValue: 4
@@ -240,7 +291,7 @@ Parameters:
     AllowedValues:
       - Enable
       - Disable
-    Default: Enable
+    Default: Disable
     Type: String
   SpotPricing:
     Description: Price to bid on Spot Instances.
@@ -304,11 +355,11 @@ Metadata:
           - DBClass
           - DBAllocatedStorage
       - Label:
-          default: 'Application Settings'
+          default: 'Application Settings:'
         Parameters:
           - AppPort
       - Label:
-          default: 'Auto-Scaling Web Server Group''s Instance Configuration: '
+          default: 'Auto-Scaling Web Server Group''s Instance Configuration:'
         Parameters:
           - UseSpotInstances
           - SpotPricing
@@ -319,23 +370,25 @@ Metadata:
           - InstanceMaxCount
           - InstanceMinCount
       - Label:
-          default: 'Security: '
+          default: 'Security:'
         Parameters:
           - KeyPairName
           - UseHTTPS
           - SSHLocation
       - Label:
-          default: 'Notification: '
+          default: 'Notification:'
         Parameters:
           - OperationsEmail
           - EmailApprovals
           - SlackApprovalsWebhook
       - Label:
-          default: 'Logging: '
+          default: 'Logging:'
         Parameters:
           - AdvancedLogging
           - ElasticsearchLogs
           - ElasticsearchStack
+          - ClusterSize
+          - IPAccess
     ParameterLabels:
       AdvancedLogging:
         default: Enable Advanced Logging Features
@@ -363,6 +416,10 @@ Metadata:
         default: Deploy Elasticsearch
       ElasticsearchStack:
         default: Central Logging Elasticsearch Stack Name
+      ClusterSize:
+        default: Amazon ES cluster size
+      IPAccess:
+        default: IP address range that can access Elasticsearch
       UseSpotInstances:
         default: Use Spot Instances
       SpotPricing:
@@ -377,8 +434,15 @@ Metadata:
 Conditions:
   cEnableDNS: !Equals [!Ref UseDNS, 'Enable']
   cEnableHTTPS: !Equals [!Ref UseHTTPS, 'Enable']
-  cEnableElasticSearchLogs: !Equals [!Ref ElasticsearchLogs, 'Enable']
-  cEnableELBtoElasticSearch: !And [!Condition cEnableElasticSearchLogs, !Condition cEnableAdvancedLogging]
+  cEnableESCentral: !Equals [!Ref ElasticsearchLogs, 'Enable - Central']
+  cEnableESIntegrated: !Equals [!Ref ElasticsearchLogs, 'Enable - Integrated']
+  cEnableES: !Or [!Condition cEnableESIntegrated, !Condition cEnableESCentral]
+  SizeLarge: !Equals [!Ref 'ClusterSize', Large]
+  SizeMedium: !Equals [!Ref 'ClusterSize', Medium]
+  SizeSmall: !Equals [!Ref 'ClusterSize', Small]
+  SizeTiny: !Equals [!Ref 'ClusterSize', Tiny]
+  cEnableElasticSearchAdvancedLogging: !And [!Condition cEnableES, !Condition cEnableAdvancedLogging]
+  cEnableIntegratedElasticSearchAdvancedLogging: !And [!Condition cEnableESIntegrated, !Condition cEnableAdvancedLogging]
   cMinInstancesGreaterThanOne: !Not [!Equals [!Ref InstanceMinCount, 1]]
   cSpotPriceGreaterThanZero: !Not [!Equals [!Ref SpotPricing, 0]]
   cEnableAdvancedLogging: !Equals [!Ref AdvancedLogging, 'Enable']
@@ -571,7 +635,6 @@ Resources:
               - Effect: Allow
                 Action:
                   - ssm:PutParameter
-                  - ssm:DeleteParameter
                 Resource:
                   - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}/db/*'
                   # Used on AWS console to test the function ^.^
@@ -1646,6 +1709,8 @@ Resources:
                   - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-integration-test:log-stream:*'
                   - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-ecs-image:log-stream'
                   - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-ecs-image:log-stream:*'
+                  - !If [cEnableES, !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-kibana:log-stream:', !Ref 'AWS::NoValue']
+                  - !If [cEnableES, !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-kibana:log-stream:*', !Ref 'AWS::NoValue']
   CodeBuildArtifactLogGroup:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Delete
@@ -1666,9 +1731,17 @@ Resources:
       RetentionInDays: 1
   CodeBuildDockerImageLogGroup:
     Type: AWS::Logs::LogGroup
+    Condition: cEnableContainers
     DeletionPolicy: Delete
     Properties:
       LogGroupName: !Sub '/aws/codebuild/${AWS::StackName}-ecs-image'
+      RetentionInDays: 1
+  CodeBuildKibanaLogGroup:
+    Type: AWS::Logs::LogGroup
+    Condition: cEnableES
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName: !Sub '/aws/codebuild/${AWS::StackName}-kibana'
       RetentionInDays: 1
   CodeBuildArtifact:
     Type: AWS::CodeBuild::Project
@@ -1690,7 +1763,7 @@ Resources:
         Location: !GetAtt 'CodeRepo.CloneUrlHttp'
         Type: CODEPIPELINE
         BuildSpec: !Sub |
-          version: 0.1
+          version: 0.2
           phases:
             build:
               commands:
@@ -1700,6 +1773,39 @@ Resources:
             files:
               - '**/*' # All files recursively
       TimeoutInMinutes: 300  # 5min
+  CodeBuildKibana:
+    Type: AWS::CodeBuild::Project
+    DependsOn:
+      - CodeRepo
+      - CodeBuildRole
+      - CodeBuildKibanaLogGroup
+    Condition: cEnableES
+    Properties:
+      Name: !Sub '${AWS::StackName}-kibana'
+      Description: This build will deploy your Kibana dashboard.
+      ServiceRole: !GetAtt 'CodeBuildRole.Arn'
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/ubuntu-base:14.04
+      Source:
+        Location: !GetAtt 'CodeRepo.CloneUrlHttp'
+        Type: CODEPIPELINE
+        BuildSpec: !Sub
+          - |
+            version: 0.2
+            phases:
+              build:
+                commands:
+                  - cd kibana/
+                  - ./load.sh -url 'https://${ES}'
+          - ES: !If
+              - cEnableESCentral
+              - Fn::ImportValue: !Sub '${ElasticsearchStack}-DomainEndpointES'
+              - !Sub '${ElasticsearchAWSLogs.DomainEndpoint}'
+      TimeoutInMinutes: 300
   CodePipelineTestArtifact:
     Type: AWS::CodeBuild::Project
     DependsOn: [CodeRepo, CodeBuildRole, CodePipelineTestArtifactLogGroup]
@@ -1713,14 +1819,14 @@ Resources:
         # Info: http://docs.aws.amazon.com/codebuild/latest/userguide/sample-docker.html
         Type: LINUX_CONTAINER
         ComputeType: BUILD_GENERAL1_SMALL
-        # List of Bukd Environments
+        # List of Build Environments
         # http://docs.aws.amazon.com/codebuild/latest/userguide/build-env-ref.html
         Image: aws/codebuild/nodejs:7.0.0
       Source:
         Location: !GetAtt 'CodeRepo.CloneUrlHttp'
         Type: CODEPIPELINE
         BuildSpec: !Sub |
-          version: 0.1
+          version: 0.2
           phases:
             build:
               commands:
@@ -1759,7 +1865,7 @@ Resources:
         Location: !GetAtt 'CodeRepo.CloneUrlHttp'
         Type: CODEPIPELINE
         BuildSpec: !Sub |
-          version: 0.1
+          version: 0.2
           phases:
             build:
               commands:
@@ -1993,6 +2099,19 @@ Resources:
               Configuration:
                 ProjectName: !Ref CodePipelineTestArtifact
               RunOrder: 2
+            - !If
+              - cEnableES
+              - Name: BuildKibana
+                InputArtifacts:
+                  - Name: SourceOutput
+                ActionTypeId:
+                  Category: Build
+                  Owner: AWS
+                  Version: 1
+                  Provider: CodeBuild
+                Configuration:
+                  ProjectName: !Ref 'CodeBuildKibana'
+              - !Ref 'AWS::NoValue'
             - !If
               - cEnableContainers
               - Name: BuildDockerImage
@@ -2229,6 +2348,10 @@ Resources:
           - !If
             - cEnableContainers
             - !Sub '"${CodeBuildDockerImage}",'
+            - !Ref AWS::NoValue
+          - !If
+            - cEnableES
+            - !Sub '"${CodeBuildKibana}",'
             - !Ref AWS::NoValue
           - !Sub |
               "${IntegrationTestArtifact}"
@@ -3086,62 +3209,186 @@ Resources:
   #####################################################################################
   # End of CloudTrail to CloudWatch
   #####################################################################################
+
+  #####################################################################################
+  # VPC FLOW LOGS
+  #####################################################################################
+  MyFlowLog:
+    Condition: cEnableAdvancedLogging
+    Properties:
+      DeliverLogsPermissionArn: !GetAtt 'flowlogsRole.Arn'
+      LogGroupName: !Ref VPCFlowLogsLogGroup
+      ResourceId: !Ref VPC
+      ResourceType: VPC
+      TrafficType: ALL
+    Type: AWS::EC2::FlowLog
+  VPCFlowLogsLogGroup:
+    DeletionPolicy: Delete
+    Condition: cEnableAdvancedLogging
+    Properties:
+      LogGroupName: !Sub '${AWS::StackName}-vpcflowlog'
+      RetentionInDays: 7
+    Type: AWS::Logs::LogGroup
+  flowlogsRole:
+    Condition: cEnableAdvancedLogging
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - vpc-flow-logs.amazonaws.com
+        Version: 2012-10-17
+      Path: /
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:DescribeLogGroups
+                  - logs:DescribeLogStreams
+                  - logs:PutLogEvents
+                Effect: Allow
+                Resource: '*'
+            Version: '2012-10-17'
+          PolicyName: LogRolePolicy
+    Type: AWS::IAM::Role
+  #####################################################################################
+  # END OF VPC FLOW LOGS
+  #####################################################################################
   #####################################################################################
   # Start of Elasticsearch logging domain
   # Logs => CloudWatch logs => CloudWatch/ LogStreamer which triggers lambda
   #####################################################################################
+  ElasticsearchAWSLogs:
+    Type: AWS::Elasticsearch::Domain
+    Condition: cEnableESIntegrated
+    Properties:
+      AccessPolicies:
+        Statement:
+          - Action: es:*
+            Condition:
+              IpAddress:
+                aws:SourceIp:
+                  - !Ref 'IPAccess'
+            Effect: Allow
+            Principal:
+              AWS: '*'
+            Resource: '*'
+        Version: '2012-10-17'
+      AdvancedOptions:
+        rest.action.multi.allow_explicit_index: 'true'
+      DomainName: !Sub 'logs-${AWS::StackName}'
+      EBSOptions:
+        Fn::If:
+          - SizeTiny
+          - EBSEnabled: true
+            Iops: 0
+            VolumeSize: 10
+            VolumeType: gp2
+          - Fn::If:
+              - SizeSmall
+              - EBSEnabled: true
+                Iops: 0
+                VolumeSize: 50
+                VolumeType: gp2
+              - EBSEnabled: false
+      ElasticsearchClusterConfig:
+        DedicatedMasterCount: '2'
+        DedicatedMasterEnabled: 'true'
+        DedicatedMasterType: !FindInMap [MasterSizing, elasticsearch, !Ref 'ClusterSize']
+        InstanceCount: !FindInMap [instanceCount, elasticsearch, !Ref 'ClusterSize']
+        InstanceType: !FindInMap [instanceSizing, elasticsearch, !Ref 'ClusterSize']
+        ZoneAwarenessEnabled: 'true'
+      ElasticsearchVersion: '5.3'
+      SnapshotOptions:
+        AutomatedSnapshotStartHour: '1'
   LambdaInvokePermission:
-    Condition: cEnableElasticSearchLogs
+    Condition: cEnableES
     Properties:
       Action: lambda:InvokeFunction
       FunctionName: !Ref LogStreamer
       Principal: !Sub 'logs.${AWS::Region}.amazonaws.com'
       SourceAccount: !Ref AWS::AccountId
     Type: AWS::Lambda::Permission
+  applogLogStreamerInvokePermission:
+    Type: AWS::Lambda::Permission
+    Condition: cEnableES
+    Properties:
+      FunctionName: !GetAtt [LogStreamer, Arn]
+      Action: lambda:InvokeFunction
+      Principal: !Sub 'logs.${AWS::Region}.amazonaws.com'
+      SourceAccount: !Ref 'AWS::AccountId'
+      SourceArn: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${AWS::StackName}-applog:*'
+  syslogLogStreamerInvokePermission:
+    Type: AWS::Lambda::Permission
+    Condition: cEnableES
+    Properties:
+      FunctionName: !GetAtt [LogStreamer, Arn]
+      Action: lambda:InvokeFunction
+      Principal: !Sub 'logs.${AWS::Region}.amazonaws.com'
+      SourceAccount: !Ref 'AWS::AccountId'
+      SourceArn: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${AWS::StackName}-syslog:*'
 
   ## Mapping Log groups to the Lambda that ships them to Elasticsearch
+  LogGrouptoLambdaMappingAppLogs:
+    Type: AWS::Logs::SubscriptionFilter
+    Condition: cEnableES
+    DependsOn: applogLogStreamerInvokePermission
+    Properties:
+      DestinationArn: !GetAtt [LogStreamer, Arn]
+      FilterPattern: '[ip, date, method, request, statuscode, bytes, responsetime,
+        user_agent]'
+      LogGroupName: !Ref LogGroupAppLog
+  LogGrouptoLambdaMappingSysLogs:
+    Type: AWS::Logs::SubscriptionFilter
+    DependsOn: syslogLogStreamerInvokePermission
+    Condition: cEnableElasticSearchAdvancedLogging
+    Properties:
+      DestinationArn: !GetAtt [LogStreamer, Arn]
+      FilterPattern: '[month, day, hour, host, service, message]'
+      LogGroupName: !Ref LogGroupSysLog
   LogGrouptoLambdaMappingCloudTrail:
-    Condition: cEnableElasticSearchLogs
+    Type: AWS::Logs::SubscriptionFilter
+    Condition: cEnableElasticSearchAdvancedLogging
     DependsOn: LambdaInvokePermission
     Properties:
       DestinationArn: !GetAtt 'LogStreamer.Arn'
       FilterPattern: !FindInMap [FilterPatternLookup, CloudTrail, Pattern]
       LogGroupName: !Ref TrailLogGroup
-    Type: AWS::Logs::SubscriptionFilter
-
   LogGrouptoLambdaMappingFlowLogs:
-    Condition: cEnableElasticSearchLogs
+    Type: AWS::Logs::SubscriptionFilter
+    Condition: cEnableElasticSearchAdvancedLogging
     DependsOn: LambdaInvokePermission
     Properties:
       DestinationArn: !GetAtt 'LogStreamer.Arn'
       FilterPattern: !FindInMap [FilterPatternLookup, FlowLogs, Pattern]
       LogGroupName: !Ref VPCFlowLogsLogGroup
-    Type: AWS::Logs::SubscriptionFilter
-
   LogGrouptoLambdaMappingELBLogs:
     Type: AWS::Logs::SubscriptionFilter
     DependsOn: LambdaInvokePermission
-    Condition: cEnableELBtoElasticSearch
+    Condition: cEnableElasticSearchAdvancedLogging
     Properties:
       DestinationArn: !GetAtt 'LogStreamer.Arn'
       FilterPattern: !FindInMap [FilterPatternLookup, ELBLogs, Pattern]
-      LogGroupName: !Sub '${AWS::StackName}-elblog'
-  ####################################################
-  # VPC FLOW LOGS
-  ####################################################
-  # Exported so service stacks can stream logs to it.
+      LogGroupName: !Ref LogGroupELBLog
   LogStreamerLogsGroup:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Delete
-    Condition: cEnableAdvancedLogging
+    Condition: cEnableElasticSearchAdvancedLogging
     Properties:
-      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-es-log-streamer'
+      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-log-streamer'
       RetentionInDays: 1
   LogStreamer:
     Type: AWS::Lambda::Function
-    Condition: cEnableElasticSearchLogs
+    Condition: cEnableES
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-es-log-streamer'
+      # The following Function Name for the Lambda needs to contain two - symbols (eg: -log-streamer). This is to ensure that the AWS provided lambda is able to pick up the correct stack name.
+      # Since this lambda is provided by AWS from their bucket, we cannot modify it.
+      FunctionName: !Sub '${AWS::StackName}-log-streamer'
       Code:
         S3Bucket: !Sub 'solutions-${AWS::Region}'
         S3Key: centralized-logging/v1/centralizedLoggingDownload.zip
@@ -3152,7 +3399,7 @@ Resources:
       Timeout: 300
   LogStreamerRole:
     Type: AWS::IAM::Role
-    Condition: cEnableElasticSearchLogs
+    Condition: cEnableES
     Properties:
       AssumeRolePolicyDocument:
         Statement:
@@ -3182,49 +3429,215 @@ Resources:
                 Resource: !Sub 'arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}*'
             Version: '2012-10-17'
           PolicyName: My_Lambda_Function_Permissions
-  MyFlowLog:
-    Condition: cEnableElasticSearchLogs
+  # Elasticsearch buckets
+  ElasticSearchSnapshotS3Location:
+    Type: AWS::S3::Bucket
+    Condition: cEnableESIntegrated
+    DeletionPolicy: Retain
     Properties:
-      DeliverLogsPermissionArn: !GetAtt 'flowlogsRole.Arn'
-      LogGroupName: !Ref VPCFlowLogsLogGroup
-      ResourceId: !Ref VPC
-      ResourceType: VPC
-      TrafficType: ALL
-    Type: AWS::EC2::FlowLog
-
-  VPCFlowLogsLogGroup:
-    DeletionPolicy: Delete
-    Condition: cEnableElasticSearchLogs
-    Properties:
-      RetentionInDays: 7
-    Type: AWS::Logs::LogGroup
-  flowlogsRole:
-    Condition: cEnableElasticSearchLogs
+      BucketName: !Sub '${AWS::StackName}-snapshots'
+      LifecycleConfiguration:
+        Rules:
+          - ExpirationInDays: 90
+            Id: !Sub '${AWS::StackName}-SnapshotMigrationLifecycleRule'
+            Status: Enabled
+            Transitions:
+              - StorageClass: STANDARD_IA
+                TransitionInDays: 30
+              - StorageClass: GLACIER
+                TransitionInDays: 60
+  ElasticSearchSnapshotRole:
+    Type: AWS::IAM::Role
+    Condition: cEnableESIntegrated
+    Metadata:
+      Comment: IAM Role for the Amazon ElasticSearch Service to Store Snapshots in an S3 Bucket
     Properties:
       AssumeRolePolicyDocument:
         Statement:
-          - Action:
-              - sts:AssumeRole
+          - Action: sts:AssumeRole
             Effect: Allow
             Principal:
-              Service:
-                - vpc-flow-logs.amazonaws.com
-        Version: 2012-10-17
-      Path: /
+              Service: es.amazonaws.com
       Policies:
-        - PolicyDocument:
+        - PolicyName: ElasticSearchSnapshotPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
             Statement:
               - Action:
-                  - logs:CreateLogGroup
-                  - logs:CreateLogStream
-                  - logs:DescribeLogGroups
-                  - logs:DescribeLogStreams
-                  - logs:PutLogEvents
+                  - s3:ListBucket
                 Effect: Allow
-                Resource: '*'
-            Version: '2012-10-17'
-          PolicyName: LogRolePolicy
+                Resource:
+                  - !Sub 'arn:aws:s3:::${AWS::StackName}-snapshots'
+              - Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                  - iam:PassRole
+                Effect: Allow
+                Resource:
+                  - !Sub 'arn:aws:s3:::${AWS::StackName}-snapshots/*'
+      Path: /
+  SnapshotLambdaRole:
     Type: AWS::IAM::Role
+    Condition: cEnableESIntegrated
+    Metadata:
+      Comment: IAM Role for the Lambda to create a Elastic Search Snapshot on the
+        S3 Bucket repo
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+      Policies:
+        - PolicyName: ElasticSearchSnapshotLambdaPolicy
+          PolicyDocument:
+            Statement:
+              # Create Log streams and write on it
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}-SnapshotLambda:*'
+              # Allow lambda to execute _snapshot actions
+              - Effect: Allow
+                Action:
+                  - es:ESHttpGet
+                  - es:ESHttpPost
+                Resource:
+                  - !Sub "arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${ElasticsearchAWSLogs}/_snapshot"
+                  - !Sub "arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${ElasticsearchAWSLogs}/_snapshot/*"
+              # Allow lambda to pass role to ES
+              - Effect: Allow
+                Action:
+                  - iam:PassRole
+                Resource: '*'
+      Path: /
+  SnapshotLambdaLogGroup:
+    Type: AWS::Logs::LogGroup
+    Condition: cEnableIntegratedElasticSearchAdvancedLogging
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-SnapshotLambda'
+      RetentionInDays: 1
+  SnapshotLambda:
+    Type: AWS::Lambda::Function
+    Condition: cEnableESIntegrated
+    DependsOn:
+      - ElasticsearchAWSLogs
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-SnapshotLambda'
+      Code:
+        ZipFile: |
+          var AWS = require('aws-sdk');
+          var response = require('cfn-response');
+          exports.handler = (event, context) => {
+              console.log(event)
+              console.log(context)
+              const region = process.env.AWS_REGION;
+              const endpoint =  new AWS.Endpoint(event.ResourceProperties.ESDomainEndpoint);
+              const isDelete = event.RequestType === 'Delete';
+              const doc = {
+                type: 's3',
+                settings: {
+                  bucket: event.ResourceProperties.ESBackupBucket,
+                  region: region,
+                  role_arn: event.ResourceProperties.RoleArn,
+                },
+              };
+              var creds = new AWS.EnvironmentCredentials('AWS');
+              var req = new AWS.HttpRequest(endpoint);
+              const now = new Date();
+              req.method = isDelete ? 'DELETE' : 'POST';
+              req.region = region;
+              if (event.ResourceProperties.doSnap === true) {
+                  req.path = `/_snapshot/${event.ResourceProperties.ESSnapshotRepo}/snap-${now.getFullYear()}.${("0" + (now.getMonth() + 1)).slice(-2)}.${("0" + (now.getDate())).slice(-2)}`;
+              } else {
+                  if (!isDelete) {
+                      req.body = JSON.stringify(doc);
+                  }
+                  req.path = `/_snapshot/${event.ResourceProperties.ESSnapshotRepo}`;
+              }
+              req.headers['presigned-expires'] = false;
+              req.headers.Host = endpoint.host;
+
+              // Sign the request (Sigv4)
+              var signer = new AWS.Signers.V4(req, 'es');
+              signer.addAuthorization(creds, new Date());
+
+              // Post document to ES
+              var send = new AWS.NodeHttpClient();
+              send.handleRequest(req, null, (httpResp) => {
+
+                  var body = '';
+                  httpResp.on('data', (chunk) => {
+                      body += chunk;
+                  });
+                  httpResp.on('end', (chunk) => {
+                      console.log('Response: ' + body);
+                      if (event.LogicalResourceId) {
+                          response.send(event, context, response.SUCCESS, {}, event.LogicalResourceId);
+                      } else {
+                          context.succeed();
+                      }
+                  });
+              }, (err) => {
+                  console.log('Error: ' + err);
+                  if (event.LogicalResourceId) {
+                      response.send(event, context, response.FAILED, {}, event.LogicalResourceId);
+                  } else {
+                      context.fail();
+                  }
+              });
+          }
+      Description: Lambda function for Creating a Snapshot on S3 SnapshotRepo for Amazon Elasticsearch.
+      Handler: index.handler
+      Role: !GetAtt [SnapshotLambdaRole, Arn]
+      Runtime: nodejs6.10
+      Timeout: '300'
+  SnapshotCreateScheduledRule:
+    Type: AWS::Events::Rule
+    Condition: cEnableESIntegrated
+    Properties:
+      Name: !Sub "${AWS::StackName}-SnapshotLambda"
+      Description: ScheduledRule
+      ScheduleExpression: rate(1 day)
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt [SnapshotLambda, Arn]
+          Id: TargetFunctionV1
+          Input: !Sub >-
+            {
+              "ResourceProperties": {
+                "doSnap": true,
+                "ESDomainEndpoint": "${ElasticsearchAWSLogs.DomainEndpoint}",
+                "ESSnapshotRepo": "${AWS::StackName}_repo"
+              }
+            }
+  CreateSnapshotRepo:
+    Type: AWS::CloudFormation::CustomResource
+    Version: '1.0'
+    Condition: cEnableESIntegrated
+    DependsOn:
+      - ElasticsearchAWSLogs
+      - ElasticSearchSnapshotS3Location
+    Properties:
+      Description: "Creeate Elasticsearch Snapshots"
+      ServiceToken: !GetAtt [SnapshotLambda, Arn]
+      doSnap: 'False'
+      ESBackupBucket: !Sub '${AWS::StackName}-snapshots'
+      ESDomainEndpoint: !Sub "${ElasticsearchAWSLogs.DomainEndpoint}"
+      RoleArn: !Sub "${ElasticSearchSnapshotRole.Arn}"
+      ESSnapshotRepo: !Sub "${AWS::StackName}_repo"
+  PermissionForEventsToInvokeSnapshotLambda:
+    Type: AWS::Lambda::Permission
+    Condition: cEnableESIntegrated
+    Properties:
+      FunctionName: !Ref 'SnapshotLambda'
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt [SnapshotCreateScheduledRule, Arn]
   ###########################################
   # End of Elasticsearch logging domain
   ###########################################
@@ -3277,9 +3690,9 @@ Resources:
     Properties:
       ServiceToken: !GetAtt 'EncryptLambda.Arn'
       KeyId: !Sub 'alias/${AWS::StackName}-masterkey'
-      Name: !Sub '/${AWS::StackName}/slack/webhooks'
+      ParameterStoreName: !Sub '/${AWS::StackName}/slack/webhooks'
       Value: !Ref SlackApprovalsWebhook
-      Description: 'Webhook URL for approvals notifications'
+      Description: Webhook URL for approvals notifications
       Type: 'SecureString'
       Overwrite: true
   SlackNotificationsLambda:

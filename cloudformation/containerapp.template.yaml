@@ -135,6 +135,7 @@ Resources:
           Value: !Ref MyApp
       ComparisonOperator: GreaterThanThreshold
       MetricName: HTTPCode_ELB_5XX_Count
+
   #####################################################################################
   # End of Service AutoScaling
   #####################################################################################

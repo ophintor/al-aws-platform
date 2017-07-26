@@ -10,7 +10,7 @@ Parameters:
       - Small
       - Medium
       - Large
-    Default: Small
+    Default: Tiny
     Description: 'Amazon ES cluster size: small (2 data nodes), medium (4 data nodes), large (6 data nodes)'
     Type: String
 
@@ -67,6 +67,8 @@ Outputs:
   KibanaURL:
     Description: URL of the Kibana dashboard
     Value: !Sub https://${ElasticsearchAWSLogs.DomainEndpoint}/_plugin/kibana/
+    Export:
+      Name: !Sub ${AWS::StackName}-KibanaURL
 
 Resources:
   ElasticsearchAWSLogs:
@@ -114,7 +116,7 @@ Resources:
         InstanceType:
           !FindInMap [instanceSizing, elasticsearch, !Ref ClusterSize]
         ZoneAwarenessEnabled: 'true'
-      ElasticsearchVersion: '5.1'
+      ElasticsearchVersion: '5.3'
       SnapshotOptions:
         AutomatedSnapshotStartHour: '1'
     Type: AWS::Elasticsearch::Domain
@@ -123,7 +125,7 @@ Resources:
     DeletionPolicy: Retain
     Properties:
       BucketName: !Sub ${AWS::StackName}-es-snapshots
-  EncryptLambdaLogsGroup:
+  SnapshotsLambdaLogsGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub /aws/lambda/${AWS::StackName}-es-snapshots
@@ -195,7 +197,7 @@ Resources:
                 Resource:
                   - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}-es-snapshots"
                   - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}-es-snapshots:*"
-             # Allow lambda to execute _snapshot actions
+              # Allow lambda to execute _snapshot actions
               - Effect: Allow
                 Action:
                   - es:ESHttpGet
@@ -203,7 +205,7 @@ Resources:
                 Resource:
                   - !Sub "arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${ElasticsearchAWSLogs}/_snapshot"
                   - !Sub "arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${ElasticsearchAWSLogs}/_snapshot/*"
-             # Allow lambda to pass role to ES
+              # Allow lambda to pass role to ES
               - Effect: Allow
                 Action:
                   - iam:PassRole
@@ -295,7 +297,7 @@ Resources:
     Properties:
       Description: "Creeate Elasticsearch Snapshots"
       ServiceToken: !GetAtt 'ElasticsearchAWSLogsSnapshotFunction.Arn'
-      doSnap: False
+      doSnap: 'False'
       ESBackupBucket: !Sub "${AWS::StackName}-es-snapshots"
       ESDomainEndpoint: !Sub "${ElasticsearchAWSLogs.DomainEndpoint}"
       RoleArn: !Sub "${ElasticsearchSnapshotRole.Arn}"

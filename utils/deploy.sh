@@ -52,7 +52,7 @@ case "${STACK_STATUS}" in
 		declare -r wait_action="stack-create-complete"
 	;;
 	*)
-		echo "Stack is in an unsuported status [${STACK_STATUS}]"
+		echo "Stack is in an unsupported status [${STACK_STATUS}]"
 		exit 1
 	;;
 esac
@@ -91,7 +91,7 @@ aws cloudformation describe-stacks \
 # Deploy Kibana dashboards.
 ES_URL=$(aws --region "${REGION}" cloudformation describe-stacks --stack-name "${STACK_NAME}" --query "Stacks[0].Outputs[?OutputKey=='KibanaURL'].OutputValue" --output text | cut -f 1-3 -d'/')
 if [ -z "${ES_URL}" ]; then
-	echo "No Kibana URL found, skipt Kibana dashboards deploy"
+	echo "No Kibana URL found, skip Kibana dashboards deploy"
 else
 	"${BASEDIR}/kibana/load.sh" -url "$ES_URL"
 fi
