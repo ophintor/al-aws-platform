@@ -648,6 +648,8 @@ Resources:
       Handler: index.lambda_handler
       Role: !GetAtt 'EncryptLambdaRole.Arn'
       Code:
+        # Lambda to Store Values in SSM Parameter Store.
+        # Ref: lambda/SetEC2Parameter.js
         ZipFile: |
           var AWS = require('aws-sdk');
           var response = require('cfn-response');
@@ -696,7 +698,7 @@ Resources:
               response.send(event, context, response.FAILED);
             }
           };
-      Runtime: nodejs4.3
+      Runtime: nodejs6.10
       Timeout: 25
   StoreEncryptedDBPassword:
     Type: Custom::SetParameterStore
@@ -891,7 +893,6 @@ Resources:
       Role: !GetAtt 'ELBLogLambdaRole.Arn'
       Handler: index.handler
       Code:
-        # Ref: https://github.com/awslabs/cloudwatch-logs-centralize-logs
         # The Following Lambda has been minified to fit inline in Cloud Formation.
         # The original version is available at "lambda/ELBLogsToCW.js"
         ZipFile: !Sub |
@@ -2214,9 +2215,11 @@ Resources:
       Handler: index.lambda_handler
       FunctionName: !Sub ${AWS::StackName}-add-target-with-transform
       Role: !Sub ${AddTargetWithTransformLambdaRole.Arn}
-      Runtime: nodejs4.3
+      Runtime: nodejs6.10
       Timeout: 25
       Code:
+        # Lambda to add CloudWatch event Targets using transforms.
+        # Ref: lambda/AddCW-EventTarget.js
         ZipFile: |
           var AWS = require('aws-sdk');
           var response = require('cfn-response');
@@ -2511,6 +2514,7 @@ Resources:
       FunctionName: !Sub '${AWS::StackName}-log-migration'
       Role: !GetAtt 'LogMigrationLambdaRole.Arn'
       Code:
+        # Ref: lambda/CloudwatchLogsMigrateToS3.js
         ZipFile: !Sub |
           var AWS = require('aws-sdk');
           exports.lambda_handler = function (event, context) {
@@ -3103,6 +3107,7 @@ Resources:
     Properties:
       FunctionName: !Sub '${AWS::StackName}-TamperLambda'
       Code:
+        # Ref: lambda/TamperLambda.py
         ZipFile: |
           import boto3
           import base64
@@ -3516,6 +3521,8 @@ Resources:
     Properties:
       FunctionName: !Sub '${AWS::StackName}-SnapshotLambda'
       Code:
+        # Lambda function to automate the process of creating manual snapshots for Elastic Search.
+        # Ref: lambda/ES-SnapshotLambda.js
         ZipFile: |
           var AWS = require('aws-sdk');
           var response = require('cfn-response');
@@ -3693,6 +3700,7 @@ Resources:
       Handler: index.handler
       Role: !GetAtt 'SlackLambdaRole.Arn'
       Code:
+        # Ref: lambda/SlackApproval.js
         ZipFile: |
           'use strict';
           const AWS = require('aws-sdk');
