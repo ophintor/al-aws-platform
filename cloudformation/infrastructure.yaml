@@ -765,6 +765,13 @@ Resources:
       Value: !GetAtt 'DBInstance.Endpoint.Address'
       Description: DataBase Address
       Type: 'String'
+  StoreAppPort:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '/${AWS::StackName}/app/port'
+      Value: !Ref AppPort
+      Description: Application Port
+      Type: 'String'
   StoreDBUsername:
     Type: AWS::SSM::Parameter
     DeletionPolicy: Delete
@@ -1324,14 +1331,17 @@ Resources:
               # Allow fetch from Parameters Store in a specific name space
               - Effect: Allow
                 Action:
+                  - ssm:GetParameter
                   - ssm:GetParameters
                 Resource:
                   - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}/db/*'
+                  - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}/app/*'
               - Effect: Allow
                 Action:
                   - ssm:GetParametersByPath
                 Resource:
                   - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}/db'
+                  - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}/app'
               # Allow describe parameters to automate config process
               - Effect: Allow
                 Action:
@@ -1854,6 +1864,8 @@ Resources:
         EnvironmentVariables:
           - Name: API_URL
             Value: !Sub 'http://${AppLoadBalancer.DNSName}/api'
+          - Name: PORT
+            Value: !Sub '${AppPort}'
           - Name: DB_CONNECTIONSTRING
             Value: !Sub '${DBInstance.Endpoint.Address}'
           - Name: DB_USERNAME
@@ -1897,6 +1909,8 @@ Resources:
             Value: !Sub '${AWS::StackName}-containerimage'
           - Name: AWS_ACCOUNT_ID
             Value: !Ref AWS::AccountId
+          - Name: PORT
+            Value: !Sub '${AppPort}'
       Source:
         Location: !GetAtt 'CodeRepo.CloneUrlHttp'
         Type: CODEPIPELINE
@@ -2174,7 +2188,8 @@ Resources:
                       "TaskRole": "${TaskRole}",
                       "ECSTargetGroup": "${AppTargetGroup}",
                       "ECSServiceRole": "${ECSServiceRole}",
-                      "DBAddress": "${DBInstance.Endpoint.Address}"
+                      "DBAddress": "${DBInstance.Endpoint.Address}",
+                      "AppPort": "${AppPort}"
                     }
                 InputArtifacts:
                   - Name: DockerImageOutput

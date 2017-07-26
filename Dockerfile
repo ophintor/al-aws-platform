@@ -2,6 +2,8 @@
 
 FROM node:7.5.0
 
+ARG PORT
+
 RUN apt-get update && \
     apt-get install -y python-dev python-pip mysql-client && \
     pip install --upgrade awscli && \
@@ -22,7 +24,7 @@ RUN npm install --color=false --only=prod
 COPY . /app
 RUN echo $(date) > ./build.date
 
-EXPOSE 3000
+EXPOSE ${PORT}
 
 # CMD [ "/entrypoint.sh", "node", "server.js" ]
 CMD chmod u+x scripts/sql_schema.sh; /entrypoint.sh /app/scripts/sql_schema.sh; /entrypoint.sh node server.js

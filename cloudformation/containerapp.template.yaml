@@ -23,6 +23,8 @@ Parameters:
     Type: String
   DockerImageTag:
     Type: String
+  AppPort:
+    Type: Number
 
 # Resources documentation
 # http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-template-resource-type-ref.html
@@ -38,7 +40,7 @@ Resources:
       TaskDefinition: !Ref MyAppDefinition
       LoadBalancers:
         - ContainerName: myapp
-          ContainerPort: 3000
+          ContainerPort: !Sub '${AppPort}'
           TargetGroupArn: !Ref ECSTargetGroup
       Role: !Ref ECSServiceRole
   MyAppDefinition:
@@ -57,10 +59,12 @@ Resources:
               Value: !Sub "${ParamsPrefix}/db/password"
             - Name: SSM_DB_NAME
               Value: !Sub "${ParamsPrefix}/db/name"
+            - Name: SSM_PORT
+              Value: !Sub "${ParamsPrefix}/app/port"
             - Name: DB_CONNECTIONSTRING
               Value: !Ref DBAddress
           PortMappings:
-            - ContainerPort: 3000
+            - ContainerPort: !Sub '${AppPort}'
           LogConfiguration:
             LogDriver: awslogs
             Options:

@@ -13,28 +13,36 @@ STACK_NAME=$(aws ec2 describe-tags \
 )
 
 # This version exports automatically all the parameters that the application has access
-PARAMS=$(aws --region "${AWS_REGION}" ssm get-parameters-by-path --path "/${STACK_NAME}/db" --with-decryption --output text --query 'Parameters[].[Name,Value]')
+APP_PARAMS=$(aws --region "${AWS_REGION}" ssm get-parameters-by-path --path "/${STACK_NAME}/app" --with-decryption --output text --query 'Parameters[].[Name,Value]')
+DB_PARAMS=$(aws --region "${AWS_REGION}" ssm get-parameters-by-path --path "/${STACK_NAME}/db" --with-decryption --output text --query 'Parameters[].[Name,Value]')
 IFS_SAVE=$IFS
 IFS=$'\n'
-for param in $PARAMS ; do
-        # shellcheck disable=SC2181
-        [ "$?" -eq "0" ] || continue
-        IFS=$IFS_SAVE
-        read -r key value <<< "${param}"
-        key="$(echo "${key}" | sed "s/^\/${STACK_NAME}.//g" | tr '[:lower:]/' '[:upper:]_')"
-        export "${key}"="${value}"
+for param in $DB_PARAMS $APP_PARAMS ; do
+	# shellcheck disable=SC2181
+	[ "$?" -eq "0" ] || continue
+	IFS=$IFS_SAVE
+	read -r key value <<< "${param}"
+	key="$(echo "${key}" | sed "s/^\/${STACK_NAME}.//g" | tr '[:lower:]/' '[:upper:]_')"
+	case "${key}" in
+		APP_PORT)
+			export PORT="${value}"
+			;;
+		*)
+			export "${key}"="${value}"
+			;;
+	esac
 done
 
 # This version uses Instance tags to map env vars to a parameter value using its name
 TAG_PREFIX="${STACK_NAME}:exports:param:"
 INSTANCE=$(ec2metadata | grep instance-id | awk '{ print $2}')
 while read -r line ; do
-    args=($line)
-    tag=${args[0]}
-    param=${args[1]}
-    NEW_VAR=${tag/#${TAG_PREFIX}/}
-    echo "exporting env var: ${NEW_VAR}"
-    export "${NEW_VAR}"="$(aws --region "${AWS_REGION}" ssm get-parameters --names "${param}" --with-decryption --output text --query 'Parameters[0].Value')"
+	args=($line)
+	tag=${args[0]}
+	param=${args[1]}
+	NEW_VAR=${tag/#${TAG_PREFIX}/}
+	echo "exporting env var: ${NEW_VAR}"
+	export "${NEW_VAR}"="$(aws --region "${AWS_REGION}" ssm get-parameters --names "${param}" --with-decryption --output text --query 'Parameters[0].Value')"
 done < <(aws ec2 describe-tags --filter Name=resource-id,Values="${INSTANCE}" --query "Tags[?starts_with(Key, \`${TAG_PREFIX}\`)].{Key:Key,Value:Value}" --output text --region "${AWS_REGION}")
 fi
 
