@@ -3059,19 +3059,6 @@ Resources:
       S3BucketName: !Ref LogStoreS3Location
       TrailName: !Sub '${AWS::StackName}-LogTrail'
     Type: AWS::CloudTrail::Trail
-  TamperTrail:
-    DependsOn: Trail
-    Condition: cEnableAdvancedLogging
-    Properties:
-      CloudWatchLogsLogGroupArn: !GetAtt 'TrailLogGroup.Arn'
-      CloudWatchLogsRoleArn: !GetAtt 'TrailLogGroupRole.Arn'
-      IncludeGlobalServiceEvents: true
-      IsLogging: true
-      IsMultiRegionTrail: true
-      S3BucketName: !Ref LogStoreS3Location
-      S3KeyPrefix: WriteOps
-      TrailName: !Sub '${AWS::StackName}-TamperTrail'
-    Type: AWS::CloudTrail::Trail
   TrailLogGroup:
     Properties:
       LogGroupName: !Sub '/aws/cloudtrail/${AWS::StackName}'
@@ -3108,9 +3095,9 @@ Resources:
     Type: "Custom::TamperLambdaTrigger"
     Properties:
       ServiceToken: !GetAtt TamperLambda.Arn
-      TamperTrail: !Sub '${AWS::StackName}-TamperTrail'
+      Trail: !Sub '${AWS::StackName}-LogTrail'
   TamperLambda:
-    DependsOn: TamperTrail
+    DependsOn: Trail
     Condition: cEnableAdvancedLogging
     Type: "AWS::Lambda::Function"
     Properties:
@@ -3158,11 +3145,11 @@ Resources:
             bucketList = ["arn:aws:s3:::"+x+"/AWS" for x in bucketList if "logs" in x and "elb" not in x]
 
             response = client.put_event_selectors(
-              TrailName = event['ResourceProperties']['TamperTrail'],
+              TrailName = event['ResourceProperties']['Trail'],
               EventSelectors=[
                 {
-                  'ReadWriteType': 'WriteOnly',
-                  'IncludeManagementEvents': False,
+                  'ReadWriteType': 'All',
+                  'IncludeManagementEvents': True,
                   'DataResources': [
                     {
                       'Type': 'AWS::S3::Object',
@@ -3183,7 +3170,7 @@ Resources:
       Role: !GetAtt TamperLambdaRole.Arn
       Runtime: "python2.7"
   TamperLambdaRole:
-    DependsOn: TamperTrail
+    DependsOn: Trail
     Condition: cEnableAdvancedLogging
     Type: AWS::IAM::Role
     Properties:
@@ -3199,10 +3186,10 @@ Resources:
             Statement:
               - Action: "cloudtrail:*"
                 Effect: "Allow"
-                Resource: !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${AWS::StackName}-TamperTrail'
-              - Action: "s3:*"
+                Resource: !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${AWS::StackName}-LogTrail'
+              - Action: "s3:List*"
                 Effect: "Allow"
-                Resource: "*"
+                Resource: "arn:aws:s3:::*"
             Version: '2012-10-17'
           PolicyName: tamperlambda-policy
 

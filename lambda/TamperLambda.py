@@ -39,11 +39,11 @@ def handler(event, context):
   bucketList = ["arn:aws:s3:::"+x+"/AWS" for x in bucketList if "logs" in x and "elb" not in x]
 
   response = client.put_event_selectors(
-    TrailName = event['ResourceProperties']['TamperTrail'],
+    TrailName = event['ResourceProperties']['Trail'],
     EventSelectors=[
       {
-        'ReadWriteType': 'WriteOnly',
-        'IncludeManagementEvents': False,
+        'ReadWriteType': 'All',
+        'IncludeManagementEvents': True,
         'DataResources': [
           {
             'Type': 'AWS::S3::Object',
