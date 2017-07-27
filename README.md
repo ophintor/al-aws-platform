@@ -48,7 +48,7 @@ http://docs.aws.amazon.com/codecommit/latest/userguide/setting-up-ssh-unixes.htm
 ### Launch the stack
 
  * Use AWS console to
-[![Launch Stack](https://s3.amazonaws.com/cloudformation-examples/cloudformation-launch-stack.png)](https://console.aws.amazon.com/cloudformation/home#/stacks/new?region=eu-west-1&stackName=al-example&templateURL=https://s3.amazonaws.com/al-cf-templates-us-east-1/templates/infrastructure.yaml)
+[![Launch Stack](https://s3.amazonaws.com/cloudformation-examples/cloudformation-launch-stack.png)](https://console.aws.amazon.com/cloudformation/home#/stacks/new?region=eu-west-1&stackName=al-example&templateURL=https://s3.amazonaws.com/al-cf-templates-us-east-1/templates/cloudplatform.yaml)
 .
 
  * You can also use a *deploy* script from *utils/* folder to create the stack.
@@ -62,7 +62,7 @@ STACK_NAME=<stack name> REGION=<region> ./utils/deploy.sh
 *Note*: you need to specify your key name on parameters _KeyName_!
 
 ```
-aws cloudformation deploy --region "eu-west-1" --template-file "cloudformation/infrastructure.yaml" --stack-name "test-stack" --capabilities "CAPABILITY_NAMED_IAM" --parameter-overrides KeyName="mykey"
+aws cloudformation deploy --region "eu-west-1" --template-file "cloudformation/cloudplatform.yaml" --stack-name "test-stack" --capabilities "CAPABILITY_NAMED_IAM" --parameter-overrides KeyName="mykey"
 ```
 
 ##### Deploy the code to code commit (It will trigger the code pipeline)
@@ -88,7 +88,7 @@ You can use a *cleanup* script from *utils/* folder to cleanup the resources cre
 STACK_NAME=<stack name> REGION=<region> ./utils/cleanup.sh
 ```
 
-####�Manual delete
+#### Manual delete
 To delete all the resources by hand from the demo you should execute this steps sequentially:
 
  1. Delete the [stack name]-Service stack. [AWS console](https://eu-west-1.console.aws.amazon.com/cloudformation/home?region=eu-west-1)
@@ -125,7 +125,7 @@ This repo has an **.editorconfig** file so you should install EditorConfig in yo
 
 You can configure locally git hooks to run the tests before commit/push and then fail the pipeline
 
-* You need to configure yout repo to use the **.githooks** folder
+* You need to configure your repo to use the **.githooks** folder
 ```
 git config core.hooksPath .githooks
 ```

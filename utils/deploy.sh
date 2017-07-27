@@ -8,7 +8,7 @@ declare -r BASEDIR="$(dirname "$(perl -e 'use Cwd qw/realpath/; print realpath($
 STACK_NAME="${STACK_NAME:-presentation}"
 REGION="${REGION:-eu-west-1}"
 
-STACK_FILE="${STACK_FILE:-infrastructure.yaml}"
+STACK_FILE="${STACK_FILE:-cloudplatform.yaml}"
 PARAMS_FOLDER="${PARAMS_FOLDER:-${BASEDIR}/utils/demo}"
 STACK_PARAMS_FILE="${STACK_FILE%.*}.json"
 S3_ENDPOINT="s3$([ "${REGION}" == "us-east-1" ] || echo -n "-${REGION}" ).amazonaws.com"
