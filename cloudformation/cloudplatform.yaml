@@ -1264,6 +1264,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Condition: cEnableContainers
     Properties:
+      AlarmName: !Sub ${AWS::StackName}-CPU_alarm_high
       AlarmDescription: Scale-up ECS cluster if CPU > 90% for 10 minutes
       MetricName: CPUUtilization
       Namespace: AWS/EC2
@@ -1280,6 +1281,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Condition: cEnableContainers
     Properties:
+      AlarmName: !Sub ${AWS::StackName}-CPU_alarm_low
       AlarmDescription: Scale-down ECS cluster if CPU < 70% for 10 minutes
       MetricName: CPUUtilization
       Namespace: AWS/EC2
@@ -2036,6 +2038,7 @@ Resources:
                   - application-autoscaling:*
                   - cloudwatch:PutMetricAlarm
                   - cloudwatch:DeleteAlarms
+                  - cloudwatch:DescribeAlarms
   ApprovalTopic:
     Type: AWS::SNS::Topic
     Properties:
@@ -3020,6 +3023,54 @@ Resources:
       Statistic: Sum
       Threshold: '1'
     Condition: cEnableAdvancedLogging
+
+  ### CloudWatch Dashboard
+  BasicDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub '${AWS::StackName}-ALDashboard'
+      DashboardBody: !Sub
+        - |
+            {
+              "widgets": [
+                ${EC2metrics}
+                ${ECSmetrics}
+                ${Advancedwidget}
+                ${RDSwidget}
+                ${APPwidget}
+              ]
+            }
+        - EC2metrics: !If
+            - cEnableEC2
+            - !Sub |
+                {"type":"metric","x":0,"y":0,"width":6,"height":6,"properties":{"view":"timeSeries","stacked":false,"metrics":[["AWS/EC2","CPUUtilization","AutoScalingGroupName","${EC2AutoScalingGroup}"]],"region":"${AWS::Region}","title":"CPUUtilisation of EC2 Autoscaling Group (%)"}},
+                {"type":"metric","x":6,"y":0,"width":6,"height":6,"properties":{"view":"timeSeries","stacked":false,"metrics":[["System/Linux","MemoryUtilization","AutoScalingGroupName","${EC2AutoScalingGroup}"]],"region":"${AWS::Region}","title":"MemoryUtilization  of EC2 Autoscaling Group (%)"}},
+                {"type":"metric","x":0,"y":6,"width":15,"height":6,"properties":{"view":"singleValue","stacked":true,"metrics":[["AWS/EC2","NetworkPacketsIn","AutoScalingGroupName","${EC2AutoScalingGroup}"],[".","NetworkPacketsOut",".","."],[".","StatusCheckFailed",".","."],[".","StatusCheckFailed_System",".","."],[".","StatusCheckFailed_Instance",".","."],[".","DiskWriteBytes",".","."],[".","DiskReadOps",".","."],[".","DiskWriteOps",".","."],[".","NetworkOut",".","."],[".","NetworkIn",".","."],[".","DiskReadBytes",".","."]],"region":"${AWS::Region}","title":"EC2 Autoscaling Group Metrics"}},
+                {"type":"metric","x":12,"y":0,"width":6,"height":6,"properties":{"view":"timeSeries","stacked":false,"metrics":[["System/Linux","DiskSpaceUtilization","MountPath","/","AutoScalingGroupName","${EC2AutoScalingGroup}","Filesystem","/dev/xvda1"]],"region":"${AWS::Region}","period":300,"title":"DiskSpaceUtilisation on EC2 AutoScalingGroup (%)"}},
+            - ''
+          ECSmetrics: !If
+            - cEnableContainers
+            - !Sub |
+                {"type":"metric","x":6,"y":0,"width":6,"height":6,"properties":{"view":"timeSeries","stacked":false,"metrics":[["AWS/ECS","MemoryUtilization","ClusterName","${AWS::StackName}-cluster"]],"region":"${AWS::Region}","title":"MemoryUtilization of ECS Cluster (%)"}},
+                {"type":"metric","x":0,"y":0,"width":6,"height":6,"properties":{"view":"timeSeries","stacked":false,"metrics":[["AWS/ECS","CPUUtilization","ClusterName","${AWS::StackName}-cluster"]],"region":"${AWS::Region}","title":"CPUUtilisation of ECS Cluster (%)"}},
+                {"type":"metric","x":12,"y":0,"width":6,"height":3,"properties":{"view":"singleValue","stacked":true,"metrics":[["AWS/ECS","MemoryReservation","ClusterName","${AWS::StackName}-cluster"],[".","CPUReservation",".","."]],"region":"${AWS::Region}","title":"ECS Cluster Metrics"}},
+                {"type":"metric","x":6,"y":12,"width":6,"height":3,"properties":{"title":"ALARM: Scale-down ECS cluster if CPU < 70% for 10 minutes","annotations":{"alarms":["arn:aws:cloudwatch:${AWS::Region}:${AWS::AccountId}:alarm:${AWS::StackName}-CPU_alarm_low"]},"view":"singleValue","stacked":false}},
+                {"type":"metric","x":6,"y":9,"width":6,"height":3,"properties":{"title":"ALARM: Scale-up ECS cluster if CPU > 90% for 10 minutes","annotations":{"alarms":["arn:aws:cloudwatch:${AWS::Region}:${AWS::AccountId}:alarm:${AWS::StackName}-CPU_alarm_high"]},"view":"singleValue","stacked":false}},
+                {"type":"metric","x":0,"y":15,"width":6,"height":3,"properties":{"title":"ALARM: HTTPCode ELB 5XX Count > 10 for 1 minute","annotations":{"alarms":["arn:aws:cloudwatch:${AWS::Region}:${AWS::AccountId}:alarm:${AWS::StackName}-ContainerApp-ALB_500s_alarm_scale_up"]},"view":"singleValue","stacked":false}},
+            - ''
+          Advancedwidget: !If
+            - cEnableAdvancedLogging
+            - !Sub |
+                {"type":"metric","x":18,"y":0,"width":6,"height":6,"properties":{"view":"timeSeries","stacked":false,"metrics":[["AWS/ApplicationELB","RequestCount","TargetGroup", "${AppTargetGroup.TargetGroupFullName}" ,"LoadBalancer", "${AppLoadBalancer.LoadBalancerFullName}" ,{"stat":"Sum","period":300}]],"region":"${AWS::Region}","title":"Request Count ApplicationELB","period":300}},
+                {"type":"metric","x":6,"y":15,"width":6,"height":3,"properties":{"title":"ALARM: No. of unauthorised access to logs","annotations":{"alarms":["arn:aws:cloudwatch:${AWS::Region}:${AWS::AccountId}:alarm:${AWS::StackName}-CloudTrailLogTamperAlarm"]},"view":"singleValue"}},
+                {"type":"metric","x":6,"y":18,"width":6,"height":3,"properties":{"title":"ALARM: No. of VPC changes","annotations":{"alarms":["arn:aws:cloudwatch:${AWS::Region}:${AWS::AccountId}:alarm:${AWS::StackName}-CloudTrailVpcChanges"]},"view":"singleValue"}},
+            - ''
+          RDSwidget: !Sub |
+            {"type":"metric","x":0,"y":6,"width":21,"height":3,"properties":{"view":"singleValue","metrics":[["AWS/RDS","FreeableMemory","EngineName","mysql",{"period":60}],[".","FreeStorageSpace",".",".",{"period":60}],[".","CPUUtilization",".",".",{"period":60}],[".","DatabaseConnections",".",".",{"period":60}],[".","ReadIOPS",".",".",{"period":60}],[".","WriteIOPS",".",".",{"period":60}],[".","ReadLatency",".",".",{"period":60}],[".","WriteLatency",".",".",{"period":60}],[".","NetworkTransmitThroughput",".",".",{"period":60}]],"region":"${AWS::Region}","title":"Database Metrics","period":300}},
+          APPwidget: !Sub |
+            {"type":"metric","x":12,"y":9,"width":9,"height":6,"properties":{"view":"singleValue","metrics":[["${AWS::StackName}-ApplicationMetrics","App Restarts",{"period":21600}],[".","Bytes_Out",{"period":21600}],[".","Chrome Users",{"period":21600}],[".","Firefox Users",{"yAxis":"left","period":21600}],[".","HTTP OK",{"period":21600}],[".","DELETEs",{"period":21600}],[".","POSTs",{"period":21600}]],"region":"${AWS::Region}","title":"Deployed Application Metrics","period":300}},
+            {"type":"metric","x":0,"y":9,"width":6,"height":3,"properties":{"title":"ALARM: Average Bytes out >1000 every 10 minutes","annotations":{"alarms":["arn:aws:cloudwatch:${AWS::Region}:${AWS::AccountId}:alarm:${AWS::StackName}-Bytes_Out_Alarm"]},"view":"singleValue","stacked":false}},
+            {"type":"metric","x":0,"y":12,"width":6,"height":3,"properties":{"title":"ALARM: 4xx Error Rate is >5 every hour","annotations":{"alarms":["arn:aws:cloudwatch:${AWS::Region}:${AWS::AccountId}:alarm:${AWS::StackName}-4xx_Error_count_alarm"]},"view":"singleValue","stacked":false}}
   #####################################################################################
   # End of Metrics and Filters
   #####################################################################################
@@ -3730,111 +3781,111 @@ Resources:
 
 
           function postMessage(message, callback) {
-          	const body = JSON.stringify(message);
-          	const options = url.parse(hookUrl);
-          	options.method = 'POST';
-          	options.headers = {
-          		'Content-Type': 'application/json',
-          		'Content-Length': Buffer.byteLength(body),
-          	};
+            const body = JSON.stringify(message);
+            const options = url.parse(hookUrl);
+            options.method = 'POST';
+            options.headers = {
+              'Content-Type': 'application/json',
+              'Content-Length': Buffer.byteLength(body),
+            };
 
-          	const postReq = https.request(options, (res) => {
-          		const chunks = [];
-          		res.setEncoding('utf8');
-          		res.on('data', (chunk) => chunks.push(chunk));
-          		res.on('end', () => {
-          			if (callback) {
-          				callback({
-          					body: chunks.join(''),
-          					statusCode: res.statusCode,
-          					statusMessage: res.statusMessage,
-          				});
-          			}
-          		});
-          		return res;
-          	});
+            const postReq = https.request(options, (res) => {
+              const chunks = [];
+              res.setEncoding('utf8');
+              res.on('data', (chunk) => chunks.push(chunk));
+              res.on('end', () => {
+                if (callback) {
+                  callback({
+                    body: chunks.join(''),
+                    statusCode: res.statusCode,
+                    statusMessage: res.statusMessage,
+                  });
+                }
+              });
+              return res;
+            });
 
-          	postReq.write(body);
-          	postReq.end();
+            postReq.write(body);
+            postReq.end();
           }
 
           function processEvent(event, callback) {
-          	const message = JSON.parse(event.Records[0].Sns.Message);
+            const message = JSON.parse(event.Records[0].Sns.Message);
 
-          	const alarmName = message.AlarmName;
-          	//var oldState = message.OldStateValue;
-          	const newState = message.NewStateValue;
-          	const reason = message.NewStateReason;
+            const alarmName = message.AlarmName;
+            //var oldState = message.OldStateValue;
+            const newState = message.NewStateValue;
+            const reason = message.NewStateReason;
 
-          	const slackMessage = {
-          		"text": `Pipeline "${message.approval.pipelineName}" approval required, action "${message.approval.actionName}"`,
-          		"attachments": [
-          		{
-          			"author_name": "Cloud Platform AWS approval",
-          			"author_icon": "https://i0.wp.com/reillytop10.com/wp-content/uploads/2016/12/Screen-Shot-2016-12-12-at-3.42.49-PM.png",
-          			"image_url": [
-          				"https://media.giphy.com/media/3o7abrH8o4HMgEAV9e/giphy.gif",
-          				"https://media.giphy.com/media/UsmcxQeK7BRBK/giphy.gif",
-          				"https://media.giphy.com/media/QynHhYJiwfoJO/giphy.gif",
-          				"https://media.giphy.com/media/Dih5LeyxL8fny/giphy.gif",
-          			][Math.floor((Math.random() * 4))]
-          		},
-          		{
-          			"text": `${message.approval.customData}`,
-          			"fields": [
-          			{
-          				"title": "Approval link",
-          				"value": `${message.approval.approvalReviewLink}`,
-          				"short": true,
-          			},
-          			]
-          		},
-          		{
-          			"fields": [
-          			{
-          				"title": "Pipeline",
-          				"value": `${message.consoleLink}`,
-          				"short": true,
-          			},
-          			]
-          		}
-          		]
-          	}
+            const slackMessage = {
+              "text": `Pipeline "${message.approval.pipelineName}" approval required, action "${message.approval.actionName}"`,
+              "attachments": [
+              {
+                "author_name": "Cloud Platform AWS approval",
+                "author_icon": "https://i0.wp.com/reillytop10.com/wp-content/uploads/2016/12/Screen-Shot-2016-12-12-at-3.42.49-PM.png",
+                "image_url": [
+                  "https://media.giphy.com/media/3o7abrH8o4HMgEAV9e/giphy.gif",
+                  "https://media.giphy.com/media/UsmcxQeK7BRBK/giphy.gif",
+                  "https://media.giphy.com/media/QynHhYJiwfoJO/giphy.gif",
+                  "https://media.giphy.com/media/Dih5LeyxL8fny/giphy.gif",
+                ][Math.floor((Math.random() * 4))]
+              },
+              {
+                "text": `${message.approval.customData}`,
+                "fields": [
+                {
+                  "title": "Approval link",
+                  "value": `${message.approval.approvalReviewLink}`,
+                  "short": true,
+                },
+                ]
+              },
+              {
+                "fields": [
+                {
+                  "title": "Pipeline",
+                  "value": `${message.consoleLink}`,
+                  "short": true,
+                },
+                ]
+              }
+              ]
+            }
 
-          	postMessage(slackMessage, (response) => {
-          		if (response.statusCode < 400) {
-          			console.info('Message posted successfully');
-          			callback(null);
-          		} else if (response.statusCode < 500) {
-          			console.error(`Error posting message to Slack API: ${response.statusCode} - ${response.statusMessage}`);
-          			callback(null);  // Don't retry because the error is due to a problem with the request
-          		} else {
-          			// Let Lambda retry
-          			callback(`Server error when processing message: ${response.statusCode} - ${response.statusMessage}`);
-          		}
-          	});
+            postMessage(slackMessage, (response) => {
+              if (response.statusCode < 400) {
+                console.info('Message posted successfully');
+                callback(null);
+              } else if (response.statusCode < 500) {
+                console.error(`Error posting message to Slack API: ${response.statusCode} - ${response.statusMessage}`);
+                callback(null);  // Don't retry because the error is due to a problem with the request
+              } else {
+                // Let Lambda retry
+                callback(`Server error when processing message: ${response.statusCode} - ${response.statusMessage}`);
+              }
+            });
           }
 
           exports.handler = (event, context, callback) => {
-          	return new Promise((resolve, reject) => {
-          		if (hookUrl) {
-          			return resolve(hookUrl)
-          		}
+            return new Promise((resolve, reject) => {
+              if (hookUrl) {
+                return resolve(hookUrl)
+              }
 
-          		const ssm = new AWS.SSM()
-          		return ssm.getParameters({
-          			Names: ['pm.slack.webhooks'],
-          			WithDecryption: true
-          		}).promise()
-          		.then((data) => {
-          			hookUrl = data.Parameters[0].Value;
-          		})
-          		.then(resolve)
-          	})
-          	.then(() => {
-          		processEvent(event, callback);
-          	})
-          	.catch(callback)
+              const ssm = new AWS.SSM()
+              return ssm.getParameters({
+                Names: ['pm.slack.webhooks'],
+                WithDecryption: true
+              }).promise()
+              .then((data) => {
+                hookUrl = data.Parameters[0].Value;
+              })
+              .then(resolve)
+            })
+            .then(() => {
+              processEvent(event, callback);
+            })
+            .catch(callback)
           };
       Runtime: nodejs6.10
       Timeout: 25

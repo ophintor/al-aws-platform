@@ -127,6 +127,7 @@ Resources:
   ALB500sAlarmScaleUp:
     Type: AWS::CloudWatch::Alarm
     Properties:
+      AlarmName: !Sub ${AWS::StackName}-ALB_500s_alarm_scale_up
       EvaluationPeriods: 1
       Statistic: Average
       Threshold: 10
