@@ -18,7 +18,7 @@ def send_response(request, response, context, status=None, reason=None):
       https = httplib.HTTPSConnection(url.hostname)
       https.request('PUT', url.path+'?'+url.query, body)
       cfnresponse.send(request, context, cfnresponse.SUCCESS, response, response['PhysicalResourceId'])
-  except:
+  except Exception as e:
     cfnresponse.send(request, context, cfnresponse.FAILED, response, response['PhysicalResourceId'])
   return response
 
@@ -28,14 +28,9 @@ def handler(event, context):
 
   body = s3client.list_buckets()
   bucketList = []
-  buckets_remain = True
-  bucket_num = 0
-  while( buckets_remain == True ):
-    try:
-      bucketList.append(body["Buckets"][bucket_num]["Name"])
-      bucket_num += 1
-    except IndexError:
-      buckets_remain = False
+  
+  for item in body["Buckets"][:]:
+    bucketList.append(item["Name"])
   bucketList = ["arn:aws:s3:::"+x+"/AWS" for x in bucketList if "logs" in x and "elb" not in x]
 
   response = client.put_event_selectors(
