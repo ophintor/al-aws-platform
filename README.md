@@ -17,10 +17,10 @@ There are 8 regions supporting all the resources required to create the stack:
 
  * Virginia: **us-east-1**
  * Ohio: **us-east-2**
+ * California: **us-west-1**
  * Oregon: **us-west-2**
  * Ireland: **eu-west-1**
  * Frankfurt: **eu-central-1**
- * Singapore: **ap-southeast-1**
  * Sydney: **ap-southeast-2**
  * Tokyo: **ap-northeast-1**
 
@@ -40,10 +40,13 @@ http://docs.aws.amazon.com/codecommit/latest/userguide/setting-up-ssh-unixes.htm
  * Use ElasticsearchLogs -> This option when enabled will stream logs to an Elastic Search instance.
  * Use Spot Instances -> This option when enabled will use Spot Instances instead of On-Demand Instances.
    Spot Instances cost far less than On-Demand Instances and can be used in non-critical environments like development.
-   **WARNING: Spot Instances can be auto terminated by AWS when the Spot Price rises above your bid price.**
    AWS will provide a 2 minute warning and then terminate the instance.
    It is possible to fail-over to using On-Demand Instances when this happens, but this feature has not been implemented in this platform yet.
-   **WARNING: Spot Instances currently (June 2017) does not work in regions: Frankfurt, Singapore, Sydney, Tokyo.**
+   - **WARNING: Spot Instances can be auto terminated by AWS when the Spot Price rises above your bid price.**
+   - **WARNING: Spot Instances currently (June 2017) does not work in regions: Frankfurt, Singapore, Sydney, Tokyo.**
+   - **UPDATE (28th July 2017):  Spot Instances work in all regions where this stack can deploy to.**
+   - $0.02 can be the minimum set to all regions. The template has $0.05 has the default price. 
+   - All (working) regions, except Ohio, support m3.medium as the smallest acceptable spot instance type. Ohio requires m4.large.
 
 ### Launch the stack
 
