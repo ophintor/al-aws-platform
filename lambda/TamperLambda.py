@@ -18,7 +18,7 @@ def send_response(request, response, context, status=None, reason=None):
       https = httplib.HTTPSConnection(url.hostname)
       https.request('PUT', url.path+'?'+url.query, body)
       cfnresponse.send(request, context, cfnresponse.SUCCESS, response, response['PhysicalResourceId'])
-  except Exception as e:
+  except:
     cfnresponse.send(request, context, cfnresponse.FAILED, response, response['PhysicalResourceId'])
   return response
 
@@ -34,7 +34,7 @@ def handler(event, context):
     try:
       bucketList.append(body["Buckets"][bucket_num]["Name"])
       bucket_num += 1
-    except:
+    except IndexError:
       buckets_remain = False
   bucketList = ["arn:aws:s3:::"+x+"/AWS" for x in bucketList if "logs" in x and "elb" not in x]
 
@@ -58,5 +58,5 @@ def handler(event, context):
   else:
     response['PhysicalResourceId'] = str(uuid.uuid4())
   if event['RequestType'] == 'Delete':
-    return send_response(event, response, context)
+    cfnresponse.send(event, context, cfnresponse.SUCCESS, response, response['PhysicalResourceId'])
   return send_response(event, response, context)
