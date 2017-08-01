@@ -680,6 +680,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - ssm:PutParameter
+                  - ssm:DeleteParameter
                 Resource:
                   - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}/db/*'
                   # Used on AWS console to test the function ^.^
