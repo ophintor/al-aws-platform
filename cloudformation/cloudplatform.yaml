@@ -377,7 +377,7 @@ Parameters:
     Description: |
       Slack channel incoming webhook to send approval notifications, check
       https://api.slack.com/incoming-webhooks
-      If no URL is set, slack notificaitons will be disabled/not provisioned
+      If no URL is set, slack notifications will be disabled/not provisioned
     Default: ''
     NoEcho: true
     Type: String
