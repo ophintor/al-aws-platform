@@ -145,6 +145,8 @@ Outputs:
   RepoURL:
     Description: Git Repository
     Value: !GetAtt 'CodeRepo.CloneUrlSsh'
+  DashboardURL:
+    Value: !Sub 'https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${AWS::StackName}-Dashboard'
   PipelineUrl:
     Value: !Sub 'https://console.aws.amazon.com/codepipeline/home?region=${AWS::Region}#/view/${CodePipeline}'
   # These exported values are sent in every request by the lambda function, not sure where they get included
@@ -3078,7 +3080,7 @@ Resources:
   BasicDashboard:
     Type: AWS::CloudWatch::Dashboard
     Properties:
-      DashboardName: !Sub '${AWS::StackName}-ALDashboard'
+      DashboardName: !Sub '${AWS::StackName}-Dashboard'
       DashboardBody: !Sub
         - |
             {
