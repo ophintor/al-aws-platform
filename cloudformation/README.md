@@ -21,7 +21,7 @@ cloudformation
 ```
 
 ## mastertemplate.yaml
-Template for _CodePipeline_ to manage a _Service Catalog_. The pipeline consists of a _CodeCommit_ repository and steps managing the portfolio and its products.
+Template for _CodePipeline_ to manage a _Service Catalog_. The pipeline consists of a _CodeCommit_ repository and the steps to manage the portfolio and its products.
 
 ## portfolio/
 ### mappings.yaml
