@@ -2,12 +2,13 @@
 
 set -xu
 
-STACK_NAME="${STACK_NAME:-presentation}"
+PREFIX="${PREFIX:-presentation}"
+STACK_NAME="${STACK_NAME:-$(aws cloudformation list-exports --query "Exports[?Name=='${PREFIX}-stack-name'].Value" --output text)}"
 REGION="${REGION:-eu-west-1}"
 
 aws ecr delete-repository \
 	--region "${REGION}" \
-	--repository-name "${STACK_NAME}-containerimage" \
+	--repository-name "${PREFIX}-containerimage" \
 	--force
 
 aws cloudformation delete-stack \
@@ -30,7 +31,7 @@ aws cloudformation wait stack-delete-complete \
 CERT_ARN=$(\
 	aws acm list-certificates \
 		--region "${REGION}" \
-		--query "CertificateSummaryList[?ends_with(DomainName,\`${STACK_NAME}.al-labs.co.uk\`)].CertificateArn" \
+		--query "CertificateSummaryList[?ends_with(DomainName,\`${PREFIX}.al-labs.co.uk\`)].CertificateArn" \
 		--output text \
 )
 
@@ -42,31 +43,31 @@ done
 
 # Cleanup Los Groups
 declare -a LOG_GROUPS=(
-	"/aws/codebuild/${STACK_NAME}-build"
-	"/aws/codebuild/${STACK_NAME}-ecs-image"
-	"/aws/codebuild/${STACK_NAME}-test"
-	"/aws/codebuild/${STACK_NAME}-integration-test"
-	"/aws/codebuild/${STACK_NAME}-application"
-	"/aws/codebuild/${STACK_NAME}-kibana"
-	"/aws/lambda/${STACK_NAME}-es-snapshots"
-	"/aws/lambda/${STACK_NAME}-set-param-store"
-	"/aws/lambda/${STACK_NAME}-LogMigrationLambda"
-	"/aws/lambda/${STACK_NAME}-LogStreamer"
-	"/aws/lambda/${STACK_NAME}-ParameterStoreLambda"
-	"/aws/lambda/${STACK_NAME}-SnapshotCreateLambda"
-	"/aws/lambda/${STACK_NAME}-SnapshotRepoCreateLambda"
-	"/aws/lambda/${STACK_NAME}-ELBLogsToCWLambda"
-	"${STACK_NAME}-ecs"
-	"${STACK_NAME}-apperr"
-	"${STACK_NAME}-applog"
-	"${STACK_NAME}-cloudinitoutput"
-	"${STACK_NAME}-cloudtrail"
-	"${STACK_NAME}-elblog"
-	"${STACK_NAME}-syslog"
+	"/aws/codebuild/${PREFIX}-build"
+	"/aws/codebuild/${PREFIX}-ecs-image"
+	"/aws/codebuild/${PREFIX}-test"
+	"/aws/codebuild/${PREFIX}-integration-test"
+	"/aws/codebuild/${PREFIX}-application"
+	"/aws/codebuild/${PREFIX}-kibana"
+	"/aws/lambda/${PREFIX}-es-snapshots"
+	"/aws/lambda/${PREFIX}-set-param-store"
+	"/aws/lambda/${PREFIX}-LogMigrationLambda"
+	"/aws/lambda/${PREFIX}-LogStreamer"
+	"/aws/lambda/${PREFIX}-ParameterStoreLambda"
+	"/aws/lambda/${PREFIX}-SnapshotCreateLambda"
+	"/aws/lambda/${PREFIX}-SnapshotRepoCreateLambda"
+	"/aws/lambda/${PREFIX}-ELBLogsToCWLambda"
+	"${PREFIX}-ecs"
+	"${PREFIX}-apperr"
+	"${PREFIX}-applog"
+	"${PREFIX}-cloudinitoutput"
+	"${PREFIX}-cloudtrail"
+	"${PREFIX}-elblog"
+	"${PREFIX}-syslog"
 )
 
 LOG_GROUPS+=(
-	$(aws --region "${REGION}" logs describe-log-groups --query "logGroups[?starts_with(logGroupName, \`${STACK_NAME}-TrailLogGroup\`)].logGroupName" --output text)
+	$(aws --region "${REGION}" logs describe-log-groups --query "logGroups[?starts_with(logGroupName, \`${PREFIX}-TrailLogGroup\`)].logGroupName" --output text)
 )
 for groupName in "${LOG_GROUPS[@]}" ; do
 	aws logs delete-log-group \
@@ -76,18 +77,18 @@ done
 
 # Cleanup CloudTrail S3 objects
 declare -a S3_BUCKETS=(
-	"${STACK_NAME}-codepipeline-artifacts"
-	"${STACK_NAME}-artifacts"
-	"${STACK_NAME}-elb-logs"
-	"${STACK_NAME}-es-snapshots"
-	"${STACK_NAME}-logs"
-	"${STACK_NAME}-snapshots"
+	"${PREFIX}-codepipeline-artifacts"
+	"${PREFIX}-artifacts"
+	"${PREFIX}-elb-logs"
+	"${PREFIX}-es-snapshots"
+	"${PREFIX}-logs"
+	"${PREFIX}-snapshots"
 )
 
 S3_BUCKETS+=(
 	$(aws s3api list-buckets \
 		--region "${REGION}" \
-		--query "Buckets[?starts_with(Name, \`${STACK_NAME}-trailbucket\`)].Name" \
+		--query "Buckets[?starts_with(Name, \`${PREFIX}-trailbucket\`)].Name" \
 		--output text
 	)
 )

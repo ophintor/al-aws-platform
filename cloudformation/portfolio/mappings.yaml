@@ -1,0 +1,29 @@
+# TODO:
+#   Rules and constraints / Roles and notifications seems to be a nice feature
+#   How to cleanup the stacks?
+name: ALCloud
+description: Automation logic R&D
+owner: Automation Logic
+# Template Path within the cloudformation/portfolio/ folder.
+# Owner within Products Key needs to be an email address.
+products:
+  - name: CloudPlatform-Demo
+    template: cloudplatform/ubuntu/node-sql/cloudplatform.yaml
+    owner: info@automationlogic.com
+    description: Creates a ready-to-use infrastructure for your NodeJS App
+  - name: CentralLogging
+    template: central-logging/central-logging-elasticsearch.yaml
+    owner: info@automationlogic.com
+    description: Creates a Standalone Elastic Search cluster to use with central logging.
+accounts:
+  - identifier: AL
+    number: 505076813643
+# Place Holder for tags.
+# tags:
+#   - Key: keyname1
+#     Value: value1
+#   - Key: keyname2
+#     Value: value2
+principals:
+  - 'arn:aws:iam::505076813643:group/PDCatalog'
+  - 'arn:aws:iam::505076813643:group/PDAdmin'

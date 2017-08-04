@@ -88,7 +88,7 @@ git push codecommit master
 You can use a *cleanup* script from *utils/* folder to cleanup the resources created by a stack.
 
 ```
-STACK_NAME=<stack name> REGION=<region> ./utils/cleanup.sh
+PREFIX=<resource prefix> REGION=<region> ./utils/cleanup.sh
 ```
 
 #### Manual delete

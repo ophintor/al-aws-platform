@@ -1,9 +1,24 @@
 ---
 # Standalone elasticsearch cluster
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Standalone ES cluster
+Description: Central Logging Stack with Elastic Search cluster and CloudTrail logging.
 # Elasticsearch
 Parameters:
+  ResourcePrefix:
+    AllowedPattern: '[a-z][a-z0-9\-]*'
+    ConstraintDescription: must begin with a letter and contain only lowercase alphanumeric characters.
+    Default: central-log
+    Description: An easily identifiable prefix for the stack's resources. Enter the Stack Name of your choice.
+    MaxLength: 16
+    MinLength: 1
+    Type: String
+  Cleanup:
+    AllowedValues:
+      - Enable
+      - Disable
+    Default: Enable
+    Description: Auto Cleanup this product's resources when the stack is deleted to simplify maintenance during testing. Do Not Enable on Production
+    Type: String
   ClusterSize:
     AllowedValues:
       - Tiny
@@ -13,7 +28,6 @@ Parameters:
     Default: Tiny
     Description: 'Amazon ES cluster size: small (2 data nodes), medium (4 data nodes), large (6 data nodes)'
     Type: String
-
   # TODO this shouldn't allow giving global access to cluster it also should be
   # locked down to instances in the VPC but that depends on network info.
   IPAccess:
@@ -25,6 +39,32 @@ Parameters:
     MinLength: '9'
     Type: String
 
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: 'Resource Prefix'
+        Parameters:
+          - ResourcePrefix
+      - Label:
+          default: 'Elastic Search'
+        Parameters:
+          - ClusterSize
+          - IPAccess
+      - Label:
+          default: 'Debug Mode'
+        Parameters:
+          - Cleanup
+    ParameterLabels:
+      ResourcePrefix:
+        default: Resource Prefix Name / Stack Name
+      ClusterSize:
+        default: Amazon ES cluster size
+      IPAccess:
+        default: IP address range that can access Elasticsearch
+      Cleanup:
+        default: Auto Cleanup Stack
+
 Conditions:
   SizeLarge:
     !Equals [!Ref ClusterSize, Large]
@@ -34,6 +74,7 @@ Conditions:
     !Equals [!Ref ClusterSize, Small]
   SizeTiny:
     !Equals [!Ref ClusterSize, Tiny]
+  cEnableCleanup: !Equals [!Ref Cleanup, 'Enable']
 
 Mappings:
   MasterSizing:
@@ -63,14 +104,25 @@ Outputs:
     Description: URL of domain endpoint - for lambda function
     Value: !Sub ${ElasticsearchAWSLogs.DomainEndpoint}
     Export:
-      Name: !Sub ${AWS::StackName}-DomainEndpointES
+      Name: !Sub ${ResourcePrefix}-DomainEndpointES
   KibanaURL:
     Description: URL of the Kibana dashboard
     Value: !Sub https://${ElasticsearchAWSLogs.DomainEndpoint}/_plugin/kibana/
     Export:
-      Name: !Sub ${AWS::StackName}-KibanaURL
+      Name: !Sub ${ResourcePrefix}-KibanaURL
 
 Resources:
+  ####################################################################################
+  # Cleanup
+  ####################################################################################
+  AutoCleanup:
+    Type: Custom::AutoCleanup
+    Condition: cEnableCleanup
+    Properties:
+      ServiceToken: !ImportValue 'CleanupLambdaArn'
+      ResourcePrefix: !Ref 'ResourcePrefix'
+      IsDelLogs: true
+
   ElasticsearchAWSLogs:
     Properties:
       AccessPolicies:
@@ -88,7 +140,7 @@ Resources:
         # Breaks lambda log posting :(
         rest.action.multi.allow_explicit_index: 'true'
       # Max length 28 chars
-      DomainName: !Sub logs-${AWS::StackName}
+      DomainName: !Sub logs-${ResourcePrefix}
       EBSOptions:
         Fn::If:
           - SizeTiny
@@ -124,11 +176,11 @@ Resources:
     Type: AWS::S3::Bucket
     DeletionPolicy: Retain
     Properties:
-      BucketName: !Sub ${AWS::StackName}-es-snapshots
+      BucketName: !Sub ${ResourcePrefix}-es-snapshots
   SnapshotsLambdaLogsGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub /aws/lambda/${AWS::StackName}-es-snapshots
+      LogGroupName: !Sub /aws/lambda/${ResourcePrefix}-es-snapshots
       RetentionInDays: 1
   ElasticsearchAWSLogsSnapshotFunctionPermissions:
     Type: AWS::Lambda::Permission
@@ -157,7 +209,7 @@ Resources:
                 Action:
                   - s3:ListBucket
                 Resource:
-                  - !Sub "arn:aws:s3:::${AWS::StackName}-es-snapshots"
+                  - !Sub "arn:aws:s3:::${ResourcePrefix}-es-snapshots"
               - Effect: "Allow"
                 Action:
                   - s3:GetObject
@@ -165,10 +217,10 @@ Resources:
                   - s3:DeleteObject
                   - iam:PassRole
                 Resource:
-                  - !Sub "arn:aws:s3:::${AWS::StackName}-es-snapshots/*"
+                  - !Sub "arn:aws:s3:::${ResourcePrefix}-es-snapshots/*"
             Version: "2012-10-17"
           PolicyName: es-snapshots
-      RoleName: !Sub ${AWS::StackName}-es-snapshots
+      RoleName: !Sub ${ResourcePrefix}-es-snapshots
   ElasticsearchAWSLogsSnapshotFunctionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -195,8 +247,8 @@ Resources:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                 Resource:
-                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}-es-snapshots"
-                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}-es-snapshots:*"
+                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ResourcePrefix}-es-snapshots"
+                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ResourcePrefix}-es-snapshots:*"
               # Allow lambda to execute _snapshot actions
               - Effect: Allow
                 Action:
@@ -213,7 +265,7 @@ Resources:
                 #   - !Sub "arn:aws:iam::${AWS::Region}:role/pm-es-test"
             Version: "2012-10-17"
           PolicyName: es-lambda-snapshots
-      RoleName: !Sub ${AWS::StackName}-ES-snapshots-Lambda
+      RoleName: !Sub ${ResourcePrefix}-ES-snapshots-Lambda
   ElasticsearchAWSLogsSnapshotFunction:
     Type: AWS::Lambda::Function
     DependsOn: [ElasticsearchAWSLogs]
@@ -287,7 +339,7 @@ Resources:
               });
           }
       Description: Lambda function for trigger ES snapshots
-      FunctionName: !Sub "${AWS::StackName}-es-snapshots"
+      FunctionName: !Sub "${ResourcePrefix}-es-snapshots"
       Handler: index.handler
       Role: !GetAtt ElasticsearchAWSLogsSnapshotFunctionRole.Arn
       Runtime: nodejs6.10
@@ -298,14 +350,14 @@ Resources:
       Description: "Creeate Elasticsearch Snapshots"
       ServiceToken: !GetAtt 'ElasticsearchAWSLogsSnapshotFunction.Arn'
       doSnap: 'False'
-      ESBackupBucket: !Sub "${AWS::StackName}-es-snapshots"
+      ESBackupBucket: !Sub "${ResourcePrefix}-es-snapshots"
       ESDomainEndpoint: !Sub "${ElasticsearchAWSLogs.DomainEndpoint}"
       RoleArn: !Sub "${ElasticsearchSnapshotRole.Arn}"
-      ESSnapshotRepo: !Sub "${AWS::StackName}_repo"
+      ESSnapshotRepo: !Sub "${ResourcePrefix}_repo"
   ScheduledRule:
     Type: "AWS::Events::Rule"
     Properties:
-      Name: !Sub "${AWS::StackName}-es-snapshots"
+      Name: !Sub "${ResourcePrefix}-es-snapshots"
       Description: "ScheduledRule"
       ScheduleExpression: "rate(1 day)"
       State: "ENABLED"
@@ -318,6 +370,6 @@ Resources:
               "ResourceProperties": {
                 "doSnap": true,
                 "ESDomainEndpoint": "${ElasticsearchAWSLogs.DomainEndpoint}",
-                "ESSnapshotRepo": "${AWS::StackName}_repo"
+                "ESSnapshotRepo": "${ResourcePrefix}_repo"
               }
             }

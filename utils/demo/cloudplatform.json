@@ -1,5 +1,9 @@
 [
 	{
+		"ParameterKey": "ResourcePrefix",
+		"ParameterValue": "<CHANGE-ME>"
+	},
+	{
 		"ParameterKey": "KeyPairName",
 		"ParameterValue": "pmarques@al"
 	},

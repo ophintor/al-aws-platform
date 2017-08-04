@@ -140,15 +140,20 @@ Outputs:
     Description: Website
     Value: !Join ['', [
       !If [cEnableHTTPS, 'https://', 'http://'],
-      !If [cEnableDNS, !Sub '${AWS::StackName}.al-labs.co.uk', !Sub '${AppLoadBalancer.DNSName}']]
+      !If [cEnableDNS, !Sub '${ResourcePrefix}.al-labs.co.uk', !Sub '${AppLoadBalancer.DNSName}']]
     ]
   RepoURL:
     Description: Git Repository
     Value: !GetAtt 'CodeRepo.CloneUrlSsh'
   DashboardURL:
-    Value: !Sub 'https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${AWS::StackName}-Dashboard'
+    Value: !Sub 'https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${ResourcePrefix}-Dashboard'
   PipelineUrl:
     Value: !Sub 'https://console.aws.amazon.com/codepipeline/home?region=${AWS::Region}#/view/${CodePipeline}'
+  StackName:
+    Description: Stack Name
+    Value: !Sub ${AWS::StackName}
+    Export:
+      Name: !Sub ${ResourcePrefix}-stack-name
   # These exported values are sent in every request by the lambda function, not sure where they get included
   # This value below is already exported but not being picked up by the lambda function
   DomainEndpoint:
@@ -160,7 +165,6 @@ Outputs:
       - Fn::ImportValue:
           !Sub '${ElasticsearchStack}-DomainEndpointES'
       - !Sub '${ElasticsearchAWSLogs.DomainEndpoint}'
-
   KibanaURL:
     Condition: cEnableES
     Description: URL of the Kibana dashboard
@@ -172,6 +176,21 @@ Outputs:
       - !Sub 'https://${ElasticsearchAWSLogs.DomainEndpoint}/_plugin/kibana/'
 
 Parameters:
+  ResourcePrefix:
+    AllowedPattern: '[a-z][a-z0-9\-]*'
+    ConstraintDescription: must begin with a letter and contain only lowercase alphanumeric characters.
+    Default: presentation
+    Description: An easily identifiable prefix for the stack's resources. Enter the Stack Name of your choice.
+    MaxLength: 16
+    MinLength: 1
+    Type: String
+  Cleanup:
+    AllowedValues:
+      - Enable
+      - Disable
+    Default: Enable
+    Description: Auto Cleanup this products resources when the stack is deleted to simplify maintenance during testing. Do Not Enable on Production
+    Type: String
   AdvancedLogging:
     Description: Enable/Disable Advanced logging
     AllowedValues:
@@ -383,9 +402,14 @@ Parameters:
     Default: ''
     NoEcho: true
     Type: String
+
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
+      - Label:
+          default: 'Resource Prefix'
+        Parameters:
+          - ResourcePrefix
       - Label:
           default: 'Domain Name:'
         Parameters:
@@ -435,9 +459,15 @@ Metadata:
           - ElasticsearchStack
           - ClusterSize
           - IPAccess
+      - Label:
+          default: 'Debug Mode'
+        Parameters:
+          - Cleanup
     ParameterLabels:
       AdvancedLogging:
         default: Enable Advanced Logging Features
+      ResourcePrefix:
+        default: Resource Prefix Name / Stack Name
       AppPort:
         default: Application TCP Port
       DBName:
@@ -476,6 +506,8 @@ Metadata:
         default: Notification Email Address
       SlackApprovalsWebhook:
         default: Slack Channel Webhook
+      Cleanup:
+        default: Auto Cleanup Stack
 
 Conditions:
   cEnableDNS: !Equals [!Ref UseDNS, 'Enable']
@@ -483,6 +515,7 @@ Conditions:
   cEnableESCentral: !Equals [!Ref ElasticsearchLogs, 'Enable - Central']
   cEnableESIntegrated: !Equals [!Ref ElasticsearchLogs, 'Enable - Integrated']
   cEnableES: !Or [!Condition cEnableESIntegrated, !Condition cEnableESCentral]
+  cEnableCleanup: !Equals [!Ref Cleanup, 'Enable']
   SizeLarge: !Equals [!Ref 'ClusterSize', Large]
   SizeMedium: !Equals [!Ref 'ClusterSize', Medium]
   SizeSmall: !Equals [!Ref 'ClusterSize', Small]
@@ -513,6 +546,17 @@ Conditions:
 # http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-template-resource-type-ref.html
 Resources:
   ####################################################################################
+  # Cleanup
+  ####################################################################################
+  AutoCleanup:
+    Type: Custom::AutoCleanup
+    Condition: cEnableCleanup
+    Properties:
+      ServiceToken: !ImportValue 'CleanupLambdaArn'
+      ResourcePrefix: !Ref 'ResourcePrefix'
+      IsDelLogs: true
+
+  ####################################################################################
   # Start of networking
   ####################################################################################
   VPC:
@@ -522,7 +566,7 @@ Resources:
       InstanceTenancy: 'default'
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-VPC'
+          Value: !Sub '${ResourcePrefix}-VPC'
   publicSubnet01:
     Type: AWS::EC2::Subnet
     Properties:
@@ -532,7 +576,7 @@ Resources:
       MapPublicIpOnLaunch: 'True'
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-PublicSubnet01'
+          Value: !Sub '${ResourcePrefix}-PublicSubnet01'
   publicSubnet02:
     Type: AWS::EC2::Subnet
     Properties:
@@ -542,7 +586,7 @@ Resources:
       MapPublicIpOnLaunch: 'True'
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-PublicSubnet02'
+          Value: !Sub '${ResourcePrefix}-PublicSubnet02'
   privateSubnet01:
     Type: AWS::EC2::Subnet
     Properties:
@@ -551,7 +595,7 @@ Resources:
       AvailabilityZone: !Select [0, !GetAZs '']
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-PrivateSubnet01'
+          Value: !Sub '${ResourcePrefix}-PrivateSubnet01'
   privateSubnet02:
     Type: AWS::EC2::Subnet
     Properties:
@@ -560,14 +604,14 @@ Resources:
       AvailabilityZone: !Select [1, !GetAZs '']
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-PrivateSubnet02'
+          Value: !Sub '${ResourcePrefix}-PrivateSubnet02'
   InternetGateway:
     Type: AWS::EC2::InternetGateway
     DependsOn: [VPC]
     Properties:
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-InternetGateway'
+          Value: !Sub '${ResourcePrefix}-InternetGateway'
   AttachInternetGateway:
     Type: AWS::EC2::VPCGatewayAttachment
     Properties:
@@ -580,7 +624,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-InternetRoutingTable'
+          Value: !Sub '${ResourcePrefix}-InternetRoutingTable'
   InternetPublicRoute:
     Type: AWS::EC2::Route
     Properties:
@@ -642,7 +686,7 @@ Resources:
   MyKeyAlias:
     Type: AWS::KMS::Alias
     Properties:
-      AliasName: !Sub 'alias/${AWS::StackName}-masterkey'
+      AliasName: !Sub 'alias/${ResourcePrefix}-masterkey'
       TargetKeyId: !Ref MyKey
 
   # Create Log Group to setup the Retention time of Lambda Logs
@@ -651,12 +695,12 @@ Resources:
     DeletionPolicy: Delete
     Condition: cEnableAdvancedLogging
     Properties:
-      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-set-param-store'
+      LogGroupName: !Sub '/aws/lambda/${ResourcePrefix}-set-param-store'
       RetentionInDays: 1
   EncryptLambdaRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${AWS::StackName}-Lambda-SetParamStore'
+      RoleName: !Sub '${ResourcePrefix}-Lambda-SetParamStore'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -676,8 +720,8 @@ Resources:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                 Resource:
-                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}-set-param-store'
-                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}-set-param-store:*'
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ResourcePrefix}-set-param-store'
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ResourcePrefix}-set-param-store:*'
               # Allow Lambda Function to set values into Parameters Store in a specific name space
               - Effect: Allow
                 Action:
@@ -692,7 +736,7 @@ Resources:
     Type: AWS::Lambda::Function
     DependsOn: MyKeyAlias
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-set-param-store'
+      FunctionName: !Sub '${ResourcePrefix}-set-param-store'
       Handler: index.lambda_handler
       Role: !GetAtt 'EncryptLambdaRole.Arn'
       Code:
@@ -754,7 +798,7 @@ Resources:
       - MyKeyAlias
     Properties:
       ServiceToken: !GetAtt 'EncryptLambda.Arn'
-      KeyId: !Sub 'alias/${AWS::StackName}-masterkey'
+      KeyId: !Sub 'alias/${ResourcePrefix}-masterkey'
       Name: !Sub '/${AWS::StackName}/db/password'
       Value: !Ref DBPassword
       Description: 'Database Password'
@@ -792,7 +836,7 @@ Resources:
             IpProtocol: tcp
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-DB'
+          Value: !Sub '${ResourcePrefix}-DB'
   DBInstance:
     Type: AWS::RDS::DBInstance
     Properties:
@@ -849,18 +893,18 @@ Resources:
   ####################################################################################
   ELBAccessLogsBucket:
     Type: AWS::S3::Bucket
-    DependsOn: "ELBLogsToCWLambda"
+    DependsOn: [ELBLogLambdaRole, ELBLogsToCWLambdaLogGroup, ELBLogsToCWLambda, ELBLogLambdaInvokePermission]
     DeletionPolicy: Retain
     Condition: cEnableAdvancedLogging
     Properties:
-      BucketName: !Sub '${AWS::StackName}-elb-logs'
+      BucketName: !Sub '${ResourcePrefix}-elb-logs'
       NotificationConfiguration:
         LambdaConfigurations:
           - Function: !GetAtt 'ELBLogsToCWLambda.Arn'
             Event: s3:ObjectCreated:*
       LifecycleConfiguration:
         Rules:
-          - Id: !Sub '${AWS::StackName}-elb-logs-lifecycle'
+          - Id: !Sub '${ResourcePrefix}-elb-logs-lifecycle'
             ExpirationInDays: 90
             Status: Enabled
             Transitions:
@@ -892,7 +936,7 @@ Resources:
     Condition: cEnableAdvancedLogging
     DeletionPolicy: Delete
     Properties:
-      LogGroupName: !Sub '${AWS::StackName}-elblog'
+      LogGroupName: !Sub '${ResourcePrefix}-elblog'
       RetentionInDays: 7
   ELBLogLambdaRole:
     Type: AWS::IAM::Role
@@ -925,7 +969,7 @@ Resources:
                 Action:
                   - 's3:GetObject'
                 Resource:
-                  - !Sub 'arn:aws:s3:::${AWS::StackName}-elb-logs/*'
+                  - !Sub 'arn:aws:s3:::${ResourcePrefix}-elb-logs/*'
   ELBLogLambdaInvokePermission:
     Type: AWS::Lambda::Permission
     Condition: cEnableAdvancedLogging
@@ -939,14 +983,14 @@ Resources:
     Condition: cEnableAdvancedLogging
     DeletionPolicy: Delete
     Properties:
-      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-elblogs-to-cw-migration'
+      LogGroupName: !Sub '/aws/lambda/${ResourcePrefix}-elblogs-to-cw-migration'
       RetentionInDays: 1
   ELBLogsToCWLambda:
     Type: AWS::Lambda::Function
     Condition: cEnableAdvancedLogging
-    DependsOn: ELBLogLambdaRole
+    DependsOn: [ELBLogLambdaRole, ELBLogsToCWLambdaLogGroup, LogGroupELBLog]
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-elblogs-to-cw-migration'
+      FunctionName: !Sub '${ResourcePrefix}-elblogs-to-cw-migration'
       Description: 'This code will move your ELB logs from S3 to CloudWatch. It is
         compressed, so quite hard to read. Original: github.com/awslabs/cloudwatch-logs-centralize-logs'
       Role: !GetAtt 'ELBLogLambdaRole.Arn'
@@ -955,10 +999,10 @@ Resources:
         # The Following Lambda has been minified to fit inline in Cloud Formation.
         # The original version is available at "lambda/ELBLogsToCW.js"
         ZipFile: !Sub |
-          'use strict';const aws=require('aws-sdk');var zlib=require('zlib');const s3=new aws.S3({apiVersion:'2006-03-01'});const cloudWatchLogs=new aws.CloudWatchLogs({apiVersion:'2014-03-28'});const readline=require('readline');const stream=require('stream');const logGroupName='${AWS::StackName}-elblog';const logStreamName='ELB';exports.handler=(event,context,callback)=>{console.log('S3 object is:',event.Records[0].s3);const bucket=event.Records[0].s3.bucket.name;console.log('Name of S3 bucket is:',bucket);const key=decodeURIComponent(event.Records[0].s3.object.key.replace(/\\+/g,' '));const params={Bucket:bucket,Key:key,};s3.getObject(params,(err,data)=>{if(err){console.log(err);const message=`Error getting object ${!key}from bucket ${!bucket}.Make sure they exist and your bucket is in the same region as this function.`;console.log(message);callback(message)}else{zlib.gunzip(data.Body,function(a,b){if(a){console.log('Error uncompressing data',a);return}var c=b.toString('ascii');manageLogStreams(c)});callback(null,data.ContentType)}});function manageLogStreams(c){var d={logGroupName:logGroupName,logStreamNamePrefix:logStreamName};cloudWatchLogs.describeLogStreams(d,function(a,b){if(a){console.log('Error during describe log streams:',a);createLogStream(c)}else{if(!b.logStreams[0]){console.log('Need to  create log stream:',b);createLogStream(c)}else{console.log('Log Stream already defined:',logStreamName);putLogEvents(b.logStreams[0].uploadSequenceToken,c)}}})}function createLogStream(c){var d={logGroupName:logGroupName,logStreamName:logStreamName};cloudWatchLogs.createLogStream(d,function(a,b){if(a){console.log('error while creating log stream: ',a,a.stack);return}else{console.log('Success in creating log stream: ',logStreamName);putLogEvents(null,c)}})}function putLogEvents(a,b){const MAX_BATCH_SIZE=1048576;const MAX_BATCH_COUNT=10000;const LOG_EVENT_OVERHEAD=26;var c=[];var d=[];var e=0;var f=new stream.PassThrough();f.end(b);var g=readline.createInterface({input:f});var h=0;g.on('line',(line)=>{++h;var i=line.split(' ',2)[1];var j=Date.parse(i);var k=line.length+LOG_EVENT_OVERHEAD;e+=k;if(e>=MAX_BATCH_SIZE||d.length>=MAX_BATCH_COUNT){c.push(d);d=[];e=k}d.push({message:line,timestamp:j})});g.on('close',()=>{c.push(d);sendBatches(a,c)})}function sendBatches(e,f){var g=0;var h=0;function sendNextBatch(a,b){if(a){console.log('Error sending batch: ',a,a.stack);return}else{var c=f.shift();if(c){++h;g+=c.length;sendBatch(b,c,sendNextBatch)}else{var d=`Successfully put ${!g}events in ${!h}f`;console.log(d);callback(null,d)}}}sendNextBatch(null,e)}function sendBatch(c,d,e){var f={logEvents:d,logGroupName:logGroupName,logStreamName:logStreamName};if(c){f['sequenceToken']=c}f.logEvents.sort(function(a,b){if(a.timestamp>b.timestamp){return 1}if(a.timestamp<b.timestamp){return-1}return 0});cloudWatchLogs.putLogEvents(f,function(a,b){if(a){console.log('Error during put log events: ',a,a.stack);e(a,null)}else{console.log(`Success in putting ${!f.logEvents.length}events`);e(null,b.nextSequenceToken)}})}};
+          'use strict';const aws=require('aws-sdk');var zlib=require('zlib');const s3=new aws.S3({apiVersion:'2006-03-01'});const cloudWatchLogs=new aws.CloudWatchLogs({apiVersion:'2014-03-28'});const readline=require('readline');const stream=require('stream');const logGroupName='${ResourcePrefix}-elblog';const logStreamName='ELB';exports.handler=(event,context,callback)=>{console.log('S3 object is:',event.Records[0].s3);const bucket=event.Records[0].s3.bucket.name;console.log('Name of S3 bucket is:',bucket);const key=decodeURIComponent(event.Records[0].s3.object.key.replace(/\\+/g,' '));const params={Bucket:bucket,Key:key,};s3.getObject(params,(err,data)=>{if(err){console.log(err);const message=`Error getting object ${!key}from bucket ${!bucket}.Make sure they exist and your bucket is in the same region as this function.`;console.log(message);callback(message)}else{zlib.gunzip(data.Body,function(a,b){if(a){console.log('Error uncompressing data',a);return}var c=b.toString('ascii');manageLogStreams(c)});callback(null,data.ContentType)}});function manageLogStreams(c){var d={logGroupName:logGroupName,logStreamNamePrefix:logStreamName};cloudWatchLogs.describeLogStreams(d,function(a,b){if(a){console.log('Error during describe log streams:',a);createLogStream(c)}else{if(!b.logStreams[0]){console.log('Need to  create log stream:',b);createLogStream(c)}else{console.log('Log Stream already defined:',logStreamName);putLogEvents(b.logStreams[0].uploadSequenceToken,c)}}})}function createLogStream(c){var d={logGroupName:logGroupName,logStreamName:logStreamName};cloudWatchLogs.createLogStream(d,function(a,b){if(a){console.log('error while creating log stream: ',a,a.stack);return}else{console.log('Success in creating log stream: ',logStreamName);putLogEvents(null,c)}})}function putLogEvents(a,b){const MAX_BATCH_SIZE=1048576;const MAX_BATCH_COUNT=10000;const LOG_EVENT_OVERHEAD=26;var c=[];var d=[];var e=0;var f=new stream.PassThrough();f.end(b);var g=readline.createInterface({input:f});var h=0;g.on('line',(line)=>{++h;var i=line.split(' ',2)[1];var j=Date.parse(i);var k=line.length+LOG_EVENT_OVERHEAD;e+=k;if(e>=MAX_BATCH_SIZE||d.length>=MAX_BATCH_COUNT){c.push(d);d=[];e=k}d.push({message:line,timestamp:j})});g.on('close',()=>{c.push(d);sendBatches(a,c)})}function sendBatches(e,f){var g=0;var h=0;function sendNextBatch(a,b){if(a){console.log('Error sending batch: ',a,a.stack);return}else{var c=f.shift();if(c){++h;g+=c.length;sendBatch(b,c,sendNextBatch)}else{var d=`Successfully put ${!g}events in ${!h}f`;console.log(d);callback(null,d)}}}sendNextBatch(null,e)}function sendBatch(c,d,e){var f={logEvents:d,logGroupName:logGroupName,logStreamName:logStreamName};if(c){f['sequenceToken']=c}f.logEvents.sort(function(a,b){if(a.timestamp>b.timestamp){return 1}if(a.timestamp<b.timestamp){return-1}return 0});cloudWatchLogs.putLogEvents(f,function(a,b){if(a){console.log('Error during put log events: ',a,a.stack);e(a,null)}else{console.log(`Success in putting ${!f.logEvents.length}events`);e(null,b.nextSequenceToken)}})}};
       Environment:
         Variables:
-          LOG_GROUP: !Sub '${AWS::StackName}-elblog'
+          LOG_GROUP: !Sub '${ResourcePrefix}-elblog'
           LOG_STREAM: 'ELB'
       Runtime: nodejs6.10
   ####################################################################################
@@ -972,7 +1016,7 @@ Resources:
     Type: AWS::ECS::Cluster
     Condition: cEnableContainers
     Properties:
-      ClusterName: !Sub '${AWS::StackName}-cluster'
+      ClusterName: !Sub '${ResourcePrefix}-cluster'
   ECSAutoScalingNotifications:
     Type: AWS::SNS::Topic
     Condition: cEnableEmailNotications
@@ -998,7 +1042,7 @@ Resources:
         - Granularity: 1Minute
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-ECS'
+          Value: !Sub '${ResourcePrefix}-ECS'
           PropagateAtLaunch: true
       NotificationConfiguration: !If
         - cEnableEmailNotications
@@ -1118,7 +1162,7 @@ Resources:
           ToPort: 22
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-ECS'
+          Value: !Sub '${ResourcePrefix}-ECS'
   ECSInstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Condition: cEnableContainers
@@ -1129,7 +1173,7 @@ Resources:
     Type: AWS::IAM::Role
     Condition: cEnableContainers
     Properties:
-      RoleName: !Sub '${AWS::StackName}-ECSInstanceRole'
+      RoleName: !Sub '${ResourcePrefix}-ECSInstanceRole'
       AssumeRolePolicyDocument:
         Statement:
           - Effect: Allow
@@ -1169,7 +1213,7 @@ Resources:
     Type: AWS::IAM::Role
     Condition: cEnableContainers
     Properties:
-      RoleName: !Sub '${AWS::StackName}-ECS-Service'
+      RoleName: !Sub '${ResourcePrefix}-ECS-Service'
       AssumeRolePolicyDocument:
         Statement:
           - Effect: Allow
@@ -1194,7 +1238,7 @@ Resources:
   ECSALB:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: !Sub '${AWS::StackName}-ECS-LB'
+      Name: !Sub '${ResourcePrefix}-ECS-LB'
       Scheme: internet-facing
       LoadBalancerAttributes:
         - Key: idle_timeout.timeout_seconds
@@ -1213,7 +1257,7 @@ Resources:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
       HealthCheckPath: /
-      Name: !Sub '${AWS::StackName}-ECSTargetGroup'
+      Name: !Sub '${ResourcePrefix}-ECSTargetGroup'
       Port: !Ref AppPort
       Protocol: HTTP
       VpcId: !Ref VPC
@@ -1230,7 +1274,7 @@ Resources:
     Type: AWS::ECR::Repository
     Condition: cEnableContainers
     Properties:
-      RepositoryName: !Sub '${AWS::StackName}-containerimage'
+      RepositoryName: !Sub '${ResourcePrefix}-containerimage'
       RepositoryPolicyText:
         Version: '2012-10-17'
         Statement:
@@ -1252,7 +1296,7 @@ Resources:
     Type: AWS::IAM::Role
     Condition: cEnableContainers
     Properties:
-      RoleName: !Sub '${AWS::StackName}-ecs-task-role'
+      RoleName: !Sub '${ResourcePrefix}-ecs-task-role'
       AssumeRolePolicyDocument:
         Statement:
           - Sid: '1'
@@ -1271,7 +1315,7 @@ Resources:
                   - ssm:DescribeParameters
                 Resource:
                   - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:*'
-        - PolicyName: parameter-store-db
+        - PolicyName: parameter-store-db-app
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
@@ -1280,22 +1324,13 @@ Resources:
                   - ssm:GetParameters
                 Resource:
                   - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}/db/*'
+                  - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}/app/*'
               - Effect: Allow
                 Action:
                   - ssm:GetParametersByPath
                 Resource:
                   - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}/db'
-        - PolicyName: parameter-store-app
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - ssm:GetParameters
-                  - ssm:GetParametersByPath
-                  - ssm:PutParameter
-                Resource:
-                  - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}/app/*'
+                  - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}/app'
   ECSScaleUpPolicy:
     Type: AWS::AutoScaling::ScalingPolicy
     Condition: cEnableContainers
@@ -1316,7 +1351,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Condition: cEnableContainers
     Properties:
-      AlarmName: !Sub ${AWS::StackName}-CPU_alarm_high
+      AlarmName: !Sub ${ResourcePrefix}-CPU_alarm_high
       AlarmDescription: Scale-up ECS cluster if CPU > 90% for 10 minutes
       MetricName: CPUUtilization
       Namespace: AWS/EC2
@@ -1333,7 +1368,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Condition: cEnableContainers
     Properties:
-      AlarmName: !Sub ${AWS::StackName}-CPU_alarm_low
+      AlarmName: !Sub ${ResourcePrefix}-CPU_alarm_low
       AlarmDescription: Scale-down ECS cluster if CPU < 70% for 10 minutes
       MetricName: CPUUtilization
       Namespace: AWS/EC2
@@ -1357,7 +1392,7 @@ Resources:
     Type: AWS::IAM::Role
     Condition: cEnableEC2
     Properties:
-      RoleName: !Sub '${AWS::StackName}-EC2-InstanceRole'
+      RoleName: !Sub '${ResourcePrefix}-EC2-InstanceRole'
       AssumeRolePolicyDocument:
         Statement:
           - Effect: Allow
@@ -1408,7 +1443,7 @@ Resources:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                 Resource:
-                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${AWS::StackName}*:*'
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${ResourcePrefix}*:*'
       Path: /
   EC2InstanceRoleInstanceProfile:
     Type: AWS::IAM::InstanceProfile
@@ -1434,7 +1469,7 @@ Resources:
         - Granularity: 1Minute
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-EC2'
+          Value: !Sub '${ResourcePrefix}-EC2'
           PropagateAtLaunch: true
     CreationPolicy:
       ResourceSignal:
@@ -1591,7 +1626,7 @@ Resources:
   AppLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: !Sub '${AWS::StackName}-LB'
+      Name: !Sub '${ResourcePrefix}-LB'
       Scheme: internet-facing
       LoadBalancerAttributes:
         - Key: idle_timeout.timeout_seconds
@@ -1609,7 +1644,7 @@ Resources:
   AppTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: !Sub '${AWS::StackName}-TG'
+      Name: !Sub '${ResourcePrefix}-TG'
       Port: !Ref AppPort
       Protocol: HTTP
       VpcId: !Ref VPC
@@ -1652,7 +1687,7 @@ Resources:
           - !Ref 'AWS::NoValue'
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-app-security-group'
+          Value: !Sub '${ResourcePrefix}-app-security-group'
 
   #####################################################################################
   # Start of CI/CD
@@ -1660,7 +1695,7 @@ Resources:
   QAGroup:
     Type: AWS::IAM::Group
     Properties:
-      GroupName: !Sub '${AWS::StackName}-QA'
+      GroupName: !Sub '${ResourcePrefix}-QA'
       ManagedPolicyArns: ['arn:aws:iam::aws:policy/IAMReadOnlyAccess', 'arn:aws:iam::aws:policy/IAMUserSSHKeys']
       Policies:
         - PolicyName: root
@@ -1678,7 +1713,7 @@ Resources:
                   - codecommit:Get*
                   - codecommit:GitPull
                 Resource:
-                  - !Sub 'arn:aws:codecommit:${AWS::Region}:${AWS::AccountId}:${AWS::StackName}-repo'
+                  - !Sub 'arn:aws:codecommit:${AWS::Region}:${AWS::AccountId}:${ResourcePrefix}-repo'
               - Effect: Allow
                 Action:
                   - 'codepipeline:GetPipeline'
@@ -1695,7 +1730,7 @@ Resources:
   DevGroup:
     Type: AWS::IAM::Group
     Properties:
-      GroupName: !Sub '${AWS::StackName}-Dev'
+      GroupName: !Sub '${ResourcePrefix}-Dev'
       ManagedPolicyArns: ['arn:aws:iam::aws:policy/IAMReadOnlyAccess', 'arn:aws:iam::aws:policy/IAMUserSSHKeys']
       Policies:
         - PolicyName: root
@@ -1715,16 +1750,16 @@ Resources:
                   - codecommit:GitPull
                   - codecommit:GitPush
                 Resource:
-                  - !Sub 'arn:aws:codecommit:${AWS::Region}:${AWS::AccountId}:${AWS::StackName}-repo'
+                  - !Sub 'arn:aws:codecommit:${AWS::Region}:${AWS::AccountId}:${ResourcePrefix}-repo'
   CodeRepo:
     Type: AWS::CodeCommit::Repository
     Properties:
-      RepositoryName: !Sub '${AWS::StackName}-repo'
+      RepositoryName: !Sub '${ResourcePrefix}-repo'
       RepositoryDescription: A code repo for the application
   CodeBuildRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${AWS::StackName}-CodeBuild'
+      RoleName: !Sub '${ResourcePrefix}-CodeBuild'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -1751,14 +1786,14 @@ Resources:
                   - ecr:UploadLayerPart
                 Resource:
                   # TODO: paramenterize pm=test => ImageName
-                  - !Sub 'arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/${AWS::StackName}-containerimage'
+                  - !Sub 'arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/${ResourcePrefix}-containerimage'
               # Pull repo
               - Effect: Allow
                 Action:
                   - codecommit:GitPull
                 Resource:
                   # TODO: paramenterize pm=test => RepositoryName
-                  - !Sub 'arn:aws:codecommit:${AWS::Region}:${AWS::AccountId}:${AWS::StackName}-repo'
+                  - !Sub 'arn:aws:codecommit:${AWS::Region}:${AWS::AccountId}:${ResourcePrefix}-repo'
               # Write build logs
               - Effect: Allow
                 Action:
@@ -1766,53 +1801,53 @@ Resources:
                   - logs:PutLogEvents
                 Resource:
                   # TODO: paramenterize pm=test => ProjectName
-                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-build:log-stream'
-                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-build:log-stream:*'
-                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-test:log-stream'
-                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-test:log-stream:*'
-                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-integration-test:log-stream'
-                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-integration-test:log-stream:*'
-                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-ecs-image:log-stream'
-                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-ecs-image:log-stream:*'
-                  - !If [cEnableES, !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-kibana:log-stream:', !Ref 'AWS::NoValue']
-                  - !If [cEnableES, !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-kibana:log-stream:*', !Ref 'AWS::NoValue']
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${ResourcePrefix}-build:log-stream'
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${ResourcePrefix}-build:log-stream:*'
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${ResourcePrefix}-test:log-stream'
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${ResourcePrefix}-test:log-stream:*'
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${ResourcePrefix}-integration-test:log-stream'
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${ResourcePrefix}-integration-test:log-stream:*'
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${ResourcePrefix}-ecs-image:log-stream'
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${ResourcePrefix}-ecs-image:log-stream:*'
+                  - !If [cEnableES, !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${ResourcePrefix}-kibana:log-stream:', !Ref 'AWS::NoValue']
+                  - !If [cEnableES, !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${ResourcePrefix}-kibana:log-stream:*', !Ref 'AWS::NoValue']
   CodeBuildArtifactLogGroup:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Delete
     Properties:
-      LogGroupName: !Sub '/aws/codebuild/${AWS::StackName}-build'
+      LogGroupName: !Sub '/aws/codebuild/${ResourcePrefix}-build'
       RetentionInDays: 1
   CodePipelineTestArtifactLogGroup:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Delete
     Properties:
-      LogGroupName: !Sub '/aws/codebuild/${AWS::StackName}-test'
+      LogGroupName: !Sub '/aws/codebuild/${ResourcePrefix}-test'
       RetentionInDays: 1
   IntegrationTestArtifactLogGroup:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Delete
     Properties:
-      LogGroupName: !Sub '/aws/codebuild/${AWS::StackName}-integration-test'
+      LogGroupName: !Sub '/aws/codebuild/${ResourcePrefix}-integration-test'
       RetentionInDays: 1
   CodeBuildDockerImageLogGroup:
     Type: AWS::Logs::LogGroup
     Condition: cEnableContainers
     DeletionPolicy: Delete
     Properties:
-      LogGroupName: !Sub '/aws/codebuild/${AWS::StackName}-ecs-image'
+      LogGroupName: !Sub '/aws/codebuild/${ResourcePrefix}-ecs-image'
       RetentionInDays: 1
   CodeBuildKibanaLogGroup:
     Type: AWS::Logs::LogGroup
     Condition: cEnableES
     DeletionPolicy: Delete
     Properties:
-      LogGroupName: !Sub '/aws/codebuild/${AWS::StackName}-kibana'
+      LogGroupName: !Sub '/aws/codebuild/${ResourcePrefix}-kibana'
       RetentionInDays: 1
   CodeBuildArtifact:
     Type: AWS::CodeBuild::Project
     DependsOn: [CodeRepo, CodeBuildRole, CodeBuildArtifactLogGroup]
     Properties:
-      Name: !Sub '${AWS::StackName}-build'
+      Name: !Sub '${ResourcePrefix}-build'
       Description: A description about my project
       ServiceRole: !GetAtt 'CodeBuildRole.Arn'
       Artifacts:
@@ -1846,7 +1881,7 @@ Resources:
       - CodeBuildKibanaLogGroup
     Condition: cEnableES
     Properties:
-      Name: !Sub '${AWS::StackName}-kibana'
+      Name: !Sub '${ResourcePrefix}-kibana'
       Description: This build will deploy your Kibana dashboard.
       ServiceRole: !GetAtt 'CodeBuildRole.Arn'
       Artifacts:
@@ -1875,7 +1910,7 @@ Resources:
     Type: AWS::CodeBuild::Project
     DependsOn: [CodeRepo, CodeBuildRole, CodePipelineTestArtifactLogGroup]
     Properties:
-      Name: !Sub '${AWS::StackName}-test'
+      Name: !Sub '${ResourcePrefix}-test'
       Description: A description about my project
       ServiceRole: !GetAtt 'CodeBuildRole.Arn'
       Artifacts:
@@ -1903,7 +1938,7 @@ Resources:
     Type: AWS::CodeBuild::Project
     DependsOn: [CodeRepo, CodeBuildRole, IntegrationTestArtifactLogGroup]
     Properties:
-      Name: !Sub '${AWS::StackName}-integration-test'
+      Name: !Sub '${ResourcePrefix}-integration-test'
       Description: A description about my project
       ServiceRole: !GetAtt 'CodeBuildRole.Arn'
       Artifacts:
@@ -1945,7 +1980,7 @@ Resources:
     Condition: cEnableContainers
     DependsOn: [CodeRepo, CodeBuildRole]
     Properties:
-      Name: !Sub '${AWS::StackName}-ecs-image'
+      Name: !Sub '${ResourcePrefix}-ecs-image'
       Description: A description about my project
       ServiceRole: !GetAtt 'CodeBuildRole.Arn'
       Artifacts:
@@ -1960,7 +1995,7 @@ Resources:
           - Name: AWS_DEFAULT_REGION
             Value: !Ref AWS::Region
           - Name: IMAGE_REPO_NAME
-            Value: !Sub '${AWS::StackName}-containerimage'
+            Value: !Sub '${ResourcePrefix}-containerimage'
           - Name: AWS_ACCOUNT_ID
             Value: !Ref AWS::AccountId
           - Name: PORT
@@ -1973,7 +2008,7 @@ Resources:
     Type: AWS::IAM::Role
     Condition: cEnableEC2
     Properties:
-      RoleName: !Sub '${AWS::StackName}-CodeDeploy'
+      RoleName: !Sub '${ResourcePrefix}-CodeDeploy'
       AssumeRolePolicyDocument:
         Statement:
           - Sid: '1'
@@ -1982,7 +2017,7 @@ Resources:
               Service: [codedeploy.amazonaws.com]
             Action: ['sts:AssumeRole']
       Policies:
-        - PolicyName: !Sub '${AWS::StackName}-CodeDeploy-policy'
+        - PolicyName: !Sub '${ResourcePrefix}-CodeDeploy-policy'
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
@@ -2007,7 +2042,7 @@ Resources:
   CodePipelineServiceRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${AWS::StackName}-CodePipelineServiceRole'
+      RoleName: !Sub '${ResourcePrefix}-CodePipelineServiceRole'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -2030,12 +2065,12 @@ Resources:
                   - codecommit:UploadArchive
                 Resource:
                   # TODO: paramenterize pm=test => RepositoryName
-                  - !Sub 'arn:aws:codecommit:${AWS::Region}:${AWS::AccountId}:${AWS::StackName}-repo'
+                  - !Sub 'arn:aws:codecommit:${AWS::Region}:${AWS::AccountId}:${ResourcePrefix}-repo'
               - Effect: Allow
                 Action:
                   - ecr:BatchGetImage
                 Resource:
-                  - !Sub 'arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/${AWS::StackName}-containerimage'
+                  - !Sub 'arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/${ResourcePrefix}-containerimage'
               - Effect: Allow
                 Action:
                   - codebuild:StartBuild
@@ -2051,7 +2086,7 @@ Resources:
     Type: AWS::S3::Bucket
     DeletionPolicy: Retain
     Properties:
-      BucketName: !Sub '${AWS::StackName}-codepipeline-artifacts'
+      BucketName: !Sub '${ResourcePrefix}-codepipeline-artifacts'
   ArtifactStoreS3LocationPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
@@ -2062,13 +2097,13 @@ Resources:
             Action:
               - s3:*
             Resource:
-              - !Sub 'arn:aws:s3:::${AWS::StackName}-codepipeline-artifacts'
-              - !Sub 'arn:aws:s3:::${AWS::StackName}-codepipeline-artifacts/*'
+              - !Sub 'arn:aws:s3:::${ResourcePrefix}-codepipeline-artifacts'
+              - !Sub 'arn:aws:s3:::${ResourcePrefix}-codepipeline-artifacts/*'
             Principal: '*'
   CloudFormationExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${AWS::StackName}-CloudFormationExecutionRole'
+      RoleName: !Sub '${ResourcePrefix}-CloudFormationExecutionRole'
       AssumeRolePolicyDocument:
         Statement:
           - Sid: '1'
@@ -2094,8 +2129,8 @@ Resources:
   ApprovalTopic:
     Type: AWS::SNS::Topic
     Properties:
-      DisplayName: !Sub '${AWS::StackName}-approvals'
-      TopicName: !Sub '${AWS::StackName}-approvals'
+      DisplayName: !Sub '${ResourcePrefix}-approvals'
+      TopicName: !Sub '${ResourcePrefix}-approvals'
   ApprovalTopicPolicy:
     Type: AWS::SNS::TopicPolicy
     Properties:
@@ -2127,7 +2162,7 @@ Resources:
       - AppTargetGroup
       - DBInstance
     Properties:
-      Name: !Sub '${AWS::StackName}-pipeline'
+      Name: !Sub '${ResourcePrefix}-pipeline'
       RoleArn: !GetAtt 'CodePipelineServiceRole.Arn'
       Stages:
         - Name: Source
@@ -2224,9 +2259,9 @@ Resources:
                 Configuration:
                   ChangeSetName: Deploy
                   ActionMode: CREATE_UPDATE
-                  StackName: !Sub '${AWS::StackName}-ContainerApp'
+                  StackName: !Sub '${ResourcePrefix}-ContainerApp'
                   Capabilities: CAPABILITY_NAMED_IAM
-                  TemplatePath: SourceOutput::cloudformation/containerapp.template.yaml
+                  TemplatePath: SourceOutput::cloudformation/portfolio/cloudplatform/ubuntu/node-sql/containerapp.template.yaml
                   RoleArn: !GetAtt 'CloudFormationExecutionRole.Arn'
                   # Can't be a YAML object:  Value of property Configuration must be an object with String (or simple type) properties
                   # ParameterOverrides
@@ -2235,11 +2270,11 @@ Resources:
                   #   DBAddress: !GetAtt 'DBInstance.Endpoint.Address'
                   ParameterOverrides: !Sub |
                     {
-                      "ParamsPrefix": "${AWS::StackName}",
+                      "ParamsPrefix": "${ResourcePrefix}",
                       "Cluster": "${ContainerCluster}",
                       "CloudwatchLogsGroup": "${LogGroupAppLog}",
                       "DockerImageTag": { "Fn::GetParam" : ["DockerImageOutput", "build.json", "tag"] },
-                      "DockerImage": "${AWS::StackName}-containerimage",
+                      "DockerImage": "${ResourcePrefix}-containerimage",
                       "TaskRole": "${TaskRole}",
                       "ECSTargetGroup": "${AppTargetGroup}",
                       "ECSServiceRole": "${ECSServiceRole}",
@@ -2283,7 +2318,7 @@ Resources:
     Condition: cEnableEmailNotications
     Properties:
       Handler: index.lambda_handler
-      FunctionName: !Sub ${AWS::StackName}-add-target-with-transform
+      FunctionName: !Sub ${ResourcePrefix}-add-target-with-transform
       Role: !Sub ${AddTargetWithTransformLambdaRole.Arn}
       Runtime: nodejs6.10
       Timeout: 25
@@ -2362,7 +2397,7 @@ Resources:
             Action:
               - sts:AssumeRole
       Policies:
-        - PolicyName: !Sub ${AWS::StackName}-PutTargetRule
+        - PolicyName: !Sub ${ResourcePrefix}-PutTargetRule
           PolicyDocument:
             Statement:
               - Effect: Allow
@@ -2375,13 +2410,14 @@ Resources:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                 Resource:
-                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}-add-target-with-transform'
-                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}-add-target-with-transform:*'
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ResourcePrefix}-add-target-with-transform'
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ResourcePrefix}-add-target-with-transform:*'
   AddTargetWithTransformLambdaLogGroup:
     Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
     Condition: cEnableEmailNoticationsAndLambdaLogging
     Properties:
-      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-add-target-with-transform'
+      LogGroupName: !Sub '/aws/lambda/${ResourcePrefix}-add-target-with-transform'
       RetentionInDays: 1
   AddTargetWithTransformation:
     Type: AWS::CloudFormation::CustomResource
@@ -2398,7 +2434,7 @@ Resources:
     Type: AWS::Events::Rule
     Properties:
       Description: Notify subscribers when build steps are finished
-      Name: !Sub ${AWS::StackName}-CodeBuildNotificationsRule
+      Name: !Sub ${ResourcePrefix}-CodeBuildNotificationsRule
       EventPattern: !Join
         - ""
         - - !Sub |
@@ -2443,40 +2479,31 @@ Resources:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Delete
     Properties:
-      LogGroupName: !Sub '${AWS::StackName}-applog'
+      LogGroupName: !Sub '${ResourcePrefix}-applog'
       RetentionInDays: 7
-  ### Temporarly commented out as stdout and stderr are combined
-  ### Please note that the log agent configuration (for EC2) has
-  ### the error log section commented out
-  # LogGroupAppErrorLog:
-  #   Type: AWS::Logs::LogGroup
-  #   DeletionPolicy: Delete
-  #   Properties:
-  #     LogGroupName: !Sub '${AWS::StackName}-apperr'
-  #     RetentionInDays: 7
   LogGroupCloudInit:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Delete
     Properties:
-      LogGroupName: !Sub '${AWS::StackName}-cloudinitoutput'
+      LogGroupName: !Sub '${ResourcePrefix}-cloudinitoutput'
       RetentionInDays: 7
   LogGroupSysLog:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Delete
     Condition: cEnableAdvancedLogging
     Properties:
-      LogGroupName: !Sub '${AWS::StackName}-syslog'
+      LogGroupName: !Sub '${ResourcePrefix}-syslog'
       RetentionInDays: 7
   ######
   LogStoreS3Location:
     Type: AWS::S3::Bucket
     DeletionPolicy: Retain
     Properties:
-      BucketName: !Sub '${AWS::StackName}-logs'
+      BucketName: !Sub '${ResourcePrefix}-logs'
       LifecycleConfiguration:
         Rules:
           - ExpirationInDays: 90
-            Id: !Sub '${AWS::StackName}-LogMigrationLifecycleRule'
+            Id: !Sub '${ResourcePrefix}-LogMigrationLifecycleRule'
             Status: Enabled
             Transitions:
               - StorageClass: STANDARD_IA
@@ -2495,14 +2522,14 @@ Resources:
               Service: !Sub 'logs.${AWS::Region}.amazonaws.com'
             Action: s3:GetBucketAcl
             Resource:
-              - !Sub 'arn:aws:s3:::${AWS::StackName}-logs'
+              - !Sub 'arn:aws:s3:::${ResourcePrefix}-logs'
           - Sid: AWSCloudWatchLogsWrite
             Effect: Allow
             Principal:
               Service: !Sub 'logs.${AWS::Region}.amazonaws.com'
             Action: s3:PutObject
             Resource:
-              - !Sub 'arn:aws:s3:::${AWS::StackName}-logs/*'
+              - !Sub 'arn:aws:s3:::${ResourcePrefix}-logs/*'
             Condition:
               StringEquals:
                 s3:x-amz-acl: bucket-owner-full-control
@@ -2543,17 +2570,17 @@ Resources:
                 Action:
                   - logs:CreateExportTask
                 Resource:
-                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${AWS::StackName}*:*'
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${ResourcePrefix}*:*'
               - Effect: Allow
                 Action:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
-                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}-log-migration:*'
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ResourcePrefix}-log-migration:*'
               - Effect: Allow
                 Action:
                   - s3:PutObject
                 Resource:
-                  - !Sub 'arn:aws:s3:::${AWS::StackName}-logs/*'
+                  - !Sub 'arn:aws:s3:::${ResourcePrefix}-logs/*'
   LogMigrationScheduledRule:
     Type: AWS::Events::Rule
     Properties:
@@ -2575,13 +2602,13 @@ Resources:
     DeletionPolicy: Delete
     Condition: cEnableAdvancedLogging
     Properties:
-      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-log-migration'
+      LogGroupName: !Sub '/aws/lambda/${ResourcePrefix}-log-migration'
       RetentionInDays: 1
   LogMigrationLambda:
     Type: AWS::Lambda::Function
     Properties:
       Handler: index.lambda_handler
-      FunctionName: !Sub '${AWS::StackName}-log-migration'
+      FunctionName: !Sub '${ResourcePrefix}-log-migration'
       Role: !GetAtt 'LogMigrationLambdaRole.Arn'
       Code:
         # Ref: lambda/CloudwatchLogsMigrateToS3.js
@@ -2592,9 +2619,9 @@ Resources:
               var cloudwatchlogs = new AWS.CloudWatchLogs();
               var now = new Date();
               var params = {
-                destination:'${AWS::StackName}-logs',
+                destination:'${ResourcePrefix}-logs',
                 from: now.getTime() - 3600000,
-                logGroupName:'${AWS::StackName}-applog',
+                logGroupName:'${ResourcePrefix}-applog',
                 to: now.getTime(),
                 taskName: 'LogTask_applog_'+now.getTime().toString()
               };
@@ -2626,6 +2653,7 @@ Resources:
     Type: AWS::SNS::Topic
     Condition: cEnableEmailNotications
     Properties:
+      TopicName: !Sub '${ResourcePrefix}-EmailSNSTopic'
       Subscription:
         - Endpoint: !Ref OperationsEmail
           Protocol: email
@@ -2664,7 +2692,7 @@ Resources:
       LogGroupName: !Ref 'LogGroupAppLog'
       FilterPattern: App listening on port
       MetricTransformations:
-        - MetricNamespace: !Sub '${AWS::StackName}-ApplicationMetrics'
+        - MetricNamespace: !Sub '${ResourcePrefix}-ApplicationMetrics'
           MetricName: App Restarts
           MetricValue: '1'
   AppGETsMetricFilter:
@@ -2673,7 +2701,7 @@ Resources:
       LogGroupName: !Ref 'LogGroupAppLog'
       FilterPattern: '[ip, timestamp, method=G, url, status_code,bytes,responsetime,useragent]'
       MetricTransformations:
-        - MetricNamespace: !Sub '${AWS::StackName}-ApplicationMetrics'
+        - MetricNamespace: !Sub '${ResourcePrefix}-ApplicationMetrics'
           MetricName: GETs
           MetricValue: '1'
   AppPOSTsMetricFilter:
@@ -2682,7 +2710,7 @@ Resources:
       LogGroupName: !Ref 'LogGroupAppLog'
       FilterPattern: '[ip, timestamp, method=POST, url, status_code,bytes,responsetime,useragent]'
       MetricTransformations:
-        - MetricNamespace: !Sub '${AWS::StackName}-ApplicationMetrics'
+        - MetricNamespace: !Sub '${ResourcePrefix}-ApplicationMetrics'
           MetricName: POSTs
           MetricValue: '1'
   AppDELETEsMetricFilter:
@@ -2691,7 +2719,7 @@ Resources:
       LogGroupName: !Ref 'LogGroupAppLog'
       FilterPattern: '[ip, timestamp, method=DELETE, url, status_code,bytes,responsetime,useragent]'
       MetricTransformations:
-        - MetricNamespace: !Sub '${AWS::StackName}-ApplicationMetrics'
+        - MetricNamespace: !Sub '${ResourcePrefix}-ApplicationMetrics'
           MetricName: DELETEs
           MetricValue: '1'
   AppBytesOutMetricFilter:
@@ -2700,7 +2728,7 @@ Resources:
       LogGroupName: !Ref 'LogGroupAppLog'
       FilterPattern: '[ip, timestamp, method, url, status_code,bytes,responsetime,useragent]'
       MetricTransformations:
-        - MetricNamespace: !Sub '${AWS::StackName}-ApplicationMetrics'
+        - MetricNamespace: !Sub '${ResourcePrefix}-ApplicationMetrics'
           MetricName: Bytes_Out
           MetricValue: $bytes
   App4xxsMetricFilter:
@@ -2709,7 +2737,7 @@ Resources:
       LogGroupName: !Ref 'LogGroupAppLog'
       FilterPattern: '[ip, timestamp, method, url, status_code=4*,bytes,responsetime,useragent]'
       MetricTransformations:
-        - MetricNamespace: !Sub '${AWS::StackName}-ApplicationMetrics'
+        - MetricNamespace: !Sub '${ResourcePrefix}-ApplicationMetrics'
           MetricName: 4xx_error_count
           MetricValue: '1'
   App200sMetricFilter:
@@ -2718,7 +2746,7 @@ Resources:
       LogGroupName: !Ref 'LogGroupAppLog'
       FilterPattern: '[ip, timestamp, method, url, status_code=200,bytes,responsetime,useragent]'
       MetricTransformations:
-        - MetricNamespace: !Sub '${AWS::StackName}-ApplicationMetrics'
+        - MetricNamespace: !Sub '${ResourcePrefix}-ApplicationMetrics'
           MetricName: HTTP OK
           MetricValue: '1'
   AppChromeUsersMetricFilter:
@@ -2727,7 +2755,7 @@ Resources:
       LogGroupName: !Ref 'LogGroupAppLog'
       FilterPattern: '[ip, timestamp, method, url, status_code,bytes,responsetime,useragent=*Chrome*]'
       MetricTransformations:
-        - MetricNamespace: !Sub '${AWS::StackName}-ApplicationMetrics'
+        - MetricNamespace: !Sub '${ResourcePrefix}-ApplicationMetrics'
           MetricName: Chrome Users
           MetricValue: '1'
   AppFirefoxUsersMetricFilter:
@@ -2736,7 +2764,7 @@ Resources:
       LogGroupName: !Ref 'LogGroupAppLog'
       FilterPattern: '[ip, timestamp, method, url, status_code,bytes,responsetime,useragent=*Firefox*]'
       MetricTransformations:
-        - MetricNamespace: !Sub '${AWS::StackName}-ApplicationMetrics'
+        - MetricNamespace: !Sub '${ResourcePrefix}-ApplicationMetrics'
           MetricName: Firefox Users
           MetricValue: '1'
   App4xxRateAlarm:
@@ -2744,9 +2772,9 @@ Resources:
     Properties:
       AlarmDescription: Notify the Operator Email if the 4xx Error Rate is higher
         than 5 every 5 minutes
-      AlarmName: !Sub '${AWS::StackName}-4xx_Error_count_alarm'
+      AlarmName: !Sub '${ResourcePrefix}-4xx_Error_count_alarm'
       MetricName: 4xx_error_count
-      Namespace: !Sub '${AWS::StackName}-ApplicationMetrics'
+      Namespace: !Sub '${ResourcePrefix}-ApplicationMetrics'
       Statistic: Sum
       Period: '300'
       EvaluationPeriods: '1'
@@ -2760,8 +2788,8 @@ Resources:
       AlarmDescription: Sample Alarm to demonstrate CloudWatch Alarms. Triggers when
         Average Bytes out is greater than 1000 every 5 minutes
       MetricName: Bytes_Out
-      AlarmName: !Sub '${AWS::StackName}-Bytes_Out_Alarm'
-      Namespace: !Sub '${AWS::StackName}-ApplicationMetrics'
+      AlarmName: !Sub '${ResourcePrefix}-Bytes_Out_Alarm'
+      Namespace: !Sub '${ResourcePrefix}-ApplicationMetrics'
       Statistic: Average
       Period: '300'
       EvaluationPeriods: '1'
@@ -2780,20 +2808,20 @@ Resources:
         || ($.eventName = RevokeSecurityGroupEgress) || ($.eventName = CreateSecurityGroup)
         || ($.eventName = DeleteSecurityGroup) }'
       MetricTransformations:
-        - MetricNamespace: !Sub '${AWS::StackName}-CloudTrailMetrics'
+        - MetricNamespace: !Sub '${ResourcePrefix}-CloudTrailMetrics'
           MetricName: SecurityGroupEventCount
           MetricValue: '1'
     Condition: cEnableAdvancedLogging
   SecurityGroupChangesAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub '${AWS::StackName}-CloudTrailSecurityGroupChanges'
+      AlarmName: !Sub '${ResourcePrefix}-CloudTrailSecurityGroupChanges'
       AlarmDescription: Alarms when an API call is made to create, update or delete
         a Security Group.
       AlarmActions:
         - !If [cEnableEmailNotications, !Ref EmailNotificationTopic, !Ref 'AWS::NoValue']
       MetricName: SecurityGroupEventCount
-      Namespace: !Sub '${AWS::StackName}-CloudTrailMetrics'
+      Namespace: !Sub '${ResourcePrefix}-CloudTrailMetrics'
       ComparisonOperator: GreaterThanOrEqualToThreshold
       EvaluationPeriods: '1'
       Period: '300'
@@ -2809,20 +2837,20 @@ Resources:
         || ($.eventName = ReplaceNetworkAclEntry) || ($.eventName = ReplaceNetworkAclAssociation)
         }'
       MetricTransformations:
-        - MetricNamespace: !Sub '${AWS::StackName}-CloudTrailMetrics'
+        - MetricNamespace: !Sub '${ResourcePrefix}-CloudTrailMetrics'
           MetricName: NetworkAclEventCount
           MetricValue: '1'
     Condition: cEnableAdvancedLogging
   NetworkAclChangesAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub '${AWS::StackName}-CloudTrailNetworkAclChanges'
+      AlarmName: !Sub '${ResourcePrefix}-CloudTrailNetworkAclChanges'
       AlarmDescription: Alarms when an API call is made to create, update or delete
         a Network ACL.
       AlarmActions:
         - !If [cEnableEmailNotications, !Ref EmailNotificationTopic, !Ref 'AWS::NoValue']
       MetricName: NetworkAclEventCount
-      Namespace: !Sub '${AWS::StackName}-CloudTrailMetrics'
+      Namespace: !Sub '${ResourcePrefix}-CloudTrailMetrics'
       ComparisonOperator: GreaterThanOrEqualToThreshold
       EvaluationPeriods: '1'
       Period: '300'
@@ -2838,20 +2866,20 @@ Resources:
         || ($.eventName = DeleteInternetGateway) || ($.eventName = DetachInternetGateway)
         }'
       MetricTransformations:
-        - MetricNamespace: !Sub '${AWS::StackName}-CloudTrailMetrics'
+        - MetricNamespace: !Sub '${ResourcePrefix}-CloudTrailMetrics'
           MetricName: GatewayEventCount
           MetricValue: '1'
     Condition: cEnableAdvancedLogging
   GatewayChangesAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub '${AWS::StackName}-CloudTrailGatewayChanges'
+      AlarmName: !Sub '${ResourcePrefix}-CloudTrailGatewayChanges'
       AlarmDescription: Alarms when an API call is made to create, update or delete
         a Customer or Internet Gateway.
       AlarmActions:
         - !If [cEnableEmailNotications, !Ref EmailNotificationTopic, !Ref 'AWS::NoValue']
       MetricName: GatewayEventCount
-      Namespace: !Sub '${AWS::StackName}-CloudTrailMetrics'
+      Namespace: !Sub '${ResourcePrefix}-CloudTrailMetrics'
       ComparisonOperator: GreaterThanOrEqualToThreshold
       EvaluationPeriods: '1'
       Period: '300'
@@ -2869,20 +2897,20 @@ Resources:
         || ($.eventName = DetachClassicLinkVpc) || ($.eventName = DisableVpcClassicLink)
         || ($.eventName = EnableVpcClassicLink) }'
       MetricTransformations:
-        - MetricNamespace: !Sub '${AWS::StackName}-CloudTrailMetrics'
+        - MetricNamespace: !Sub '${ResourcePrefix}-CloudTrailMetrics'
           MetricName: VpcEventCount
           MetricValue: '1'
     Condition: cEnableAdvancedLogging
   VpcChangesAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub '${AWS::StackName}-CloudTrailVpcChanges'
+      AlarmName: !Sub '${ResourcePrefix}-CloudTrailVpcChanges'
       AlarmDescription: Alarms when an API call is made to create, update or delete
         a VPC, VPC peering connection or VPC connection to classic.
       AlarmActions:
         - !If [cEnableEmailNotications, !Ref EmailNotificationTopic, !Ref 'AWS::NoValue']
       MetricName: VpcEventCount
-      Namespace: !Sub '${AWS::StackName}-CloudTrailMetrics'
+      Namespace: !Sub '${ResourcePrefix}-CloudTrailMetrics'
       ComparisonOperator: GreaterThanOrEqualToThreshold
       EvaluationPeriods: '1'
       Period: '300'
@@ -2897,20 +2925,20 @@ Resources:
         || ($.eventName = StartInstances) || ($.eventName = StopInstances) || ($.eventName
         = TerminateInstances) }'
       MetricTransformations:
-        - MetricNamespace: !Sub '${AWS::StackName}-CloudTrailMetrics'
+        - MetricNamespace: !Sub '${ResourcePrefix}-CloudTrailMetrics'
           MetricName: EC2InstanceEventCount
           MetricValue: '1'
     Condition: cEnableAdvancedLogging
   EC2InstanceChangesAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub '${AWS::StackName}-CloudTrailEC2InstanceChanges'
+      AlarmName: !Sub '${ResourcePrefix}-CloudTrailEC2InstanceChanges'
       AlarmDescription: Alarms when an API call is made to create, terminate, start,
         stop or reboot an EC2 instance.
       AlarmActions:
         - !If [cEnableEmailNotications, !Ref EmailNotificationTopic, !Ref 'AWS::NoValue']
       MetricName: EC2InstanceEventCount
-      Namespace: !Sub '${AWS::StackName}-CloudTrailMetrics'
+      Namespace: !Sub '${ResourcePrefix}-CloudTrailMetrics'
       ComparisonOperator: GreaterThanOrEqualToThreshold
       EvaluationPeriods: '1'
       Period: '300'
@@ -2924,20 +2952,20 @@ Resources:
       FilterPattern: '{ ($.eventName = RunInstances) && (($.requestParameters.instanceType
         = *.8xlarge) || ($.requestParameters.instanceType = *.4xlarge)) }'
       MetricTransformations:
-        - MetricNamespace: !Sub '${AWS::StackName}-CloudTrailMetrics'
+        - MetricNamespace: !Sub '${ResourcePrefix}-CloudTrailMetrics'
           MetricName: EC2LargeInstanceEventCount
           MetricValue: '1'
     Condition: cEnableAdvancedLogging
   EC2LargeInstanceChangesAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub '${AWS::StackName}-CloudTrailEC2LargeInstanceChanges'
+      AlarmName: !Sub '${ResourcePrefix}-CloudTrailEC2LargeInstanceChanges'
       AlarmDescription: Alarms when an API call is made to create, terminate, start,
         stop or reboot a 4x or 8x-large EC2 instance.
       AlarmActions:
         - !If [cEnableEmailNotications, !Ref EmailNotificationTopic, !Ref 'AWS::NoValue']
       MetricName: EC2LargeInstanceEventCount
-      Namespace: !Sub '${AWS::StackName}-CloudTrailMetrics'
+      Namespace: !Sub '${ResourcePrefix}-CloudTrailMetrics'
       ComparisonOperator: GreaterThanOrEqualToThreshold
       EvaluationPeriods: '1'
       Period: '300'
@@ -2952,20 +2980,20 @@ Resources:
         || ($.eventName = DeleteTrail) || ($.eventName = StartLogging) || ($.eventName
         = StopLogging) }'
       MetricTransformations:
-        - MetricNamespace: !Sub '${AWS::StackName}-CloudTrailMetrics'
+        - MetricNamespace: !Sub '${ResourcePrefix}-CloudTrailMetrics'
           MetricName: CloudTrailEventCount
           MetricValue: '1'
     Condition: cEnableAdvancedLogging
   CloudTrailChangesAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub '${AWS::StackName}-CloudTrailChanges'
+      AlarmName: !Sub '${ResourcePrefix}-CloudTrailChanges'
       AlarmDescription: Alarms when an API call is made to create, update or delete
         a CloudTrail trail, or to start or stop logging to a trail.
       AlarmActions:
         - !If [cEnableEmailNotications, !Ref EmailNotificationTopic, !Ref 'AWS::NoValue']
       MetricName: CloudTrailEventCount
-      Namespace: !Sub '${AWS::StackName}-CloudTrailMetrics'
+      Namespace: !Sub '${ResourcePrefix}-CloudTrailMetrics'
       ComparisonOperator: GreaterThanOrEqualToThreshold
       EvaluationPeriods: '1'
       Period: '300'
@@ -2979,20 +3007,20 @@ Resources:
       FilterPattern: '{ ($.eventName = ConsoleLogin) && ($.errorMessage = "Failed
         authentication") }'
       MetricTransformations:
-        - MetricNamespace: !Sub '${AWS::StackName}-CloudTrailMetrics'
+        - MetricNamespace: !Sub '${ResourcePrefix}-CloudTrailMetrics'
           MetricName: ConsoleSignInFailureCount
           MetricValue: '1'
     Condition: cEnableAdvancedLogging
   ConsoleSignInFailuresAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub '${AWS::StackName}-CloudTrailConsoleSignInFailures'
+      AlarmName: !Sub '${ResourcePrefix}-CloudTrailConsoleSignInFailures'
       AlarmDescription: Alarms when an unauthenticated API call is made to sign into
         the console.
       AlarmActions:
         - !If [cEnableEmailNotications, !Ref EmailNotificationTopic, !Ref 'AWS::NoValue']
       MetricName: ConsoleSignInFailureCount
-      Namespace: !Sub '${AWS::StackName}-CloudTrailMetrics'
+      Namespace: !Sub '${ResourcePrefix}-CloudTrailMetrics'
       ComparisonOperator: GreaterThanOrEqualToThreshold
       EvaluationPeriods: '1'
       Period: '300'
@@ -3006,19 +3034,19 @@ Resources:
       FilterPattern: '{ ($.errorCode = "*UnauthorizedOperation") || ($.errorCode =
         "AccessDenied*") }'
       MetricTransformations:
-        - MetricNamespace: !Sub '${AWS::StackName}-CloudTrailMetrics'
+        - MetricNamespace: !Sub '${ResourcePrefix}-CloudTrailMetrics'
           MetricName: AuthorizationFailureCount
           MetricValue: '1'
     Condition: cEnableAdvancedLogging
   AuthorizationFailuresAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub '${AWS::StackName}-CloudTrailAuthorizationFailures'
+      AlarmName: !Sub '${ResourcePrefix}-CloudTrailAuthorizationFailures'
       AlarmDescription: Alarms when an unauthorized API call is made.
       AlarmActions:
         - !If [cEnableEmailNotications, !Ref EmailNotificationTopic, !Ref 'AWS::NoValue']
       MetricName: AuthorizationFailureCount
-      Namespace: !Sub '${AWS::StackName}-CloudTrailMetrics'
+      Namespace: !Sub '${ResourcePrefix}-CloudTrailMetrics'
       ComparisonOperator: GreaterThanOrEqualToThreshold
       EvaluationPeriods: '1'
       Period: '300'
@@ -3031,19 +3059,19 @@ Resources:
       LogGroupName: !Ref 'TrailLogGroup'
       FilterPattern: '{ ($.eventSource = s3*) && (($.errorCode = "*UnauthorizedOperation") || ($.errorCode = "AccessDenied*")) }'
       MetricTransformations:
-        - MetricNamespace: !Sub '${AWS::StackName}-CloudTrailMetrics'
+        - MetricNamespace: !Sub '${ResourcePrefix}-CloudTrailMetrics'
           MetricName: LogTamperCount
           MetricValue: '1'
     Condition: cEnableAdvancedLogging
   LogTamperAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub '${AWS::StackName}-CloudTrailLogTamperAlarm'
+      AlarmName: !Sub '${ResourcePrefix}-CloudTrailLogTamperAlarm'
       AlarmDescription: Alarms when an unauthorized action on the log bucket occurs.
       AlarmActions:
         - !If [cEnableEmailNotications, !Ref EmailNotificationTopic, !Ref 'AWS::NoValue']
       MetricName: LogTamperCount
-      Namespace: !Sub '${AWS::StackName}-CloudTrailMetrics'
+      Namespace: !Sub '${ResourcePrefix}-CloudTrailMetrics'
       ComparisonOperator: GreaterThanThreshold
       EvaluationPeriods: '1'
       Period: '60'
@@ -3056,19 +3084,19 @@ Resources:
       LogGroupName: !Ref 'TrailLogGroup'
       FilterPattern: '{($.eventName=DeleteGroupPolicy)||($.eventName=DeleteRolePolicy)||($.eventName=DeleteUserPolicy)||($.eventName=PutGroupPolicy)||($.eventName=PutRolePolicy)||($.eventName=PutUserPolicy)||($.eventName=CreatePolicy)||($.eventName=DeletePolicy)||($.eventName=CreatePolicyVersion)||($.eventName=DeletePolicyVersion)||($.eventName=AttachRolePolicy)||($.eventName=DetachRolePolicy)||($.eventName=AttachUserPolicy)||($.eventName=DetachUserPolicy)||($.eventName=AttachGroupPolicy)||($.eventName=DetachGroupPolicy)}'
       MetricTransformations:
-        - MetricNamespace: !Sub '${AWS::StackName}-CloudTrailMetrics'
+        - MetricNamespace: !Sub '${ResourcePrefix}-CloudTrailMetrics'
           MetricName: IAMPolicyEventCount
           MetricValue: '1'
     Condition: cEnableAdvancedLogging
   IAMPolicyChangesAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub '${AWS::StackName}-CloudTrailIAMPolicyChanges'
+      AlarmName: !Sub '${ResourcePrefix}-CloudTrailIAMPolicyChanges'
       AlarmDescription: Alarms when an API call is made to change an IAM policy.
       AlarmActions:
         - !If [cEnableEmailNotications, !Ref EmailNotificationTopic, !Ref 'AWS::NoValue']
       MetricName: IAMPolicyEventCount
-      Namespace: !Sub '${AWS::StackName}-CloudTrailMetrics'
+      Namespace: !Sub '${ResourcePrefix}-CloudTrailMetrics'
       ComparisonOperator: GreaterThanOrEqualToThreshold
       EvaluationPeriods: '1'
       Period: '300'
@@ -3080,7 +3108,7 @@ Resources:
   BasicDashboard:
     Type: AWS::CloudWatch::Dashboard
     Properties:
-      DashboardName: !Sub '${AWS::StackName}-Dashboard'
+      DashboardName: !Sub '${ResourcePrefix}-Dashboard'
       DashboardBody: !Sub
         - |
             {
@@ -3103,26 +3131,26 @@ Resources:
           ECSmetrics: !If
             - cEnableContainers
             - !Sub |
-                {"type":"metric","x":6,"y":0,"width":6,"height":6,"properties":{"view":"timeSeries","stacked":false,"metrics":[["AWS/ECS","MemoryUtilization","ClusterName","${AWS::StackName}-cluster"]],"region":"${AWS::Region}","title":"MemoryUtilization of ECS Cluster (%)"}},
-                {"type":"metric","x":0,"y":0,"width":6,"height":6,"properties":{"view":"timeSeries","stacked":false,"metrics":[["AWS/ECS","CPUUtilization","ClusterName","${AWS::StackName}-cluster"]],"region":"${AWS::Region}","title":"CPUUtilisation of ECS Cluster (%)"}},
-                {"type":"metric","x":12,"y":0,"width":6,"height":3,"properties":{"view":"singleValue","stacked":true,"metrics":[["AWS/ECS","MemoryReservation","ClusterName","${AWS::StackName}-cluster"],[".","CPUReservation",".","."]],"region":"${AWS::Region}","title":"ECS Cluster Metrics"}},
-                {"type":"metric","x":6,"y":12,"width":6,"height":3,"properties":{"title":"ALARM: Scale-down ECS cluster if CPU < 70% for 10 minutes","annotations":{"alarms":["arn:aws:cloudwatch:${AWS::Region}:${AWS::AccountId}:alarm:${AWS::StackName}-CPU_alarm_low"]},"view":"singleValue","stacked":false}},
-                {"type":"metric","x":6,"y":9,"width":6,"height":3,"properties":{"title":"ALARM: Scale-up ECS cluster if CPU > 90% for 10 minutes","annotations":{"alarms":["arn:aws:cloudwatch:${AWS::Region}:${AWS::AccountId}:alarm:${AWS::StackName}-CPU_alarm_high"]},"view":"singleValue","stacked":false}},
-                {"type":"metric","x":0,"y":15,"width":6,"height":3,"properties":{"title":"ALARM: HTTPCode ELB 5XX Count > 10 for 1 minute","annotations":{"alarms":["arn:aws:cloudwatch:${AWS::Region}:${AWS::AccountId}:alarm:${AWS::StackName}-ContainerApp-ALB_500s_alarm_scale_up"]},"view":"singleValue","stacked":false}},
+                {"type":"metric","x":6,"y":0,"width":6,"height":6,"properties":{"view":"timeSeries","stacked":false,"metrics":[["AWS/ECS","MemoryUtilization","ClusterName","${ResourcePrefix}-cluster"]],"region":"${AWS::Region}","title":"MemoryUtilization of ECS Cluster (%)"}},
+                {"type":"metric","x":0,"y":0,"width":6,"height":6,"properties":{"view":"timeSeries","stacked":false,"metrics":[["AWS/ECS","CPUUtilization","ClusterName","${ResourcePrefix}-cluster"]],"region":"${AWS::Region}","title":"CPUUtilisation of ECS Cluster (%)"}},
+                {"type":"metric","x":12,"y":0,"width":6,"height":3,"properties":{"view":"singleValue","stacked":true,"metrics":[["AWS/ECS","MemoryReservation","ClusterName","${ResourcePrefix}-cluster"],[".","CPUReservation",".","."]],"region":"${AWS::Region}","title":"ECS Cluster Metrics"}},
+                {"type":"metric","x":6,"y":12,"width":6,"height":3,"properties":{"title":"ALARM: Scale-down ECS cluster if CPU < 70% for 10 minutes","annotations":{"alarms":["arn:aws:cloudwatch:${AWS::Region}:${AWS::AccountId}:alarm:${ResourcePrefix}-CPU_alarm_low"]},"view":"singleValue","stacked":false}},
+                {"type":"metric","x":6,"y":9,"width":6,"height":3,"properties":{"title":"ALARM: Scale-up ECS cluster if CPU > 90% for 10 minutes","annotations":{"alarms":["arn:aws:cloudwatch:${AWS::Region}:${AWS::AccountId}:alarm:${ResourcePrefix}-CPU_alarm_high"]},"view":"singleValue","stacked":false}},
+                {"type":"metric","x":0,"y":15,"width":6,"height":3,"properties":{"title":"ALARM: HTTPCode ELB 5XX Count > 10 for 1 minute","annotations":{"alarms":["arn:aws:cloudwatch:${AWS::Region}:${AWS::AccountId}:alarm:${ResourcePrefix}-ContainerApp-ALB_500s_alarm_scale_up"]},"view":"singleValue","stacked":false}},
             - ''
           Advancedwidget: !If
             - cEnableAdvancedLogging
             - !Sub |
                 {"type":"metric","x":18,"y":0,"width":6,"height":6,"properties":{"view":"timeSeries","stacked":false,"metrics":[["AWS/ApplicationELB","RequestCount","TargetGroup", "${AppTargetGroup.TargetGroupFullName}" ,"LoadBalancer", "${AppLoadBalancer.LoadBalancerFullName}" ,{"stat":"Sum","period":300}]],"region":"${AWS::Region}","title":"Request Count ApplicationELB","period":300}},
-                {"type":"metric","x":6,"y":15,"width":6,"height":3,"properties":{"title":"ALARM: No. of unauthorised access to logs","annotations":{"alarms":["arn:aws:cloudwatch:${AWS::Region}:${AWS::AccountId}:alarm:${AWS::StackName}-CloudTrailLogTamperAlarm"]},"view":"singleValue"}},
-                {"type":"metric","x":6,"y":18,"width":6,"height":3,"properties":{"title":"ALARM: No. of VPC changes","annotations":{"alarms":["arn:aws:cloudwatch:${AWS::Region}:${AWS::AccountId}:alarm:${AWS::StackName}-CloudTrailVpcChanges"]},"view":"singleValue"}},
+                {"type":"metric","x":6,"y":15,"width":6,"height":3,"properties":{"title":"ALARM: No. of unauthorised access to logs","annotations":{"alarms":["arn:aws:cloudwatch:${AWS::Region}:${AWS::AccountId}:alarm:${ResourcePrefix}-CloudTrailLogTamperAlarm"]},"view":"singleValue"}},
+                {"type":"metric","x":6,"y":18,"width":6,"height":3,"properties":{"title":"ALARM: No. of VPC changes","annotations":{"alarms":["arn:aws:cloudwatch:${AWS::Region}:${AWS::AccountId}:alarm:${ResourcePrefix}-CloudTrailVpcChanges"]},"view":"singleValue"}},
             - ''
           RDSwidget: !Sub |
             {"type":"metric","x":0,"y":6,"width":21,"height":3,"properties":{"view":"singleValue","metrics":[["AWS/RDS","FreeableMemory","EngineName","mysql",{"period":60}],[".","FreeStorageSpace",".",".",{"period":60}],[".","CPUUtilization",".",".",{"period":60}],[".","DatabaseConnections",".",".",{"period":60}],[".","ReadIOPS",".",".",{"period":60}],[".","WriteIOPS",".",".",{"period":60}],[".","ReadLatency",".",".",{"period":60}],[".","WriteLatency",".",".",{"period":60}],[".","NetworkTransmitThroughput",".",".",{"period":60}]],"region":"${AWS::Region}","title":"Database Metrics","period":300}},
           APPwidget: !Sub |
-            {"type":"metric","x":12,"y":9,"width":9,"height":6,"properties":{"view":"singleValue","metrics":[["${AWS::StackName}-ApplicationMetrics","App Restarts",{"period":21600}],[".","Bytes_Out",{"period":21600}],[".","Chrome Users",{"period":21600}],[".","Firefox Users",{"yAxis":"left","period":21600}],[".","HTTP OK",{"period":21600}],[".","DELETEs",{"period":21600}],[".","POSTs",{"period":21600}]],"region":"${AWS::Region}","title":"Deployed Application Metrics","period":300}},
-            {"type":"metric","x":0,"y":9,"width":6,"height":3,"properties":{"title":"ALARM: Average Bytes out >1000 every 10 minutes","annotations":{"alarms":["arn:aws:cloudwatch:${AWS::Region}:${AWS::AccountId}:alarm:${AWS::StackName}-Bytes_Out_Alarm"]},"view":"singleValue","stacked":false}},
-            {"type":"metric","x":0,"y":12,"width":6,"height":3,"properties":{"title":"ALARM: 4xx Error Rate is >5 every hour","annotations":{"alarms":["arn:aws:cloudwatch:${AWS::Region}:${AWS::AccountId}:alarm:${AWS::StackName}-4xx_Error_count_alarm"]},"view":"singleValue","stacked":false}}
+            {"type":"metric","x":12,"y":9,"width":9,"height":6,"properties":{"view":"singleValue","metrics":[["${ResourcePrefix}-ApplicationMetrics","App Restarts",{"period":21600}],[".","Bytes_Out",{"period":21600}],[".","Chrome Users",{"period":21600}],[".","Firefox Users",{"yAxis":"left","period":21600}],[".","HTTP OK",{"period":21600}],[".","DELETEs",{"period":21600}],[".","POSTs",{"period":21600}]],"region":"${AWS::Region}","title":"Deployed Application Metrics","period":300}},
+            {"type":"metric","x":0,"y":9,"width":6,"height":3,"properties":{"title":"ALARM: Average Bytes out >1000 every 10 minutes","annotations":{"alarms":["arn:aws:cloudwatch:${AWS::Region}:${AWS::AccountId}:alarm:${ResourcePrefix}-Bytes_Out_Alarm"]},"view":"singleValue","stacked":false}},
+            {"type":"metric","x":0,"y":12,"width":6,"height":3,"properties":{"title":"ALARM: 4xx Error Rate is >5 every hour","annotations":{"alarms":["arn:aws:cloudwatch:${AWS::Region}:${AWS::AccountId}:alarm:${ResourcePrefix}-4xx_Error_count_alarm"]},"view":"singleValue","stacked":false}}
   #####################################################################################
   # End of Metrics and Filters
   #####################################################################################
@@ -3133,9 +3161,9 @@ Resources:
   LBCertifcate:
     Type: AWS::CertificateManager::Certificate
     Properties:
-      DomainName: !Sub '${AWS::StackName}.al-labs.co.uk'
+      DomainName: !Sub '${ResourcePrefix}.al-labs.co.uk'
       DomainValidationOptions:
-        - DomainName: !Sub '${AWS::StackName}.al-labs.co.uk'
+        - DomainName: !Sub '${ResourcePrefix}.al-labs.co.uk'
           ValidationDomain: 'al-labs.co.uk'
     Condition: cEnableHTTPS
   ALBHTTPSListener:
@@ -3156,7 +3184,7 @@ Resources:
       HostedZoneName: al-labs.co.uk.
       Comment: Zone apex alias targeted to myELB LoadBalancer.
       RecordSets:
-        - Name: !Sub '${AWS::StackName}.al-labs.co.uk.'
+        - Name: !Sub '${ResourcePrefix}.al-labs.co.uk.'
           Type: A
           AliasTarget:
             HostedZoneId: !GetAtt 'AppLoadBalancer.CanonicalHostedZoneID'
@@ -3179,11 +3207,11 @@ Resources:
       IsLogging: true
       IsMultiRegionTrail: true
       S3BucketName: !Ref LogStoreS3Location
-      TrailName: !Sub '${AWS::StackName}-LogTrail'
+      TrailName: !Sub '${ResourcePrefix}-LogTrail'
     Type: AWS::CloudTrail::Trail
   TrailLogGroup:
     Properties:
-      LogGroupName: !Sub '/aws/cloudtrail/${AWS::StackName}'
+      LogGroupName: !Sub '/aws/cloudtrail/${ResourcePrefix}'
       RetentionInDays: 7
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Delete
@@ -3217,13 +3245,13 @@ Resources:
     Type: "Custom::TamperLambdaTrigger"
     Properties:
       ServiceToken: !GetAtt TamperLambda.Arn
-      Trail: !Sub '${AWS::StackName}-LogTrail'
+      Trail: !Sub '${ResourcePrefix}-LogTrail'
   TamperLambda:
     DependsOn: Trail
     Condition: cEnableAdvancedLogging
     Type: "AWS::Lambda::Function"
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-TamperLambda'
+      FunctionName: !Sub '${ResourcePrefix}-TamperLambda'
       Code:
         # Ref: lambda/TamperLambda.py
         ZipFile: |
@@ -3309,7 +3337,7 @@ Resources:
             Statement:
               - Action: "cloudtrail:*"
                 Effect: "Allow"
-                Resource: !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${AWS::StackName}-LogTrail'
+                Resource: !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${ResourcePrefix}-LogTrail'
               - Action: "s3:List*"
                 Effect: "Allow"
                 Resource: "arn:aws:s3:::*"
@@ -3336,7 +3364,7 @@ Resources:
     DeletionPolicy: Delete
     Condition: cEnableAdvancedLogging
     Properties:
-      LogGroupName: !Sub '${AWS::StackName}-vpcflowlog'
+      LogGroupName: !Sub '${ResourcePrefix}-vpcflowlog'
       RetentionInDays: 7
     Type: AWS::Logs::LogGroup
   flowlogsRole:
@@ -3350,7 +3378,7 @@ Resources:
             Principal:
               Service:
                 - vpc-flow-logs.amazonaws.com
-        Version: 2012-10-17
+        Version: '2012-10-17'
       Path: /
       Policies:
         - PolicyDocument:
@@ -3391,7 +3419,7 @@ Resources:
         Version: '2012-10-17'
       AdvancedOptions:
         rest.action.multi.allow_explicit_index: 'true'
-      DomainName: !Sub 'logs-${AWS::StackName}'
+      DomainName: !Sub 'logs-${ResourcePrefix}'
       EBSOptions:
         Fn::If:
           - SizeTiny
@@ -3432,7 +3460,7 @@ Resources:
       Action: lambda:InvokeFunction
       Principal: !Sub 'logs.${AWS::Region}.amazonaws.com'
       SourceAccount: !Ref 'AWS::AccountId'
-      SourceArn: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${AWS::StackName}-applog:*'
+      SourceArn: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${ResourcePrefix}-applog:*'
   syslogLogStreamerInvokePermission:
     Type: AWS::Lambda::Permission
     Condition: cEnableES
@@ -3441,7 +3469,7 @@ Resources:
       Action: lambda:InvokeFunction
       Principal: !Sub 'logs.${AWS::Region}.amazonaws.com'
       SourceAccount: !Ref 'AWS::AccountId'
-      SourceArn: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${AWS::StackName}-syslog:*'
+      SourceArn: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${ResourcePrefix}-syslog:*'
 
   ## Mapping Log groups to the Lambda that ships them to Elasticsearch
   LogGrouptoLambdaMappingAppLogs:
@@ -3490,7 +3518,7 @@ Resources:
     DeletionPolicy: Delete
     Condition: cEnableElasticSearchAdvancedLogging
     Properties:
-      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-log-streamer'
+      LogGroupName: !Sub '/aws/lambda/${ResourcePrefix}-log-streamer'
       RetentionInDays: 1
   LogStreamer:
     Type: AWS::Lambda::Function
@@ -3498,7 +3526,7 @@ Resources:
     Properties:
       # The following Function Name for the Lambda needs to contain two - symbols (eg: -log-streamer). This is to ensure that the AWS provided lambda is able to pick up the correct stack name.
       # Since this lambda is provided by AWS from their bucket, we cannot modify it.
-      FunctionName: !Sub '${AWS::StackName}-log-streamer'
+      FunctionName: !Sub '${ResourcePrefix}-log-streamer'
       Code:
         S3Bucket: !Sub 'solutions-${AWS::Region}'
         S3Key: centralized-logging/v1/centralizedLoggingDownload.zip
@@ -3527,7 +3555,7 @@ Resources:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                 Resource:
-                  !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}*'
+                  !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ResourcePrefix}*'
               - Effect: Allow
                 Action:
                   - es:ESHttpPost
@@ -3545,11 +3573,11 @@ Resources:
     Condition: cEnableESIntegrated
     DeletionPolicy: Retain
     Properties:
-      BucketName: !Sub '${AWS::StackName}-snapshots'
+      BucketName: !Sub '${ResourcePrefix}-snapshots'
       LifecycleConfiguration:
         Rules:
           - ExpirationInDays: 90
-            Id: !Sub '${AWS::StackName}-SnapshotMigrationLifecycleRule'
+            Id: !Sub '${ResourcePrefix}-SnapshotMigrationLifecycleRule'
             Status: Enabled
             Transitions:
               - StorageClass: STANDARD_IA
@@ -3577,7 +3605,7 @@ Resources:
                   - s3:ListBucket
                 Effect: Allow
                 Resource:
-                  - !Sub 'arn:aws:s3:::${AWS::StackName}-snapshots'
+                  - !Sub 'arn:aws:s3:::${ResourcePrefix}-snapshots'
               - Action:
                   - s3:GetObject
                   - s3:PutObject
@@ -3585,7 +3613,7 @@ Resources:
                   - iam:PassRole
                 Effect: Allow
                 Resource:
-                  - !Sub 'arn:aws:s3:::${AWS::StackName}-snapshots/*'
+                  - !Sub 'arn:aws:s3:::${ResourcePrefix}-snapshots/*'
       Path: /
   SnapshotLambdaRole:
     Type: AWS::IAM::Role
@@ -3609,7 +3637,7 @@ Resources:
                 Action:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
-                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}-SnapshotLambda:*'
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ResourcePrefix}-SnapshotLambda:*'
               # Allow lambda to execute _snapshot actions
               - Effect: Allow
                 Action:
@@ -3629,7 +3657,7 @@ Resources:
     Condition: cEnableIntegratedElasticSearchAdvancedLogging
     DeletionPolicy: Delete
     Properties:
-      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-SnapshotLambda'
+      LogGroupName: !Sub '/aws/lambda/${ResourcePrefix}-SnapshotLambda'
       RetentionInDays: 1
   SnapshotLambda:
     Type: AWS::Lambda::Function
@@ -3637,7 +3665,7 @@ Resources:
     DependsOn:
       - ElasticsearchAWSLogs
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-SnapshotLambda'
+      FunctionName: !Sub '${ResourcePrefix}-SnapshotLambda'
       Code:
         # Lambda function to automate the process of creating manual snapshots for Elastic Search.
         # Ref: lambda/ES-SnapshotLambda.js
@@ -3712,7 +3740,7 @@ Resources:
     Type: AWS::Events::Rule
     Condition: cEnableESIntegrated
     Properties:
-      Name: !Sub "${AWS::StackName}-SnapshotLambda"
+      Name: !Sub "${ResourcePrefix}-SnapshotLambda"
       Description: ScheduledRule
       ScheduleExpression: rate(1 day)
       State: ENABLED
@@ -3724,7 +3752,7 @@ Resources:
               "ResourceProperties": {
                 "doSnap": true,
                 "ESDomainEndpoint": "${ElasticsearchAWSLogs.DomainEndpoint}",
-                "ESSnapshotRepo": "${AWS::StackName}_repo"
+                "ESSnapshotRepo": "${ResourcePrefix}_repo"
               }
             }
   CreateSnapshotRepo:
@@ -3738,10 +3766,10 @@ Resources:
       Description: "Creeate Elasticsearch Snapshots"
       ServiceToken: !GetAtt [SnapshotLambda, Arn]
       doSnap: 'False'
-      ESBackupBucket: !Sub '${AWS::StackName}-snapshots'
+      ESBackupBucket: !Sub '${ResourcePrefix}-snapshots'
       ESDomainEndpoint: !Sub "${ElasticsearchAWSLogs.DomainEndpoint}"
       RoleArn: !Sub "${ElasticSearchSnapshotRole.Arn}"
-      ESSnapshotRepo: !Sub "${AWS::StackName}_repo"
+      ESSnapshotRepo: !Sub "${ResourcePrefix}_repo"
   PermissionForEventsToInvokeSnapshotLambda:
     Type: AWS::Lambda::Permission
     Condition: cEnableESIntegrated
@@ -3758,13 +3786,13 @@ Resources:
     DeletionPolicy: Delete
     Condition: cEnableSlackAndLambdaLogging
     Properties:
-      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-slack-notifications'
+      LogGroupName: !Sub '/aws/lambda/${ResourcePrefix}-slack-notifications'
       RetentionInDays: 1
   SlackLambdaRole:
     Type: AWS::IAM::Role
     Condition: cEnableSlackApprovals
     Properties:
-      RoleName: !Sub '${AWS::StackName}-slack-notifications'
+      RoleName: !Sub '${ResourcePrefix}-slack-notifications'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -3784,8 +3812,8 @@ Resources:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                 Resource:
-                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}-slack-notifications'
-                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}-slack-notifications:*'
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ResourcePrefix}-slack-notifications'
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ResourcePrefix}-slack-notifications:*'
               # Allow lambda to use KMS to decrypt Env Vars
               - Effect: Allow
                 Action:
@@ -3801,7 +3829,7 @@ Resources:
     Condition: cEnableSlackApprovals
     Properties:
       ServiceToken: !GetAtt 'EncryptLambda.Arn'
-      KeyId: !Sub 'alias/${AWS::StackName}-masterkey'
+      KeyId: !Sub 'alias/${ResourcePrefix}-masterkey'
       ParameterStoreName: !Sub '/${AWS::StackName}/slack/webhooks'
       Value: !Ref SlackApprovalsWebhook
       Description: Webhook URL for approvals notifications
@@ -3812,7 +3840,7 @@ Resources:
     DependsOn: MyKeyAlias
     Condition: cEnableSlackApprovals
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-slack-notifications'
+      FunctionName: !Sub '${ResourcePrefix}-slack-notifications'
       Description: |
         Lambda Function to send approvals notifications to slack channel
       Handler: index.handler
