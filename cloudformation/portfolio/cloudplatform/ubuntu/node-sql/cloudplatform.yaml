@@ -221,8 +221,11 @@ Parameters:
     Description: Database instance class
     Type: String
   DBEncryption:
-    AllowedValues: ["Yes", "No"]
-    Default: "Yes"
+    AllowedValues:
+      - "Yes (account default key)"
+      - "Yes (application-specific key)"
+      - "No"
+    Default: "Yes (account default key)"
     Description: "Whether to encrypt this stack's database."
     Type: String
   DBName:
@@ -510,6 +513,7 @@ Metadata:
         default: Auto Cleanup Stack
 
 Conditions:
+  cUseStackKMSKey: !Equals [!Ref DBEncryption, "Yes (application-specific key)"]
   cEnableDNS: !Equals [!Ref UseDNS, 'Enable']
   cEnableHTTPS: !Equals [!Ref UseHTTPS, 'Enable']
   cEnableESCentral: !Equals [!Ref ElasticsearchLogs, 'Enable - Central']
@@ -534,7 +538,9 @@ Conditions:
     - !Not [!Equals [!Sub '${AWS::Region}', 'ap-northeast-1']]
     - !Not [!Equals [!Ref InstanceType, 't2.micro']]
   cEnableContainers: !Equals [!Ref UseContainers, 'Enable']
-  cEnableDBEncryption: !Equals [!Ref DBEncryption, "Yes"]
+  cEnableDBEncryption: !Or
+    - !Equals [!Ref DBEncryption, "Yes (application-specific key)"]
+    - !Equals [!Ref DBEncryption, "Yes (account default key)"]
   cEnableEC2: !Not [!Condition cEnableContainers]
   cEnableApprovalEmails: !Not [!Equals [!Ref EmailApprovals, '']]
   cEnableSlackApprovals: !Not [!Equals [!Ref SlackApprovalsWebhook, '']]
@@ -849,10 +855,11 @@ Resources:
       MasterUsername: !Ref DBUsername
       BackupRetentionPeriod: 0 # NOTE: This disables backups and speedups the provisioning tests...!
       DBSubnetGroupName: !Ref DBSubnetGroup
-      StorageEncrypted: !If
-        - cEnableDBEncryption
-        - True
-        - False
+      StorageEncrypted: !If [cEnableDBEncryption, True, False]
+      KmsKeyId: !If
+        - cUseStackKMSKey
+        - !GetAtt 'MyKey.Arn'
+        - !Ref 'AWS::NoValue'
   StoreDBAddress:
     Type: AWS::SSM::Parameter
     DeletionPolicy: Delete
