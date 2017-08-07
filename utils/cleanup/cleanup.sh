@@ -43,6 +43,7 @@ done
 
 # Cleanup Los Groups
 declare -a LOG_GROUPS=(
+	"/aws/cloudtrail/${PREFIX}"
 	"/aws/codebuild/${PREFIX}-build"
 	"/aws/codebuild/${PREFIX}-ecs-image"
 	"/aws/codebuild/${PREFIX}-test"
@@ -51,19 +52,17 @@ declare -a LOG_GROUPS=(
 	"/aws/codebuild/${PREFIX}-kibana"
 	"/aws/lambda/${PREFIX}-es-snapshots"
 	"/aws/lambda/${PREFIX}-set-param-store"
-	"/aws/lambda/${PREFIX}-LogMigrationLambda"
-	"/aws/lambda/${PREFIX}-LogStreamer"
-	"/aws/lambda/${PREFIX}-ParameterStoreLambda"
-	"/aws/lambda/${PREFIX}-SnapshotCreateLambda"
-	"/aws/lambda/${PREFIX}-SnapshotRepoCreateLambda"
-	"/aws/lambda/${PREFIX}-ELBLogsToCWLambda"
+	"/aws/lambda/${PREFIX}-log-streamer"
+	"/aws/lambda/${PREFIX}-SnapshotLambda"
+	"/aws/lambda/${PREFIX}-elblogs-to-cw-migration"
+	"/aws/lambda/${PREFIX}-log-migration"
+	"/aws/lambda/${PREFIX}-slack-notifications"
 	"${PREFIX}-ecs"
-	"${PREFIX}-apperr"
 	"${PREFIX}-applog"
 	"${PREFIX}-cloudinitoutput"
-	"${PREFIX}-cloudtrail"
 	"${PREFIX}-elblog"
 	"${PREFIX}-syslog"
+	"${PREFIX}-vpcflowlog"
 )
 
 LOG_GROUPS+=(
