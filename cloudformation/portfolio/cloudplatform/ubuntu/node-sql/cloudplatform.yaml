@@ -698,7 +698,7 @@ Resources:
   # Create Log Group to setup the Retention time of Lambda Logs
   EncryptLambdaLogsGroup:
     Type: AWS::Logs::LogGroup
-    DeletionPolicy: Delete
+    DeletionPolicy: Retain
     Condition: cEnableAdvancedLogging
     Properties:
       LogGroupName: !Sub '/aws/lambda/${ResourcePrefix}-set-param-store'
@@ -941,7 +941,7 @@ Resources:
   LogGroupELBLog:
     Type: AWS::Logs::LogGroup
     Condition: cEnableAdvancedLogging
-    DeletionPolicy: Delete
+    DeletionPolicy: Retain
     Properties:
       LogGroupName: !Sub '${ResourcePrefix}-elblog'
       RetentionInDays: 7
@@ -988,7 +988,7 @@ Resources:
   ELBLogsToCWLambdaLogGroup:
     Type: AWS::Logs::LogGroup
     Condition: cEnableAdvancedLogging
-    DeletionPolicy: Delete
+    DeletionPolicy: Retain
     Properties:
       LogGroupName: !Sub '/aws/lambda/${ResourcePrefix}-elblogs-to-cw-migration'
       RetentionInDays: 1
@@ -1820,33 +1820,33 @@ Resources:
                   - !If [cEnableES, !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${ResourcePrefix}-kibana:log-stream:*', !Ref 'AWS::NoValue']
   CodeBuildArtifactLogGroup:
     Type: AWS::Logs::LogGroup
-    DeletionPolicy: Delete
+    DeletionPolicy: Retain
     Properties:
       LogGroupName: !Sub '/aws/codebuild/${ResourcePrefix}-build'
       RetentionInDays: 1
   CodePipelineTestArtifactLogGroup:
     Type: AWS::Logs::LogGroup
-    DeletionPolicy: Delete
+    DeletionPolicy: Retain
     Properties:
       LogGroupName: !Sub '/aws/codebuild/${ResourcePrefix}-test'
       RetentionInDays: 1
   IntegrationTestArtifactLogGroup:
     Type: AWS::Logs::LogGroup
-    DeletionPolicy: Delete
+    DeletionPolicy: Retain
     Properties:
       LogGroupName: !Sub '/aws/codebuild/${ResourcePrefix}-integration-test'
       RetentionInDays: 1
   CodeBuildDockerImageLogGroup:
     Type: AWS::Logs::LogGroup
     Condition: cEnableContainers
-    DeletionPolicy: Delete
+    DeletionPolicy: Retain
     Properties:
       LogGroupName: !Sub '/aws/codebuild/${ResourcePrefix}-ecs-image'
       RetentionInDays: 1
   CodeBuildKibanaLogGroup:
     Type: AWS::Logs::LogGroup
     Condition: cEnableES
-    DeletionPolicy: Delete
+    DeletionPolicy: Retain
     Properties:
       LogGroupName: !Sub '/aws/codebuild/${ResourcePrefix}-kibana'
       RetentionInDays: 1
@@ -2421,7 +2421,7 @@ Resources:
                   - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ResourcePrefix}-add-target-with-transform:*'
   AddTargetWithTransformLambdaLogGroup:
     Type: AWS::Logs::LogGroup
-    DeletionPolicy: Delete
+    DeletionPolicy: Retain
     Condition: cEnableEmailNoticationsAndLambdaLogging
     Properties:
       LogGroupName: !Sub '/aws/lambda/${ResourcePrefix}-add-target-with-transform'
@@ -2484,19 +2484,19 @@ Resources:
   #####################################################################################
   LogGroupAppLog:
     Type: AWS::Logs::LogGroup
-    DeletionPolicy: Delete
+    DeletionPolicy: Retain
     Properties:
       LogGroupName: !Sub '${ResourcePrefix}-applog'
       RetentionInDays: 7
   LogGroupCloudInit:
     Type: AWS::Logs::LogGroup
-    DeletionPolicy: Delete
+    DeletionPolicy: Retain
     Properties:
       LogGroupName: !Sub '${ResourcePrefix}-cloudinitoutput'
       RetentionInDays: 7
   LogGroupSysLog:
     Type: AWS::Logs::LogGroup
-    DeletionPolicy: Delete
+    DeletionPolicy: Retain
     Condition: cEnableAdvancedLogging
     Properties:
       LogGroupName: !Sub '${ResourcePrefix}-syslog'
@@ -2606,7 +2606,7 @@ Resources:
       SourceArn: !GetAtt 'LogMigrationScheduledRule.Arn'
   LogMigrationLambdaLogGroup:
     Type: AWS::Logs::LogGroup
-    DeletionPolicy: Delete
+    DeletionPolicy: Retain
     Condition: cEnableAdvancedLogging
     Properties:
       LogGroupName: !Sub '/aws/lambda/${ResourcePrefix}-log-migration'
@@ -3221,7 +3221,7 @@ Resources:
       LogGroupName: !Sub '/aws/cloudtrail/${ResourcePrefix}'
       RetentionInDays: 7
     Type: AWS::Logs::LogGroup
-    DeletionPolicy: Delete
+    DeletionPolicy: Retain
     Condition: cEnableAdvancedLogging
   TrailLogGroupRole:
     Properties:
@@ -3359,6 +3359,7 @@ Resources:
   # VPC FLOW LOGS
   #####################################################################################
   MyFlowLog:
+    Type: AWS::EC2::FlowLog
     Condition: cEnableAdvancedLogging
     Properties:
       DeliverLogsPermissionArn: !GetAtt 'flowlogsRole.Arn'
@@ -3366,15 +3367,15 @@ Resources:
       ResourceId: !Ref VPC
       ResourceType: VPC
       TrafficType: ALL
-    Type: AWS::EC2::FlowLog
   VPCFlowLogsLogGroup:
-    DeletionPolicy: Delete
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
     Condition: cEnableAdvancedLogging
     Properties:
       LogGroupName: !Sub '${ResourcePrefix}-vpcflowlog'
       RetentionInDays: 7
-    Type: AWS::Logs::LogGroup
   flowlogsRole:
+    Type: AWS::IAM::Role
     Condition: cEnableAdvancedLogging
     Properties:
       AssumeRolePolicyDocument:
@@ -3400,7 +3401,6 @@ Resources:
                 Resource: '*'
             Version: '2012-10-17'
           PolicyName: LogRolePolicy
-    Type: AWS::IAM::Role
   #####################################################################################
   # END OF VPC FLOW LOGS
   #####################################################################################
@@ -3522,7 +3522,7 @@ Resources:
       LogGroupName: !Ref LogGroupELBLog
   LogStreamerLogsGroup:
     Type: AWS::Logs::LogGroup
-    DeletionPolicy: Delete
+    DeletionPolicy: Retain
     Condition: cEnableElasticSearchAdvancedLogging
     Properties:
       LogGroupName: !Sub '/aws/lambda/${ResourcePrefix}-log-streamer'
@@ -3662,7 +3662,7 @@ Resources:
   SnapshotLambdaLogGroup:
     Type: AWS::Logs::LogGroup
     Condition: cEnableIntegratedElasticSearchAdvancedLogging
-    DeletionPolicy: Delete
+    DeletionPolicy: Retain
     Properties:
       LogGroupName: !Sub '/aws/lambda/${ResourcePrefix}-SnapshotLambda'
       RetentionInDays: 1
@@ -3790,7 +3790,7 @@ Resources:
   ###########################################
   SlackLambdaLogsGroup:
     Type: AWS::Logs::LogGroup
-    DeletionPolicy: Delete
+    DeletionPolicy: Retain
     Condition: cEnableSlackAndLambdaLogging
     Properties:
       LogGroupName: !Sub '/aws/lambda/${ResourcePrefix}-slack-notifications'
