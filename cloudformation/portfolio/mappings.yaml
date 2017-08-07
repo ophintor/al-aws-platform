@@ -18,12 +18,12 @@ products:
 accounts:
   - identifier: AL
     number: 505076813643
-# Place Holder for tags.
-# tags:
-#   - Key: keyname1
-#     Value: value1
-#   - Key: keyname2
-#     Value: value2
+#Place Holder for tags. The Sync Lambda expects some tags values which is the reason behind the following tags block being present in this mappings file.
+tags:
+  - Key: keyname1
+    Value: value1
+  - Key: keyname2
+    Value: value2
 principals:
   - 'arn:aws:iam::505076813643:group/PDCatalog'
   - 'arn:aws:iam::505076813643:group/PDAdmin'
