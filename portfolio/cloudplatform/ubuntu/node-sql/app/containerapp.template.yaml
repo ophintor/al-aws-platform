@@ -15,7 +15,7 @@ Parameters:
   CloudwatchLogsGroup:
     Type: String
   # Configurations
-  ParamsPrefix:
+  ParentStackName:
     Type: String
   DBAddress:
     Type: String
@@ -54,13 +54,13 @@ Resources:
           Memory: '300'
           Environment:
             - Name: SSM_DB_USERNAME
-              Value: !Sub "${ParamsPrefix}/db/username"
+              Value: !Sub "${ParentStackName}/db/username"
             - Name: SSM_DB_PASSWORD
-              Value: !Sub "${ParamsPrefix}/db/password"
+              Value: !Sub "${ParentStackName}/db/password"
             - Name: SSM_DB_NAME
-              Value: !Sub "${ParamsPrefix}/db/name"
+              Value: !Sub "${ParentStackName}/db/name"
             - Name: SSM_PORT
-              Value: !Sub "${ParamsPrefix}/app/port"
+              Value: !Sub "${ParentStackName}/app/port"
             - Name: DB_CONNECTIONSTRING
               Value: !Ref DBAddress
           PortMappings:

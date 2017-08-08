@@ -2303,7 +2303,7 @@ Resources:
                   # Can't be a YAML object:  Value of property Configuration must be an object with String (or simple type) properties
                   ParameterOverrides: !Sub |
                     {
-                      "ParamsPrefix": "${ResourcePrefix}",
+                      "ParentStackName": "${AWS::StackName}",
                       "Cluster": "${ContainerCluster}",
                       "CloudwatchLogsGroup": "${LogGroupAppLog}",
                       "DockerImageTag": { "Fn::GetParam" : ["DockerImageOutput", "build.json", "tag"] },
