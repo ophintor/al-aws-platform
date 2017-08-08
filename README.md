@@ -48,6 +48,64 @@ http://docs.aws.amazon.com/codecommit/latest/userguide/setting-up-ssh-unixes.htm
    - $0.02 can be the minimum set to all regions. The template has $0.05 has the default price. 
    - All (working) regions, except Ohio, support m3.medium as the smallest acceptable spot instance type. Ohio requires m4.large.
 
+### Service Catalogue
+
+![Scheme](service_catalogue.png)
+
+An administrator or template author can add stacks to the product portfolio by committing them to the source control repository where they are then automatically built and deployed to the service catalogue.
+
+Developers and administrators are then able to select products to build from the service catalogue.  Roles and privileges can be used to constrain users to specific products, and to specific parameters when building products, such as resource limits and access to data.
+
+### Description of files
+
+```
+.
+├── LICENSE.txt
+├── README.md
+├── mastertemplate.yaml
+├── portfolio
+│   ├── central-logging
+│   │   └── central-logging-elasticsearch.yaml
+│   ├── cloudplatform
+│   │   └── ubuntu
+│   │       └── node-sql
+│   │           ├── app
+│   │           │   ├── appspec.yml
+│   │           │   └── containerapp.template.yaml
+│   │           └── cloudplatform.yaml
+│   └── mappings.yaml
+└── servicecatalogue
+    └── lambda
+        ├── lambda-cloudformation.yaml
+        ├── requirements.txt
+        └── sync-catalog.py
+```
+
+### mastertemplate.yaml
+Template for _CodePipeline_ to manage a _Service Catalog_. The pipeline consists of a _CodeCommit_ repository and the steps to manage the portfolio and its products.
+
+### portfolio/
+#### mappings.yaml
+Instructions for the _CodePipeline_ defining the _Service Catalog_ portfolio and a list of products that are a part of it.
+
+#### central-logging/
+##### central-logging-elasticsearch.yaml
+A central-logging Elasticsearch cluster that exports an endpoint so infrastructure and application stacks can stream data to it.
+
+#### cloudplatform/ubuntu/note-sql/
+##### cloudplatform.yaml
+Main _CloudFormation_ template for infrastructure deployment.
+##### containerapp.template.yaml
+Used by the _CodePipeline_ defined in cloudplatform.yaml to deploy an alternative container backend for the application.
+
+### servicecatalogue/lambda
+#### lambda-cloudformation.yaml
+_CloudFormaiton_ template to deploy a stack with the lambda code from this directory and its supporting resources.
+#### requirements.txt
+Python dependencies to be packaged with lambda code.
+#### sync-catalog.py
+Code of the lambda used to manage the _Service Catalog_ portfolio.
+
 ### Launch the stack
 
  * Use AWS console to
