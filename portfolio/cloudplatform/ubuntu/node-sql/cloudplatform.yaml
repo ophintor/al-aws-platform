@@ -1874,11 +1874,17 @@ Resources:
           phases:
             build:
               commands:
+                - echo Build Artifact with only the NodeJS demo files that are needed
+                - mv portfolio/cloudplatform/ubuntu/node-sql/app/* /tmp
+                - rm -rf *
+                - mv /tmp/* .
+                - rm containerapp.template.yaml
+                - rm Dockerfile
                 - echo Install NodeJS dependencies...
                 - npm install --only=prod
           artifacts:
             files:
-              - '**/*' # All files recursively
+              - '**/*' # All files recursively within the app directory
       TimeoutInMinutes: 300  # 5min
   CodeBuildKibana:
     Type: AWS::CodeBuild::Project
@@ -2005,11 +2011,35 @@ Resources:
             Value: !Sub '${ResourcePrefix}-containerimage'
           - Name: AWS_ACCOUNT_ID
             Value: !Ref AWS::AccountId
-          - Name: PORT
-            Value: !Sub '${AppPort}'
       Source:
         Location: !GetAtt 'CodeRepo.CloneUrlHttp'
         Type: CODEPIPELINE
+        BuildSpec: !Sub |
+          version: 0.2
+          phases:
+            pre_build:
+              commands:
+                - echo Logging in to Amazon ECR...
+                - echo -n "$CODEBUILD_BUILD_ID" | sed "s/.*:\([[:xdigit:]]\{7\}\).*/\1/" > /tmp/build_id
+                - printf "%s" "$REPOSITORY_URI" "$(cat /tmp/build_id)" > /tmp/build_tag
+                - printf '{"tag":"%s"}' "$(cat /tmp/build_id)" > /tmp/build.json
+                - $(aws ecr get-login --region $AWS_DEFAULT_REGION)
+            build:
+              commands:
+                - echo Build started on `date`
+                - echo Building the Docker image...
+                - cd portfolio/cloudplatform/ubuntu/node-sql/app/
+                - docker build --build-arg PORT=${AppPort} -t $IMAGE_REPO_NAME:$(cat /tmp/build_tag) .
+                - docker tag $IMAGE_REPO_NAME:$(cat /tmp/build_tag) $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME:$(cat /tmp/build_tag)
+            post_build:
+              commands:
+                - echo Build completed on `date`
+                - echo Pushing the Docker image...
+                - docker run $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME:$(cat /tmp/build_tag) bash -c "npm install --only=dev ; npm test"
+                - docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME:$(cat /tmp/build_tag)
+          artifacts:
+            files: /tmp/build.json
+            discard-paths: 'yes'
       TimeoutInMinutes: 300 # 5min
   CodeDeployTrustRole:
     Type: AWS::IAM::Role
@@ -2268,13 +2298,9 @@ Resources:
                   ActionMode: CREATE_UPDATE
                   StackName: !Sub '${ResourcePrefix}-ContainerApp'
                   Capabilities: CAPABILITY_NAMED_IAM
-                  TemplatePath: SourceOutput::cloudformation/portfolio/cloudplatform/ubuntu/node-sql/containerapp.template.yaml
+                  TemplatePath: SourceOutput::portfolio/cloudplatform/ubuntu/node-sql/app/containerapp.template.yaml
                   RoleArn: !GetAtt 'CloudFormationExecutionRole.Arn'
                   # Can't be a YAML object:  Value of property Configuration must be an object with String (or simple type) properties
-                  # ParameterOverrides
-                  #   ECSTargetGroup: !Ref ECSTargetGroup
-                  #   ECSServiceRole: !Ref ECSServiceRole
-                  #   DBAddress: !GetAtt 'DBInstance.Endpoint.Address'
                   ParameterOverrides: !Sub |
                     {
                       "ParamsPrefix": "${ResourcePrefix}",

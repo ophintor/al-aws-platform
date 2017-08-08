@@ -7,7 +7,7 @@ Parameters:
       - Enable
       - Disable
     Default: Enable
-    Description: 'Enable cleanup lambda to cleanup a product stack''s resources. Do not Enable in Production'
+    Description: Enable cleanup lambda to cleanup a product stack's resources. Do not Enable in Production
     Type: String
 
 Metadata:
@@ -99,13 +99,13 @@ Resources:
           phases:
             install:
               commands:
-                - cd cloudformation/servicecatalogue/lambda/
+                - cd servicecatalogue/lambda/
                 - pip install -r requirements.txt -t "$PWD"
             build:
               commands:
                 - aws cloudformation package --template-file lambda-cloudformation.yaml --s3-bucket "${S3_BUCKET}" --s3-prefix catalog-sync-lambda/codebuild --output-template-file lambdatemplate.yaml
           artifacts:
-            files: cloudformation/servicecatalogue/lambda/lambdatemplate.yaml
+            files: servicecatalogue/lambda/lambdatemplate.yaml
             discard-paths: yes
       TimeoutInMinutes: 10
       Tags:

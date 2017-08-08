@@ -82,8 +82,8 @@ def sync_service_catalog(s3, artifact, jobid):
     with zipfile.ZipFile(tmp_file, 'r') as zip:
         zip.extractall('/tmp/')
         print('Extract Complete')
-    if os.path.isdir('/tmp/cloudformation/portfolio'):
-        with open('/tmp/cloudformation/portfolio/mappings.yaml', 'r') as stream:
+    if os.path.isdir('/tmp/portfolio'):
+        with open('/tmp/portfolio/mappings.yaml', 'r') as stream:
             objfile = yaml.load(stream)
             print('Loaded JSON=' + json.dumps(objfile))
             lst_portfolio = list_portfolios()
@@ -113,7 +113,7 @@ def sync_service_catalog(s3, artifact, jobid):
                             if ids['Name'] == productsInFile['name']:
                                 productid = ids['ProductId']
                         s3.upload_file(
-                            '/tmp/cloudformation/portfolio/' + productsInFile['template'],
+                            '/tmp/portfolio/' + productsInFile['template'],
                             bucket, s3key)
                         # TODO: use list_provisioning_artifacts to get last version?
                         create_provisioning_artifact(productsInFile, productid, bucket + "/" + s3key)
@@ -121,7 +121,7 @@ def sync_service_catalog(s3, artifact, jobid):
                         s3key = 'sc-templates/' + productsInFile['name'] + '/templates/' + str(
                             uuid.uuid4()) + '.yaml'
                         s3.upload_file(
-                            '/tmp/cloudformation/portfolio/' + productsInFile['template'],
+                            '/tmp/portfolio/' + productsInFile['template'],
                             bucket,
                             s3key)
                         create_product(productsInFile, portfolio_id, bucket + "/" + s3key)
@@ -134,11 +134,11 @@ def sync_service_catalog(s3, artifact, jobid):
                     s3key = 'sc-templates/' + productsInFile['name'] + '/templates/' + str(
                         uuid.uuid4()) + '.yaml'
                     s3.upload_file(
-                        '/tmp/cloudformation/portfolio/' + productsInFile['template'], bucket,
+                        '/tmp/portfolio/' + productsInFile['template'], bucket,
                         s3key)
                     create_product(productsInFile, portfolioid, bucket + "/" + s3key)
     else:
-        put_job_failure(jobid, 'Cannot find folder cloudformation/portfolio/ ')
+        put_job_failure(jobid, 'Cannot find folder portfolio/ ')
 
 def update_portfolio(objPortfolio, objMappingFile, bucket):
     """ Pseudo code as
