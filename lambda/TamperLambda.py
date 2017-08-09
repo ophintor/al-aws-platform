@@ -6,6 +6,14 @@ import urlparse
 import json
 import cfnresponse
 
+def getBucketName(bucket):
+  return bucket["Name"]
+def getLogBuckets(bucket_name):
+  if "logs" in bucket_name and "elb" not in bucket_name:
+    return True
+def getBucketArn(bucket_name):
+  return "arn:aws:s3:::" + bucket_name + "/AWS"
+
 def send_response(request, response, context, status=None, reason=None):
   if status is not None:
     response['Status'] = status
@@ -27,11 +35,7 @@ def handler(event, context):
   s3client = boto3.client('s3')
 
   body = s3client.list_buckets()
-  bucketList = []
-  
-  for item in body["Buckets"][:]:
-    bucketList.append(item["Name"])
-  bucketList = ["arn:aws:s3:::"+x+"/AWS" for x in bucketList if "logs" in x and "elb" not in x]
+  bucket_list = map(getBucketArn, filter(getLogBuckets, map(getBucketName, body["Buckets"])))
 
   response = client.put_event_selectors(
     TrailName = event['ResourceProperties']['Trail'],
@@ -42,7 +46,7 @@ def handler(event, context):
         'DataResources': [
           {
             'Type': 'AWS::S3::Object',
-            'Values': bucketList
+            'Values': bucket_list
           },
         ]
       },
@@ -54,4 +58,5 @@ def handler(event, context):
     response['PhysicalResourceId'] = str(uuid.uuid4())
   if event['RequestType'] == 'Delete':
     cfnresponse.send(event, context, cfnresponse.SUCCESS, response, response['PhysicalResourceId'])
+    return response
   return send_response(event, response, context)
