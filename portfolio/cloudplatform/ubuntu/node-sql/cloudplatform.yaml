@@ -1875,16 +1875,13 @@ Resources:
             build:
               commands:
                 - echo Build Artifact with only the NodeJS demo files that are needed
-                - mv portfolio/cloudplatform/ubuntu/node-sql/app/* /tmp
-                - rm -rf *
-                - mv /tmp/* .
-                - rm containerapp.template.yaml
-                - rm Dockerfile
+                - cd portfolio/cloudplatform/ubuntu/node-sql/app/
                 - echo Install NodeJS dependencies...
                 - npm install --only=prod
           artifacts:
             files:
               - '**/*' # All files recursively within the app directory
+            base-directory: portfolio/cloudplatform/ubuntu/node-sql/app/
       TimeoutInMinutes: 300  # 5min
   CodeBuildKibana:
     Type: AWS::CodeBuild::Project
