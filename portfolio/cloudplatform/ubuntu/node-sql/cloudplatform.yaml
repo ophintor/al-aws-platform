@@ -3281,7 +3281,7 @@ Resources:
     Condition: cEnableAdvancedLogging
     Type: "AWS::Lambda::Function"
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-TamperLambda'
+      FunctionName: !Sub '${ResourcePrefix}-TamperLambda'
       Code:
         # Ref: lambda/TamperLambda.py
         ZipFile: |
@@ -3295,17 +3295,23 @@ Resources:
 
           def getBucketName(bucket):
             return bucket["Name"]
+
+
           def getLogBuckets(bucket_name):
             if "logs" in bucket_name and "elb" not in bucket_name:
               return True
+
+
           def getBucketArn(bucket_name):
             return "arn:aws:s3:::" + bucket_name + "/AWS"
+
 
           def send_response(request, response, context, status=None, reason=None):
             if status is not None:
               response['Status'] = status
             if reason is not None:
               response['Reason'] = reason
+
             try:
               if 'ResponseURL' in request and request['ResponseURL']:
                 url = urlparse.urlparse(request['ResponseURL'])
@@ -3315,7 +3321,9 @@ Resources:
                 cfnresponse.send(request, context, cfnresponse.SUCCESS, response, response['PhysicalResourceId'])
             except Exception as e:
               cfnresponse.send(request, context, cfnresponse.FAILED, response, response['PhysicalResourceId'])
+
             return response
+
 
           def handler(event, context):
             client = boto3.client('cloudtrail')

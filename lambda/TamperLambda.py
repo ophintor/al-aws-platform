@@ -6,19 +6,26 @@ import urlparse
 import json
 import cfnresponse
 
+
 def getBucketName(bucket):
   return bucket["Name"]
+
+
 def getLogBuckets(bucket_name):
   if "logs" in bucket_name and "elb" not in bucket_name:
     return True
+
+
 def getBucketArn(bucket_name):
   return "arn:aws:s3:::" + bucket_name + "/AWS"
+
 
 def send_response(request, response, context, status=None, reason=None):
   if status is not None:
     response['Status'] = status
   if reason is not None:
     response['Reason'] = reason
+
   try:
     if 'ResponseURL' in request and request['ResponseURL']:
       url = urlparse.urlparse(request['ResponseURL'])
@@ -28,7 +35,9 @@ def send_response(request, response, context, status=None, reason=None):
       cfnresponse.send(request, context, cfnresponse.SUCCESS, response, response['PhysicalResourceId'])
   except Exception as e:
     cfnresponse.send(request, context, cfnresponse.FAILED, response, response['PhysicalResourceId'])
+
   return response
+
 
 def handler(event, context):
   client = boto3.client('cloudtrail')
@@ -38,7 +47,7 @@ def handler(event, context):
   bucket_list = map(getBucketArn, filter(getLogBuckets, map(getBucketName, body["Buckets"])))
 
   response = client.put_event_selectors(
-    TrailName = event['ResourceProperties']['Trail'],
+    TrailName=event['ResourceProperties']['Trail'],
     EventSelectors=[
       {
         'ReadWriteType': 'All',
