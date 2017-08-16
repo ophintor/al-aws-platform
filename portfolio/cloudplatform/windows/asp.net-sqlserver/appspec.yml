@@ -1,0 +1,18 @@
+version: 0.0
+os: windows
+files:
+  - source: \
+    destination: c:\app
+hooks:
+  AfterInstall:
+    - location: scripts\after_install.ps1
+      timeout: 600
+  ApplicationStop:
+    - location: scripts\app_stop.ps1
+      timeout: 300
+  ApplicationStart:
+    - location: scripts\app_start.ps1
+      timeout: 300
+  ValidateService:
+    - location: scripts\app_check.ps1
+      timeout: 300

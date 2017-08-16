@@ -15,6 +15,10 @@ products:
     template: central-logging/central-logging-elasticsearch.yaml
     owner: info@automationlogic.com
     description: Creates a Standalone Elastic Search cluster to use with central logging.
+  - name: CloudPlatform-Windows-Demo
+    template: cloudplatform/windows/asp.net-sqlserver/cloudplatform.yaml
+    owner: info@automationlogic.com
+    description: Creates a ready-to-use infrastructure for your .NET App
 accounts:
   - identifier: AL
     number: 505076813643
