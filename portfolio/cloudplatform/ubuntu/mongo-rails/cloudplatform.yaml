@@ -1956,14 +1956,11 @@ Resources:
           phases:
             build:
               commands:
-                - echo Build Artifact with only the NodeJS demo files that are needed
-                - cd portfolio/cloudplatform/ubuntu/node-sql/app/
-                - echo Install NodeJS dependencies...
-                - npm install --only=prod
+                - cd portfolio/cloudplatform/ubuntu/mongo-rails/mongo_app/
           artifacts:
             files:
               - '**/*' # All files recursively within the app directory
-            base-directory: portfolio/cloudplatform/ubuntu/node-sql/app/
+            base-directory: portfolio/cloudplatform/ubuntu/mongo-rails/mongo_app/
       TimeoutInMinutes: 300  # 5min
   CodeBuildKibana:
     Type: AWS::CodeBuild::Project
@@ -2103,7 +2100,7 @@ Resources:
               commands:
                 - echo Build started on `date`
                 - echo Building the Docker image...
-                - cd portfolio/cloudplatform/ubuntu/node-sql/app/
+                - cd portfolio/cloudplatform/ubuntu/mongo-rails/mongo_app/
                 - docker build --build-arg PORT=${AppPort} -t $IMAGE_REPO_NAME:$(cat /tmp/build_tag) .
                 - docker tag $IMAGE_REPO_NAME:$(cat /tmp/build_tag) $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME:$(cat /tmp/build_tag)
             post_build:
@@ -2373,7 +2370,7 @@ Resources:
                   ActionMode: CREATE_UPDATE
                   StackName: !Sub '${AWS::StackName}-ContainerApp'
                   Capabilities: CAPABILITY_NAMED_IAM
-                  TemplatePath: SourceOutput::portfolio/cloudplatform/ubuntu/node-sql/app/containerapp.template.yaml
+                  TemplatePath: SourceOutput::portfolio/cloudplatform/ubuntu/mongo-rails/mongo_app/containerapp.template.yaml
                   RoleArn: !GetAtt 'CloudFormationExecutionRole.Arn'
                   # Can't be a YAML object:  Value of property Configuration must be an object with String (or simple type) properties
                   ParameterOverrides: !Sub |

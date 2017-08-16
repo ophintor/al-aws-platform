@@ -1,0 +1,43 @@
+<h1>People</h1>
+<div class="well">
+	<%= link_to "New Person", new_person_path, class: "btn btn-primary" %>
+</div>
+
+<% if flash[:notice] %>
+	<div class="alert alert-success"><%= flash[:notice] %></div>
+<% end %>
+
+<table class="table table-bordered table-striped">
+	<thead>
+		<tr>
+			<th>First Name</th>
+			<th>Last Name</th>
+			<th>Email</th>
+			<th>Notes</th>
+			<th>&nbsp;</th>
+			<th>&nbsp;</th>
+		</tr>
+	</thead>
+	<tbody>
+		<% if @people.size == 0 %>
+			<tr>
+				<td colspan="6">No people found.</td>
+			</tr>
+		<% else %>
+			<% @people.each do |person| %>
+				<tr>
+					<td><%= person.first_name %></td>
+					<td><%= person.last_name %></td>
+					<td><%= person.email %></td>
+					<td><%= person.notes %></td>
+					<td>
+						<%= link_to "Edit", edit_person_path(person), class: "btn btn-default" %>
+					</td>
+					<td>
+						<%= button_to "Delete", person, method: :delete, data: { confirm: "Are you sure you wish to delete #{person.first_name} #{person.last_name}?" }, class: "btn btn-danger" %>
+					</td>
+				</tr>
+			<% end %>
+		<% end %>
+	</tbody>
+</table>

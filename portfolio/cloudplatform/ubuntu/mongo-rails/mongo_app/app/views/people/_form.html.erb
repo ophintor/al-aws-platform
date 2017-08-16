@@ -1,0 +1,19 @@
+<%= form_for @person do |f| %>
+	<div class="form-group">
+		<%= f.label :first_name %>
+		<%= f.text_field :first_name, class: "form-control" %>
+	</div>
+	<div class="form-group">
+		<%= f.label :last_name %>
+		<%= f.text_field :last_name, class: "form-control" %>
+	</div>
+	<div class="form-group">
+		<%= f.label :email %>
+		<%= f.text_field :email, class: "form-control" %>
+	</div>
+	<div class="form-group">
+		<%= f.label :notes %>
+		<%= f.text_area :notes, class: "form-control" %>
+	</div>
+	<%= f.submit class: "btn btn-primary" %>
+<% end %>
