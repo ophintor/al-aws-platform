@@ -44,7 +44,7 @@ def get_ami_ids(known_region, known_ami):
     for region in [r for r in REGIONS if r != known_region]:
         if args.verbose:
             print('Getting AMI information for: {}'.format(region))
-        client = boto3.client('ec2', region_name=known_region)
+        client = boto3.client('ec2', region_name=region)
         obtained_ami = client.describe_images(Filters=filters)['Images']
         if len(obtained_ami) > 0:
             amis[region] = obtained_ami[0]['ImageId']
