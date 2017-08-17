@@ -6,7 +6,7 @@ $ErrorActionPreference = "Stop"
 
 $env:ASPNETCORE_ENVIRONMENT = 'Production'
 
-Set-Location -Path C:\app\sample-webapp\
+Set-Location -Path C:\app
 
 Import-Module AWSPowerShell
 

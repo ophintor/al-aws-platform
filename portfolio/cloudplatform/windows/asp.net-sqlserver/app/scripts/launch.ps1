@@ -1,7 +1,7 @@
 $ErrorActionPreference = "Stop"
 $Text = @'
 filter timestamp {"[$(Get-Date -Format u)] $_"}
-Set-Location 'C:\app\sample-webapp\bin\Debug\netcoreapp1.1\publish\'
+Set-Location 'C:\app\bin\Debug\netcoreapp1.1\publish\'
 & dotnet .\webapp.dll --server.urls http://*:$env:APP_PORT | timestamp | Out-File -Append -NoClobber -Encoding 'utf8' -FilePath C:\stdout
 '@
 

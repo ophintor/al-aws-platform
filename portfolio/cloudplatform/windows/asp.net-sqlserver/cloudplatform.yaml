@@ -1423,15 +1423,13 @@ Resources:
           phases:
             build:
               commands:
-                - cd portfolio/cloudplatform/windows/asp.net-sqlserver/sample-webapp
+                - cd portfolio/cloudplatform/windows/asp.net-sqlserver/app
                 - dotnet restore
                 - dotnet publish
           artifacts:
             files:
-              - sample-webapp/**/*
-              - appspec.yml
-              - scripts/*
-            base-directory: portfolio/cloudplatform/windows/asp.net-sqlserver
+              - '**/*'
+            base-directory: portfolio/cloudplatform/windows/asp.net-sqlserver/app
       TimeoutInMinutes: 300  # 5min
   CodeBuildKibana:
     Type: AWS::CodeBuild::Project
@@ -2060,69 +2058,78 @@ Resources:
       FilterPattern: Now listening on
       MetricTransformations:
         - MetricNamespace: !Sub '${ResourcePrefix}-ApplicationMetrics'
-          MetricName: App Restarts
+          MetricName: app_restart_count
           MetricValue: '1'
-  AppGETsMetricFilter:
+  AppGETMetricFilter:
     Type: AWS::Logs::MetricFilter
     Properties:
       LogGroupName: !Ref 'LogGroupAppLog'
-      FilterPattern: Request starting GET # '[ip, timestamp, method=G, url, status_code,bytes,responsetime,useragent]'
+      FilterPattern: '[placeholder=Request, status=starting, protocol, request=GET, ...]'
       MetricTransformations:
         - MetricNamespace: !Sub '${ResourcePrefix}-ApplicationMetrics'
-          MetricName: GETs
+          MetricName: GET_request_count
+          MetricValue: '1'
+  AppPOSTMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref 'LogGroupAppLog'
+      FilterPattern: '[placeholder=Request, status=starting, protocol, request=POST, ...]'
+      MetricTransformations:
+        - MetricNamespace: !Sub '${ResourcePrefix}-ApplicationMetrics'
+          MetricName: POST_request_count
           MetricValue: '1'
   AppUserCreatedMetricFilter:
     Type: AWS::Logs::MetricFilter
     Properties:
       LogGroupName: !Ref 'LogGroupAppLog'
-      FilterPattern: User created
+      FilterPattern: '[what=User, status=created, ...]'
       MetricTransformations:
         - MetricNamespace: !Sub '${ResourcePrefix}-ApplicationMetrics'
-          MetricName: User_account_count
+          MetricName: user_account_count
           MetricValue: '1'
   AppUserLoginMetricFilter:
     Type: AWS::Logs::MetricFilter
     Properties:
       LogGroupName: !Ref 'LogGroupAppLog'
-      FilterPattern: logged in
+      FilterPattern: '[what=User, action=logged, in_out=in.]'
       MetricTransformations:
         - MetricNamespace: !Sub '${ResourcePrefix}-ApplicationMetrics'
-          MetricName: User_login_count
+          MetricName: user_login_count
           MetricValue: '1'
   AppUserLogoutMetricFilter:
     Type: AWS::Logs::MetricFilter
     Properties:
       LogGroupName: !Ref 'LogGroupAppLog'
-      FilterPattern: logged out
+      FilterPattern: '[what=User, action=logged, in_out=out.]'
       MetricTransformations:
         - MetricNamespace: !Sub '${ResourcePrefix}-ApplicationMetrics'
-          MetricName: Usr_logout_count
+          MetricName: user_login_count
+          MetricValue: '-1'
+  App200sMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref 'LogGroupAppLog'
+      FilterPattern: '[placeholder, status=finished, placeholder2, time_taken, http_code=200, ...]'
+      MetricTransformations:
+        - MetricNamespace: !Sub '${ResourcePrefix}-ApplicationMetrics'
+          MetricName: 200_code_count
           MetricValue: '1'
   App4xxsMetricFilter:
     Type: AWS::Logs::MetricFilter
     Properties:
       LogGroupName: !Ref 'LogGroupAppLog'
-      FilterPattern: Request finished 404
+      FilterPattern: '[placeholder, status=finished, placeholder2, time_taken, http_code=4*, ...]'
       MetricTransformations:
         - MetricNamespace: !Sub '${ResourcePrefix}-ApplicationMetrics'
-          MetricName: 4xx_error_count
-          MetricValue: '1'
-  App200sMetricFilter:
-    Type: AWS::Logs::MetricFilter
-    Properties:
-      LogGroupName: !Ref 'LogGroupAppLog'
-      FilterPattern: Request finished 200
-      MetricTransformations:
-        - MetricNamespace: !Sub '${ResourcePrefix}-ApplicationMetrics'
-          MetricName: HTTP OK
+          MetricName: 4xx_code_count
           MetricValue: '1'
   App4xxRateAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmDescription: Notify the Operator Email if the 4xx Error Rate is higher
         than 5 every 5 minutes
-      AlarmName: !Sub '${ResourcePrefix}-4xx_Error_count_alarm'
-      MetricName: 4xx_error_count
+      AlarmName: !Sub '${ResourcePrefix}-4xx_code_alarm'
+      MetricName: 4xx_code_count
       Namespace: !Sub '${ResourcePrefix}-ApplicationMetrics'
       Statistic: Sum
       Period: '300'
@@ -2453,11 +2460,10 @@ Resources:
                 ${APPwidget}
               ]
             }
-        - EC2metrics: |
-            {"type":"metric","x":0,"y":0,"width":6,"height":6,"properties":{"view":"timeSeries","stacked":false,"metrics":[["AWS/EC2","CPUUtilization","AutoScalingGroupName","${EC2AutoScalingGroup}"]],"region":"${AWS::Region}","title":"CPUUtilisation of EC2 Autoscaling Group (%)"}},
-            {"type":"metric","x":6,"y":0,"width":6,"height":6,"properties":{"view":"timeSeries","stacked":false,"metrics":[["System/Linux","MemoryUtilization","AutoScalingGroupName","${EC2AutoScalingGroup}"]],"region":"${AWS::Region}","title":"MemoryUtilization  of EC2 Autoscaling Group (%)"}},
+        - EC2metrics: !Sub |
+            {"type":"metric","x":0,"y":0,"width":9,"height":6,"properties":{"view":"timeSeries","stacked":false,"metrics":[["AWS/EC2","CPUUtilization","AutoScalingGroupName","${EC2AutoScalingGroup}"]],"region":"${AWS::Region}","title":"CPUUtilisation of EC2 Autoscaling Group (%)"}},
+            {"type":"metric","x":9,"y":0,"width":9,"height":6,"properties":{"view":"timeSeries","stacked":false,"metrics":[["AWS/EC2","DiskReadOps","AutoScalingGroupName","${EC2AutoScalingGroup}"],[ ".", "DiskWriteOps", ".", "." ]],"region":"${AWS::Region}","period":300,"title":"DiskUtilisation on EC2 AutoScalingGroup"}},
             {"type":"metric","x":0,"y":6,"width":18,"height":6,"properties":{"view":"singleValue","stacked":true,"metrics":[["AWS/EC2","NetworkPacketsIn","AutoScalingGroupName","${EC2AutoScalingGroup}"],[".","NetworkPacketsOut",".","."],[".","StatusCheckFailed",".","."],[".","StatusCheckFailed_System",".","."],[".","StatusCheckFailed_Instance",".","."],[".","DiskWriteBytes",".","."],[".","DiskReadOps",".","."],[".","DiskWriteOps",".","."],[".","NetworkOut",".","."],[".","NetworkIn",".","."],[".","DiskReadBytes",".","."]],"region":"${AWS::Region}","title":"EC2 Autoscaling Group Metrics"}},
-            {"type":"metric","x":12,"y":0,"width":6,"height":6,"properties":{"view":"timeSeries","stacked":false,"metrics":[["System/Linux","DiskSpaceUtilization","MountPath","/","AutoScalingGroupName","${EC2AutoScalingGroup}","Filesystem","/dev/xvda1"]],"region":"${AWS::Region}","period":300,"title":"DiskSpaceUtilisation on EC2 AutoScalingGroup (%)"}},
           Advancedwidget: !If
             - cEnableAdvancedLogging
             - !Sub |
@@ -2466,11 +2472,11 @@ Resources:
                 {"type":"metric","x":18,"y":9,"width":6,"height":3,"properties":{"title":"ALARM: No. of VPC changes","annotations":{"alarms":["arn:aws:cloudwatch:${AWS::Region}:${AWS::AccountId}:alarm:${ResourcePrefix}-CloudTrailVpcChanges"]},"view":"singleValue"}},
             - ''
           RDSwidget: !Sub |
-            {"type":"metric","x":0,"y":6,"width":18,"height":3,"properties":{"view":"singleValue","metrics":[["AWS/RDS","FreeableMemory","EngineName","mysql",{"period":60}],[".","FreeStorageSpace",".",".",{"period":60}],[".","CPUUtilization",".",".",{"period":60}],[".","DatabaseConnections",".",".",{"period":60}],[".","ReadIOPS",".",".",{"period":60}],[".","WriteIOPS",".",".",{"period":60}],[".","ReadLatency",".",".",{"period":60}],[".","WriteLatency",".",".",{"period":60}],[".","NetworkTransmitThroughput",".",".",{"period":60}]],"region":"${AWS::Region}","title":"Database Metrics","period":300}},
+            {"type":"metric","x":0,"y":6,"width":18,"height":3,"properties":{"view":"singleValue","metrics":[["AWS/RDS","FreeableMemory","EngineName","${DBEngine}",{"period":60}],[".","FreeStorageSpace",".",".",{"period":60}],[".","CPUUtilization",".",".",{"period":60}],[".","DatabaseConnections",".",".",{"period":60}],[".","ReadIOPS",".",".",{"period":60}],[".","WriteIOPS",".",".",{"period":60}],[".","ReadLatency",".",".",{"period":60}],[".","WriteLatency",".",".",{"period":60}],[".","NetworkTransmitThroughput",".",".",{"period":60}]],"region":"${AWS::Region}","title":"Database Metrics","period":300}},
           APPwidget: !Sub |
-            {"type":"metric","x":6,"y":9,"width":12,"height":6,"properties":{"view":"singleValue","metrics":[["${ResourcePrefix}-ApplicationMetrics","App Restarts",{"period":21600}],[".","Bytes_Out",{"period":21600}],[".","Chrome Users",{"period":21600}],[".","Firefox Users",{"yAxis":"left","period":21600}],[".","HTTP OK",{"period":21600}],[".","DELETEs",{"period":21600}],[".","POSTs",{"period":21600}]],"region":"${AWS::Region}","title":"Deployed Application Metrics","period":300}},
-            {"type":"metric","x":0,"y":9,"width":6,"height":3,"properties":{"title":"ALARM: Average Bytes out >1000 every 10 minutes","annotations":{"alarms":["arn:aws:cloudwatch:${AWS::Region}:${AWS::AccountId}:alarm:${ResourcePrefix}-Bytes_Out_Alarm"]},"view":"singleValue","stacked":false}},
-            {"type":"metric","x":0,"y":12,"width":6,"height":3,"properties":{"title":"ALARM: 4xx Error Rate is >5 every hour","annotations":{"alarms":["arn:aws:cloudwatch:${AWS::Region}:${AWS::AccountId}:alarm:${ResourcePrefix}-4xx_Error_count_alarm"]},"view":"singleValue","stacked":false}}
+            {"type":"metric","x":0,"y":9,"width":4,"height":3,"properties":{"view":"singleValue","metrics":[[ "${ResourcePrefix}-ApplicationMetrics", "200_code_count", { "stat": "Sum" } ]],"region": "${AWS::Region}"}},
+            {"type":"metric","x":0,"y":12,"width":4,"height":3,"properties":{"title":"ALARM: 4xx Error Rate is >5 every 5 minutes","annotations":{"alarms":["arn:aws:cloudwatch:${AWS::Region}:${AWS::AccountId}:alarm:${ResourcePrefix}-4xx_code_alarm"]},"view":"singleValue","stacked":false}},
+            {"type":"metric","x":4,"y":9,"width":14,"height":6,"properties":{"view":"singleValue","metrics":[["${ResourcePrefix}-ApplicationMetrics","app_restart_count",{"period":10}],[".","GET_request_count",{"period":10}],[".","POST_request_count",{"period":10}],[".","user_account_count",{"period":10}],[".","user_login_count",{"period":10}]],"region":"${AWS::Region}","title":"Deployed Application Metrics","period":300}}
   #####################################################################################
   # End of Metrics and Filters
   #####################################################################################
