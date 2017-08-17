@@ -13,15 +13,15 @@ aws ecr delete-repository \
 
 aws cloudformation delete-stack \
 	--region "${REGION}" \
-    --stack-name "${STACK_NAME}-ContainerApp"
+	--stack-name "${PREFIX}-ContainerApp"
 
 aws cloudformation wait stack-delete-complete \
 	--region "${REGION}" \
-	--stack-name "${STACK_NAME}-ContainerApp"
+	--stack-name "${PREFIX}-ContainerApp"
 
 aws cloudformation delete-stack \
 	--region "${REGION}" \
-    --stack-name "${STACK_NAME}"
+	--stack-name "${STACK_NAME}"
 
 aws cloudformation wait stack-delete-complete \
 	--region "${REGION}" \
@@ -41,7 +41,7 @@ for arn in ${CERT_ARN} ; do
 		--certificate-arn "${arn}"
 done
 
-# Cleanup Los Groups
+# Cleanup Log Groups
 declare -a LOG_GROUPS=(
 	"/aws/cloudtrail/${PREFIX}"
 	"/aws/codebuild/${PREFIX}-build"

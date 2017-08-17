@@ -1,36 +1,36 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >
-  Automation Logic Cloud Platform
+  Automation Logic Cloud Platform Java Demo
 Mappings:
   DBEngines:
-    MySQL:
+    aurora:
       port: 3306
   AWSRegion2AMI:
     # ubuntu/images/hvm-ssd/ubuntu-xenial-16.04-amd64-server-20170113
     # North Virginia
     us-east-1:
-      Ubuntu16x04: ami-d15a75c7
+      Amazon: ami-a4c7edb2
     # Ohio
     us-east-2:
-      Ubuntu16x04: ami-8b92b4ee
+      Amazon: ami-8a7859ef
     # North California
     us-west-1:
-      Ubuntu16x04: ami-73f7da13
+      Amazon: ami-327f5352
     # Oregon
     us-west-2:
-      Ubuntu16x04: ami-835b4efa
+      Amazon: ami-6df1e514
     # Ireland
     eu-west-1:
-      Ubuntu16x04: ami-6d48500b
+      Amazon: ami-d7b9a2b1
     # Frankfurt
     eu-central-1:
-      Ubuntu16x04: ami-1c45e273
+      Amazon: ami-82be18ed
     # Sydney
     ap-southeast-2:
-      Ubuntu16x04: ami-e94e5e8a
+      Amazon: ami-527b4031
     # Tokyo
     ap-northeast-1:
-      Ubuntu16x04: ami-785c491f
+      Amazon: ami-3bd3c45c
   AWSRegionECSAMI:
     # amzn-ami-2016.09.f-amazon-ecs-optimized
     # Latest Version 2017.03.d
@@ -200,24 +200,24 @@ Parameters:
     Type: String
   AppPort:
     ConstraintDescription: must be a valid TCP port number (1-65535)
-    Default: 3000
+    Default: 8080
     Description: Which TCP port the app listens on
     MaxValue: 65535
     MinValue: 1
     Type: Number
   DBAllocatedStorage:
-    ConstraintDescription: must be between 5 and 1024Gb.
-    Default: 5
+    ConstraintDescription: must be between 100 and 3072Gb.
+    Default: 100
     Description: The size of the database (Gb)
-    MaxValue: 1024
-    MinValue: 5
+    MaxValue: 3072
+    MinValue: 100
     Type: Number
   DBClass:
     AllowedValues:
-      - db.t2.large
-      - db.m4.large
+      - db.t2.medium
+      - db.r3.large
     ConstraintDescription: must select a valid database instance type.
-    Default: db.t2.large
+    Default: db.t2.medium
     Description: Database instance class
     Type: String
   DBEncryption:
@@ -255,8 +255,8 @@ Parameters:
     NoEcho: true
     Type: String
   DBEngine:
-    AllowedValues: ["MySQL"]
-    Default: MySQL
+    AllowedValues: ["aurora"]
+    Default: aurora
     Description: Which DB Engine to use
     Type: String
   ElasticsearchLogs:
@@ -325,16 +325,14 @@ Parameters:
     MinValue: 1
     MaxValue: 4
   InstanceMaxCount:
-    Description: Maximum Number of Amazon EC2 instances in an autoscaling group. (Must
-      be a number between 4 and 8)
+    Description: Maximum Number of Amazon EC2 instances in an autoscaling group. (Must be a number between 4 and 8)
     Type: Number
     Default: 4
     ConstraintDescription: Must be a number between 4 and 8.
     MinValue: 4
     MaxValue: 8
   InstanceMinCount:
-    Description: Minimum Number of Amazon EC2 instances in an autoscaling group. (Must
-      be a number between 1 and 4).
+    Description: Minimum Number of Amazon EC2 instances in an autoscaling group. (Must be a number between 1 and 4).
     Type: Number
     Default: 1
     ConstraintDescription: Must be a number between 1 and 4.
@@ -349,8 +347,8 @@ Parameters:
     ConstraintDescription: Must be a valid IP CIDR range of the form x.x.x.x/x.
   OperatingSystem:
     AllowedValues:
-      - Ubuntu16x04
-    Default: Ubuntu16x04
+      - Amazon
+    Default: Amazon
     Description: Operating System Type
     Type: String
   UseSpotInstances:
@@ -843,30 +841,64 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub '${ResourcePrefix}-DB'
-  DBInstance:
+  DBCluster:
+    Type: AWS::RDS::DBCluster
+    Properties:
+      DatabaseName: !Ref DBName
+      MasterUsername: !Ref DBUsername
+      MasterUserPassword: !Ref DBPassword
+      Engine: aurora
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      DBClusterParameterGroupName: !Ref DBClusterParameterGroup
+      BackupRetentionPeriod: 1 # Note: This disables backups and speedups the provisioning tests...!
+      VpcSecurityGroupIds:
+        - !GetAtt
+          - DBSecurityGroup
+          - GroupId
+      StorageEncrypted: !If
+        - cEnableDBEncryption
+        - True
+        - False
+  DBInstance1:
     Type: AWS::RDS::DBInstance
     Properties:
-      AllocatedStorage: !Ref DBAllocatedStorage
       DBInstanceClass: !Ref DBClass
-      DBName: !Ref DBName
-      VPCSecurityGroups: [!Ref DBSecurityGroup]
-      Engine: MySQL
-      MasterUserPassword: !Ref DBPassword
-      MasterUsername: !Ref DBUsername
-      BackupRetentionPeriod: 0 # NOTE: This disables backups and speedups the provisioning tests...!
+      AvailabilityZone: !GetAtt [privateSubnet01, AvailabilityZone]
+      Engine: aurora
       DBSubnetGroupName: !Ref DBSubnetGroup
-      StorageEncrypted: !If [cEnableDBEncryption, True, False]
-      KmsKeyId: !If
-        - cUseStackKMSKey
-        - !GetAtt 'MyKey.Arn'
-        - !Ref 'AWS::NoValue'
+      DBClusterIdentifier: !Ref DBCluster
+      DBParameterGroupName: !Ref DBParameterGroup
+  DBInstance2:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceClass: !Ref DBClass
+      AvailabilityZone: !GetAtt [privateSubnet01, AvailabilityZone]
+      Engine: aurora
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      DBClusterIdentifier: !Ref DBCluster
+      DBParameterGroupName: !Ref DBParameterGroup
+  DBClusterParameterGroup:
+    # More can be found here: http://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/Aurora.Appendix.ParameterGroups.html
+    Type: AWS::RDS::DBClusterParameterGroup
+    Properties:
+      Description: "Aurora Cluster Parameter Group"
+      Family: aurora5.6
+      Parameters:
+        time_zone: "UTC"
+  DBParameterGroup:
+    Type: AWS::RDS::DBParameterGroup
+    Properties:
+      Description: "Aurora Parameter Group"
+      Family: aurora5.6
+      Parameters:
+        sql_mode: "IGNORE_SPACE"
   StoreDBAddress:
     Type: AWS::SSM::Parameter
     DeletionPolicy: Delete
     Properties:
       Name: !Sub '/${AWS::StackName}/db/connectionstring'
-      Value: !GetAtt 'DBInstance.Endpoint.Address'
-      Description: DataBase Address
+      Value: !GetAtt 'DBCluster.Endpoint.Address'
+      Description: Database Address
       Type: 'String'
   StoreAppPort:
     Type: AWS::SSM::Parameter
@@ -1260,23 +1292,6 @@ Resources:
       Tags:
         - Key: custom:cloudformation:depends-on
           Value: !If [cEnableAdvancedLogging, !Ref ELBAccessLogsBucketPolicy, !Ref 'AWS::NoValue']
-  ECSTargetGroup:
-    Type: AWS::ElasticLoadBalancingV2::TargetGroup
-    Properties:
-      HealthCheckPath: /
-      Name: !Sub '${ResourcePrefix}-ECSTargetGroup'
-      Port: !Ref AppPort
-      Protocol: HTTP
-      VpcId: !Ref VPC
-  ALBListener:
-    Type: AWS::ElasticLoadBalancingV2::Listener
-    Properties:
-      DefaultActions:
-        - Type: forward
-          TargetGroupArn: !Ref ECSTargetGroup
-      LoadBalancerArn: !Ref ECSALB
-      Port: 80
-      Protocol: HTTP
   MyRepository:
     Type: AWS::ECR::Repository
     Condition: cEnableContainers
@@ -1502,11 +1517,13 @@ Resources:
                 enabled: true
                 ensureRunning: true
           packages:
-            apt:
-              mysql-client: []
+            yum:
+              mysql: []
               unzip: []
-              libwww-perl: []
-              libdatetime-perl: []
+              perl-libwww-perl: []
+              perl-DateTime: []
+              mysql-connector-java: []
+              java-1.8.0-openjdk: []
           files:
             /tmp/cwlogs/logstreams.conf:
               content: !Join
@@ -1514,10 +1531,10 @@ Resources:
                 - - !Sub |
                     [general]
                     state_file= /var/awslogs/agent-state
-                    [nodejs-serverlog]
+                    [java-serverlog]
                     file = /tmp/server.log
                     log_group_name =  ${LogGroupAppLog}
-                    log_stream_name = nodejs.serverlog-{instance_id}
+                    log_stream_name = java.serverlog-{instance_id}
                     datetime_format = %d/%b/%Y:%H:%M:%S
                     [cloud-init-outputlog]
                     file = /var/log/cloud-init-output.log
@@ -1554,7 +1571,7 @@ Resources:
               content: |
                 #!/usr/bin/env bash
                 set -xu
-                (crontab -l 2>/dev/null; echo '*/1 * * * * /home/ubuntu/aws-scripts-mon/mon-put-instance-data.pl --mem-util --disk-space-util --disk-path=/ --auto-scaling=only --from-cron') | crontab -
+                (crontab -l 2>/dev/null; echo '*/1 * * * * /home/ec2-user/aws-scripts-mon/mon-put-instance-data.pl --mem-util --disk-space-util --disk-path=/ --auto-scaling=only --from-cron') | crontab -
               mode: '000500'
               owner: root
               group: root
@@ -1573,43 +1590,41 @@ Resources:
           # We can "trap" errors and use cfn-signal to "stop" the deploy
           function error_exit
           {
-            cfn-signal -e 1 --stack ${AWS::StackName} --resource EC2AutoScalingGroup --region ${AWS::Region}
+            /opt/aws/bin/cfn-signal -e 1 --stack ${AWS::StackName} --resource EC2AutoScalingGroup --region ${AWS::Region}
             exit 1
           }
 
           trap 'error_exit' ERR
 
           # Update repo and get tool dependencies
-          apt-get update
-          apt-get install -y python-pip ruby
+          # yum update
+          yum install -y python-pip ruby
+
+          # Uninstall Open JDK 1.7.0 ( Open JDK 1.8.0 is installed through CFN-INIT )
+          yum -y erase java-1.7.0-openjdk
 
           # Intall CloudFormation tools....
           pip install https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz
 
           # AWS CLI Tools are used to get parameters from parameter store.
-          pip install awscli
+          pip install --upgrade awscli
           aws configure set region ${AWS::Region}
 
           # Install the AWS CodeDeploy Agent.
-          cd /home/ubuntu
+          cd /home/ec2-user
           curl -O https://aws-codedeploy-${AWS::Region}.s3.amazonaws.com/latest/install
           chmod +x ./install
           ./install auto
 
-          # https://nodejs.org/en/download/package-manager/#debian-and-ubuntu-based-linux-distributions
-          curl -sL https://deb.nodesource.com/setup_7.x | sudo -E bash -
-          apt-get install -y nodejs
-
-          # Call CFN-INIT to process the metadata for CloudFormation Init. Since ubuntu does not have the tools installed, we install the CFN Bootstrap in the previous step.\n,
-          cfn-init -v --stack ${AWS::StackName} --resource EC2LaunchConfig --region ${AWS::Region}
+          # Call CFN-INIT to process the metadata for CloudFormation Init. Since ubuntu does not have the tools installed, we install the CFN Bootstrap in the previous step.
+          /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource EC2LaunchConfig --region ${AWS::Region}
 
           #Download and Install the Cloudwatch Logs agent.
           curl -O https://s3.amazonaws.com/aws-cloudwatch/downloads/latest/awslogs-agent-setup.py
           python awslogs-agent-setup.py -n -r ${AWS::Region} -c /tmp/cwlogs/logstreams.conf
 
           #Start the Cloudwatch logs agent service using the SYSTEMD Unit file created by cloudformation Init.
-          systemctl enable awslogs.service
-          systemctl start awslogs.service
+          service awslogs start
 
           #Download and Install the CloudWatch monitoring Script \n,
           curl -O http://aws-cloudwatch.s3.amazonaws.com/downloads/CloudWatchMonitoringScripts-1.2.1.zip
@@ -1620,7 +1635,7 @@ Resources:
           rm ./aws_monitoring.sh
 
           # All is well, so signal AutoScalingGroup.
-          $(which cfn-signal) -e 0 --stack ${AWS::StackName} --resource EC2AutoScalingGroup --region ${AWS::Region}
+          /opt/aws/bin/cfn-signal -e 0 --stack ${AWS::StackName} --resource EC2AutoScalingGroup --region ${AWS::Region}
 
   #####################################################################################
   # End of EC2 Auto Scaling
@@ -1655,6 +1670,13 @@ Resources:
       Port: !Ref AppPort
       Protocol: HTTP
       VpcId: !Ref VPC
+      TargetGroupAttributes:
+        - Key: stickiness.enabled
+          Value: true
+        - Key: stickiness.type
+          Value: lb_cookie
+        - Key: stickiness.lb_cookie.duration_seconds
+          Value: 21600 # 6 hours
   AppLoadBalancerListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
@@ -1812,8 +1834,6 @@ Resources:
                   - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${ResourcePrefix}-build:log-stream:*'
                   - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${ResourcePrefix}-test:log-stream'
                   - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${ResourcePrefix}-test:log-stream:*'
-                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${ResourcePrefix}-integration-test:log-stream'
-                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${ResourcePrefix}-integration-test:log-stream:*'
                   - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${ResourcePrefix}-ecs-image:log-stream'
                   - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${ResourcePrefix}-ecs-image:log-stream:*'
                   - !If [cEnableES, !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${ResourcePrefix}-kibana:log-stream:', !Ref 'AWS::NoValue']
@@ -1823,18 +1843,6 @@ Resources:
     DeletionPolicy: Retain
     Properties:
       LogGroupName: !Sub '/aws/codebuild/${ResourcePrefix}-build'
-      RetentionInDays: 1
-  CodePipelineTestArtifactLogGroup:
-    Type: AWS::Logs::LogGroup
-    DeletionPolicy: Retain
-    Properties:
-      LogGroupName: !Sub '/aws/codebuild/${ResourcePrefix}-test'
-      RetentionInDays: 1
-  IntegrationTestArtifactLogGroup:
-    Type: AWS::Logs::LogGroup
-    DeletionPolicy: Retain
-    Properties:
-      LogGroupName: !Sub '/aws/codebuild/${ResourcePrefix}-integration-test'
       RetentionInDays: 1
   CodeBuildDockerImageLogGroup:
     Type: AWS::Logs::LogGroup
@@ -1865,7 +1873,7 @@ Resources:
         ComputeType: BUILD_GENERAL1_SMALL
         # List of Build Environments
         # http://docs.aws.amazon.com/codebuild/latest/userguide/build-env-ref.html
-        Image: aws/codebuild/nodejs:7.0.0
+        Image: aws/codebuild/eb-java-8-amazonlinux-64:2.4.3
       Source:
         Location: !GetAtt 'CodeRepo.CloneUrlHttp'
         Type: CODEPIPELINE
@@ -1874,14 +1882,13 @@ Resources:
           phases:
             build:
               commands:
-                - echo Build Artifact with only the NodeJS demo files that are needed
-                - cd portfolio/cloudplatform/ubuntu/node-sql/app/
-                - echo Install NodeJS dependencies...
-                - npm install --only=prod
+                - echo Build Artifact with only the JavaApp demo files that are needed
+                - cd portfolio/cloudplatform/amazon/java-auroradb/app/java-application/
+                - mvn install -DskipTests
           artifacts:
             files:
-              - '**/*' # All files recursively within the app directory
-            base-directory: portfolio/cloudplatform/ubuntu/node-sql/app/
+              - '**/*'
+            base-directory: portfolio/cloudplatform/amazon/java-auroradb/app/
       TimeoutInMinutes: 300  # 5min
   CodeBuildKibana:
     Type: AWS::CodeBuild::Project
@@ -1915,75 +1922,6 @@ Resources:
               - cEnableESCentral
               - Fn::ImportValue: !Sub '${ElasticsearchStack}-DomainEndpointES'
               - !Sub '${ElasticsearchAWSLogs.DomainEndpoint}'
-      TimeoutInMinutes: 300
-  CodePipelineTestArtifact:
-    Type: AWS::CodeBuild::Project
-    DependsOn: [CodeRepo, CodeBuildRole, CodePipelineTestArtifactLogGroup]
-    Properties:
-      Name: !Sub '${ResourcePrefix}-test'
-      Description: A description about my project
-      ServiceRole: !GetAtt 'CodeBuildRole.Arn'
-      Artifacts:
-        Type: CODEPIPELINE
-      Environment:
-        # Info: http://docs.aws.amazon.com/codebuild/latest/userguide/sample-docker.html
-        Type: LINUX_CONTAINER
-        ComputeType: BUILD_GENERAL1_SMALL
-        # List of Build Environments
-        # http://docs.aws.amazon.com/codebuild/latest/userguide/build-env-ref.html
-        Image: aws/codebuild/nodejs:7.0.0
-      Source:
-        Location: !GetAtt 'CodeRepo.CloneUrlHttp'
-        Type: CODEPIPELINE
-        BuildSpec: !Sub |
-          version: 0.2
-          phases:
-            build:
-              commands:
-                - echo Install NodeJS dev/test dependencies...
-                - npm install --only=dev
-                - npm test
-      TimeoutInMinutes: 300 # 5min
-  IntegrationTestArtifact:
-    Type: AWS::CodeBuild::Project
-    DependsOn: [CodeRepo, CodeBuildRole, IntegrationTestArtifactLogGroup]
-    Properties:
-      Name: !Sub '${ResourcePrefix}-integration-test'
-      Description: A description about my project
-      ServiceRole: !GetAtt 'CodeBuildRole.Arn'
-      Artifacts:
-        Type: CODEPIPELINE
-      Environment:
-        # Info: http://docs.aws.amazon.com/codebuild/latest/userguide/sample-docker.html
-        Type: LINUX_CONTAINER
-        ComputeType: BUILD_GENERAL1_SMALL
-        # List of Build Environments
-        # http://docs.aws.amazon.com/codebuild/latest/userguide/build-env-ref.html
-        Image: aws/codebuild/nodejs:7.0.0
-        EnvironmentVariables:
-          - Name: API_URL
-            Value: !Sub 'http://${AppLoadBalancer.DNSName}/api'
-          - Name: PORT
-            Value: !Sub '${AppPort}'
-          - Name: DB_CONNECTIONSTRING
-            Value: !Sub '${DBInstance.Endpoint.Address}'
-          - Name: DB_USERNAME
-            Value: !Sub '${DBUsername}'
-          - Name: DB_PASSWORD
-            Value: !Sub '${DBPassword}'
-          - Name: DB_NAME
-            Value: !Sub '${DBName}'
-      Source:
-        Location: !GetAtt 'CodeRepo.CloneUrlHttp'
-        Type: CODEPIPELINE
-        BuildSpec: !Sub |
-          version: 0.2
-          phases:
-            build:
-              commands:
-                - echo integration tests...
-                - npm install --only=dev
-                - npm run integration-tests
       TimeoutInMinutes: 300 # 5min
   CodeBuildDockerImage:
     Type: AWS::CodeBuild::Project
@@ -2025,14 +1963,12 @@ Resources:
               commands:
                 - echo Build started on `date`
                 - echo Building the Docker image...
-                - cd portfolio/cloudplatform/ubuntu/node-sql/app/
                 - docker build --build-arg PORT=${AppPort} -t $IMAGE_REPO_NAME:$(cat /tmp/build_tag) .
                 - docker tag $IMAGE_REPO_NAME:$(cat /tmp/build_tag) $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME:$(cat /tmp/build_tag)
             post_build:
               commands:
                 - echo Build completed on `date`
                 - echo Pushing the Docker image...
-                - docker run $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME:$(cat /tmp/build_tag) bash -c "npm install --only=dev ; npm test"
                 - docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME:$(cat /tmp/build_tag)
           artifacts:
             files: /tmp/build.json
@@ -2194,7 +2130,7 @@ Resources:
     Type: AWS::CodePipeline::Pipeline
     DependsOn:
       - AppTargetGroup
-      - DBInstance
+      - DBCluster
     Properties:
       Name: !Sub '${ResourcePrefix}-pipeline'
       RoleArn: !GetAtt 'CodePipelineServiceRole.Arn'
@@ -2227,17 +2163,6 @@ Resources:
               Configuration:
                 ProjectName: !Ref CodeBuildArtifact
               RunOrder: 1
-            - Name: TestArtifact
-              InputArtifacts:
-                - Name: BuildArtifact
-              ActionTypeId:
-                Category: Build
-                Owner: AWS
-                Version: 1
-                Provider: CodeBuild
-              Configuration:
-                ProjectName: !Ref CodePipelineTestArtifact
-              RunOrder: 2
             - !If
               - cEnableES
               - Name: BuildKibana
@@ -2255,7 +2180,7 @@ Resources:
               - cEnableContainers
               - Name: BuildDockerImage
                 InputArtifacts:
-                  - Name: SourceOutput
+                  - Name: BuildArtifact
                 ActionTypeId:
                   Category: Build
                   Owner: AWS
@@ -2265,6 +2190,7 @@ Resources:
                   - Name: DockerImageOutput
                 Configuration:
                   ProjectName: !Ref CodeBuildDockerImage
+                RunOrder: 2
               - !Ref 'AWS::NoValue'
         - Name: Beta
           Actions:
@@ -2295,7 +2221,7 @@ Resources:
                   ActionMode: CREATE_UPDATE
                   StackName: !Sub '${ResourcePrefix}-ContainerApp'
                   Capabilities: CAPABILITY_NAMED_IAM
-                  TemplatePath: SourceOutput::portfolio/cloudplatform/ubuntu/node-sql/app/containerapp.template.yaml
+                  TemplatePath: SourceOutput::portfolio/cloudplatform/amazon/java-auroradb/app/containerapp.template.yaml
                   RoleArn: !GetAtt 'CloudFormationExecutionRole.Arn'
                   # Can't be a YAML object:  Value of property Configuration must be an object with String (or simple type) properties
                   ParameterOverrides: !Sub |
@@ -2308,27 +2234,13 @@ Resources:
                       "TaskRole": "${TaskRole}",
                       "ECSTargetGroup": "${AppTargetGroup}",
                       "ECSServiceRole": "${ECSServiceRole}",
-                      "DBAddress": "${DBInstance.Endpoint.Address}",
+                      "DBAddress": "${DBCluster.Endpoint.Address}",
                       "AppPort": "${AppPort}"
                     }
                 InputArtifacts:
                   - Name: DockerImageOutput
                   - Name: SourceOutput
               - !Ref 'AWS::NoValue'
-        - Name: IntegrationTests
-          Actions:
-            - Name: HTTP
-              InputArtifacts:
-                - Name: BuildArtifact
-              ActionTypeId:
-                Category: Build
-                Owner: AWS
-                Version: 1
-                Provider: CodeBuild
-              # OutputArtifacts:
-              #  - Name: BuildArtifact
-              Configuration:
-                ProjectName: !Ref IntegrationTestArtifact
         - Name: ApprovalProduction
           Actions:
             - Name: QAApproval
@@ -2483,7 +2395,6 @@ Resources:
                 ],
                 "project-name": [
                   "${CodeBuildArtifact}",
-                  "${CodePipelineTestArtifact}",
           - !If
             - cEnableContainers
             - !Sub '"${CodeBuildDockerImage}",'
@@ -2492,11 +2403,6 @@ Resources:
             - cEnableES
             - !Sub '"${CodeBuildKibana}",'
             - !Ref AWS::NoValue
-          - !Sub |
-              "${IntegrationTestArtifact}"
-                  ]
-                }
-              }
       State: ENABLED
   #####################################################################################
   # End of CI/CD

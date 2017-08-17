@@ -2,6 +2,8 @@
 
 set -x
 
-service todolist stop
+for pid in $(pgrep java); do
+  kill -9 "${pid}"
+done
 
 echo "[WebApp] App stopped"
