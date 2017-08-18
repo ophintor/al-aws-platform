@@ -1883,12 +1883,12 @@ Resources:
             build:
               commands:
                 - echo Build Artifact with only the JavaApp demo files that are needed
-                - cd portfolio/cloudplatform/amazon/java-auroradb/app/java-application/
+                - cd portfolio/cloudplatform/amazonlinux/java-auroradb/app/java-application/
                 - mvn install -DskipTests
           artifacts:
             files:
               - '**/*'
-            base-directory: portfolio/cloudplatform/amazon/java-auroradb/app/
+            base-directory: portfolio/cloudplatform/amazonlinux/java-auroradb/app/
       TimeoutInMinutes: 300  # 5min
   CodeBuildKibana:
     Type: AWS::CodeBuild::Project
@@ -2221,7 +2221,7 @@ Resources:
                   ActionMode: CREATE_UPDATE
                   StackName: !Sub '${ResourcePrefix}-ContainerApp'
                   Capabilities: CAPABILITY_NAMED_IAM
-                  TemplatePath: SourceOutput::portfolio/cloudplatform/amazon/java-auroradb/app/containerapp.template.yaml
+                  TemplatePath: SourceOutput::portfolio/cloudplatform/amazonlinux/java-auroradb/app/containerapp.template.yaml
                   RoleArn: !GetAtt 'CloudFormationExecutionRole.Arn'
                   # Can't be a YAML object:  Value of property Configuration must be an object with String (or simple type) properties
                   ParameterOverrides: !Sub |
