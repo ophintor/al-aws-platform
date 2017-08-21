@@ -20,7 +20,7 @@ products:
     owner: info@automationlogic.com
     description: Creates a ready-to-use infrastructure for your .NET App
   - name: Java
-    template: cloudplatform/amazon/java-auroradb/cloudplatform.yaml
+    template: cloudplatform/amazonlinux/java-auroradb/cloudplatform.yaml
     owner: info@automationlogic.com
     description: Creates a ready to use infrastructure for your Java App
 accounts:
