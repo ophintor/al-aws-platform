@@ -23,6 +23,10 @@ products:
     template: cloudplatform/amazonlinux/java-auroradb/cloudplatform.yaml
     owner: info@automationlogic.com
     description: Creates a ready to use infrastructure for your Java App
+  - name: Rails-MongoDB-CloudPlatform
+    template: cloudplatform/ubuntu/mongo-rails/cloudplatform.yaml
+    owner: info@automationlogic.com
+    description: Creates a ready-to-use infrastructure for your Rails App
 accounts:
   - identifier: AL
     number: 505076813643
