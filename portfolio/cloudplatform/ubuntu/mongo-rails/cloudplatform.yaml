@@ -307,7 +307,7 @@ Parameters:
     Type: String
     Default: Disable
     AllowedValues:
-      - Enable
+      # - Enable  # TODO: FIX ECS for MONGO RAILS DEMO
       - Disable
   InstanceType:
     AllowedValues:
