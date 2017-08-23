@@ -559,9 +559,85 @@ Resources:
     Condition: cEnableCleanup
     Properties:
       ServiceToken: !ImportValue 'CleanupLambdaArn'
-      ResourcePrefix: !Ref 'ResourcePrefix'
-      IsDelLogs: true
-
+      BucketNames:
+        - !Ref 'ArtifactStoreS3Location'
+        - !Ref 'LogStoreS3Location'
+        - !If
+          - cEnableAdvancedLogging
+          - !Ref 'ELBAccessLogsBucket'
+          - !Ref 'AWS::NoValue'
+        - !If
+          - cEnableESIntegrated
+          - !Ref 'ElasticSearchSnapshotS3Location'
+          - !Ref 'AWS::NoValue'
+      LogGroupNames:
+        - !Ref 'CodeBuildArtifactLogGroup'
+        - !Ref 'CodePipelineTestArtifactLogGroup'
+        - !Ref 'IntegrationTestArtifactLogGroup'
+        - !Ref 'LogGroupAppLog'
+        - !Ref 'LogGroupCloudInit'
+        - !If
+          - cEnableAdvancedLogging
+          - !Ref 'EncryptLambdaLogsGroup'
+          - !Ref 'AWS::NoValue'
+        - !If
+          - cEnableAdvancedLogging
+          - !Ref 'LogGroupELBLog'
+          - !Ref 'AWS::NoValue'
+        - !If
+          - cEnableAdvancedLogging
+          - !Ref 'ELBLogsToCWLambdaLogGroup'
+          - !Ref 'AWS::NoValue'
+        - !If
+          - cEnableAdvancedLogging
+          - !Ref 'LogGroupSysLog'
+          - !Ref 'AWS::NoValue'
+        - !If
+          - cEnableAdvancedLogging
+          - !Ref 'LogMigrationLambdaLogGroup'
+          - !Ref 'AWS::NoValue'
+        - !If
+          - cEnableAdvancedLogging
+          - !Ref 'TrailLogGroup'
+          - !Ref 'AWS::NoValue'
+        - !If
+          - cEnableAdvancedLogging
+          - !Ref 'VPCFlowLogsLogGroup'
+          - !Ref 'AWS::NoValue'
+        - !If
+          - cEnableContainers
+          - !Ref 'CodeBuildDockerImageLogGroup'
+          - !Ref 'AWS::NoValue'
+        - !If
+          - cEnableES
+          - !Ref 'CodeBuildKibanaLogGroup'
+          - !Ref 'AWS::NoValue'
+        - !If
+          - cEnableEmailNoticationsAndLambdaLogging
+          - !Ref 'AddTargetWithTransformLambdaLogGroup'
+          - !Ref 'AWS::NoValue'
+        - !If
+          - cEnableElasticSearchAdvancedLogging
+          - !Ref 'LogStreamerLogsGroup'
+          - !Ref 'AWS::NoValue'
+        - !If
+          - cEnableIntegratedElasticSearchAdvancedLogging
+          - !Ref 'SnapshotLambdaLogGroup'
+          - !Ref 'AWS::NoValue'
+        - !If
+          - cEnableSlackAndLambdaLogging
+          - !Ref 'SlackLambdaLogsGroup'
+          - !Ref 'AWS::NoValue'
+      ECRNames:
+        - !If
+          - cEnableContainers
+          - !Ref 'ECSRepository'
+          - !Ref 'AWS::NoValue'
+      StackNames:
+        - !If
+          - cEnableContainers
+          - !Sub '${AWS::StackName}-ContainerApp'
+          - !Ref 'AWS::NoValue'
   ####################################################################################
   # Start of networking
   ####################################################################################
@@ -1277,7 +1353,7 @@ Resources:
       LoadBalancerArn: !Ref ECSALB
       Port: 80
       Protocol: HTTP
-  MyRepository:
+  ECSRepository:
     Type: AWS::ECR::Repository
     Condition: cEnableContainers
     Properties:
@@ -2293,7 +2369,7 @@ Resources:
                 Configuration:
                   ChangeSetName: Deploy
                   ActionMode: CREATE_UPDATE
-                  StackName: !Sub '${ResourcePrefix}-ContainerApp'
+                  StackName: !Sub '${AWS::StackName}-ContainerApp'
                   Capabilities: CAPABILITY_NAMED_IAM
                   TemplatePath: SourceOutput::portfolio/cloudplatform/ubuntu/node-sql/app/containerapp.template.yaml
                   RoleArn: !GetAtt 'CloudFormationExecutionRole.Arn'
@@ -2301,6 +2377,7 @@ Resources:
                   ParameterOverrides: !Sub |
                     {
                       "ParentStackName": "${AWS::StackName}",
+                      "ResourcePrefix": "${ResourcePrefix}",
                       "Cluster": "${ContainerCluster}",
                       "CloudwatchLogsGroup": "${LogGroupAppLog}",
                       "DockerImageTag": { "Fn::GetParam" : ["DockerImageOutput", "build.json", "tag"] },
@@ -3166,7 +3243,7 @@ Resources:
                 {"type":"metric","x":12,"y":0,"width":6,"height":3,"properties":{"view":"singleValue","stacked":true,"metrics":[["AWS/ECS","MemoryReservation","ClusterName","${ResourcePrefix}-cluster"],[".","CPUReservation",".","."]],"region":"${AWS::Region}","title":"ECS Cluster Metrics"}},
                 {"type":"metric","x":6,"y":12,"width":6,"height":3,"properties":{"title":"ALARM: Scale-down ECS cluster if CPU < 70% for 10 minutes","annotations":{"alarms":["arn:aws:cloudwatch:${AWS::Region}:${AWS::AccountId}:alarm:${ResourcePrefix}-CPU_alarm_low"]},"view":"singleValue","stacked":false}},
                 {"type":"metric","x":6,"y":9,"width":6,"height":3,"properties":{"title":"ALARM: Scale-up ECS cluster if CPU > 90% for 10 minutes","annotations":{"alarms":["arn:aws:cloudwatch:${AWS::Region}:${AWS::AccountId}:alarm:${ResourcePrefix}-CPU_alarm_high"]},"view":"singleValue","stacked":false}},
-                {"type":"metric","x":0,"y":15,"width":6,"height":3,"properties":{"title":"ALARM: HTTPCode ELB 5XX Count > 10 for 1 minute","annotations":{"alarms":["arn:aws:cloudwatch:${AWS::Region}:${AWS::AccountId}:alarm:${ResourcePrefix}-ContainerApp-ALB_500s_alarm_scale_up"]},"view":"singleValue","stacked":false}},
+                {"type":"metric","x":0,"y":15,"width":6,"height":3,"properties":{"title":"ALARM: HTTPCode ELB 5XX Count > 10 for 1 minute","annotations":{"alarms":["arn:aws:cloudwatch:${AWS::Region}:${AWS::AccountId}:alarm:${ResourcePrefix}-ALB_500s_alarm_scale_up"]},"view":"singleValue","stacked":false}},
             - ''
           Advancedwidget: !If
             - cEnableAdvancedLogging

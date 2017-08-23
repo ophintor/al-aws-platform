@@ -23,6 +23,7 @@ Metadata:
 
 Conditions:
   cEnableCleanup: !Equals [!Ref Cleanup, 'Enable']
+
 Resources:
   CloudPlatformRepo:
     Type: AWS::CodeCommit::Repository
@@ -314,7 +315,14 @@ Resources:
                   - logs:Delete*
                   - s3:Delete*
                   - s3:List*
+                  - cloudformation:Delete*
+                  - ecr:Delete*
                 Resource: "*"
+              - Effect: Allow
+                Action:
+                  - iam:PassRole
+                Resource:
+                  - !Sub ${CloudFormationCleanupRole.Arn}
               - Effect: Allow
                 Action:
                   - logs:CreateLogStream
@@ -322,6 +330,33 @@ Resources:
                 Resource:
                   - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}-AutoCleanup'
                   - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}-AutoCleanup:*'
+  CloudFormationCleanupRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${AWS::StackName}-CloudFormationCleanupRole'
+      AssumeRolePolicyDocument:
+        Statement:
+          - Sid: '1'
+            Effect: Allow
+            Principal:
+              Service: [cloudformation.amazonaws.com]
+            Action: ['sts:AssumeRole']
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Resource: '*'
+                Effect: Allow
+                Action:
+                  - ecs:Delete*
+                  - ecs:DeregisterTask*
+                  - ecs:DescribeServices
+                  - ecs:UpdateService
+                  - ecr:Delete*
+                  - iam:Delete*
+                  - application-autoscaling:*
+                  - cloudwatch:Delete*
   CleanupLambda:
     Type: AWS::Lambda::Function
     Condition: cEnableCleanup
@@ -329,6 +364,9 @@ Resources:
       FunctionName: !Sub '${AWS::StackName}-AutoCleanup'
       Handler: index.handler
       Role: !GetAtt 'CleanupLambdaRole.Arn'
+      Environment:
+        Variables:
+          CF_CLEANUP_ROLE_ARN: !Sub '${CloudFormationCleanupRole.Arn}'
       Code:
         # Lambda to Auto Cleanup Stack's Resources.
         # Ref: lambda/CleanupLambda.js
@@ -339,73 +377,65 @@ Resources:
           try {
           var s3 = new AWS.S3();
           var cloudwatchlogs = new AWS.CloudWatchLogs();
-          console.log('event ',event);
+          var ecr = new AWS.ECR();
+          var cloudformation = new AWS.CloudFormation();
+          console.log('event ',JSON.stringify(event));
           if(event.RequestType == 'Delete') {
 
-          rp= event.ResourceProperties.ResourcePrefix;
-          isDel= event.ResourceProperties.IsDelLogs;
+          var bNames = event.ResourceProperties.BucketNames ? event.ResourceProperties.BucketNames : [];
+          var lgNames = event.ResourceProperties.LogGroupNames ? event.ResourceProperties.LogGroupNames : [];
+          var ecrNames = event.ResourceProperties.ECRNames ? event.ResourceProperties.ECRNames : [];
+          var stackNames = event.ResourceProperties.StackNames ? event.ResourceProperties.StackNames : [];
 
-          var bNames = [];
-          bNames.push(rp+'-codepipeline-artifacts');
-          bNames.push(rp+'-logs');
-          bNames.push(rp+'-elb-logs');
-          bNames.push(rp+'-snapshots');
-          bNames.push(rp+'-es-snapshots');
-
-          var lgNames = [];
-          lgNames.push('/aws/codebuild/' + rp + '-build');
-          lgNames.push('/aws/codebuild/' + rp + '-ecs-image');
-          lgNames.push('/aws/codebuild/' + rp + '-test');
-          lgNames.push('/aws/codebuild/' + rp + '-integration-test');
-          lgNames.push('/aws/codebuild/' + rp + '-kibana');
-          lgNames.push('/aws/lambda/' + rp + '-log-migration');
-          lgNames.push('/aws/lambda/' + rp + '-log-streamer');
-          lgNames.push('/aws/lambda/' + rp + '-set-param-store');
-          lgNames.push('/aws/lambda/' + rp + '-SnapshotLambda');
-          lgNames.push('/aws/lambda/' + rp + '-elblogs-to-cw-migration');
-          lgNames.push('/aws/lambda/' + rp + '-add-target-with-transform');
-          lgNames.push('/aws/lambda/' + rp + '-slack-notifications');
-          lgNames.push('/aws/lambda/' + rp + '-es-snapshots');
-          lgNames.push('/aws/cloudtrail/' + rp);
-          lgNames.push(rp + '-applog');
-          lgNames.push(rp + '-cloudinitoutput');
-          lgNames.push(rp + '-elblog');
-          lgNames.push(rp + '-syslog');
-          lgNames.push(rp + '-vpcflowlog');
-
-          var bucketpromises = bNames.map(function(bName) {
-          return new Promise(function(resolve, reject) {
+          var promiseCollection = [];
+          if(bNames.length > 0){
+          bNames.forEach(function(bName) {
+          promiseCollection.push(new Promise(function(resolve, reject) {
           deleteBucket(bName,function() {
-          console.log('Delete bucket promise completed for ' + bName);
+          console.log('Del Bucket completed ' + bName);
           resolve();
           });
+          }));
           });
-          });
-
-          Promise.all(bucketpromises)
-          .then(function() {
-          console.log('all buckets deleted');
-          if(isDel=='true'){
-          var logspromises = lgNames.map(function(lgName) {
-          return new Promise(function(resolve, reject) {
+          }
+          if(lgNames.length > 0){
+          lgNames.forEach(function(lgName) {
+          promiseCollection.push(new Promise(function(resolve, reject) {
           deleteLogGroup(lgName,function() {
-          console.log('Delete Logs promise completed for ' + lgName);
+          console.log('Del Logs completed ' + lgName);
           resolve();
           });
+          }));
           });
+          }
+          if(ecrNames.length > 0){
+          ecrNames.forEach(function(ecrName) {
+          promiseCollection.push(new Promise(function(resolve, reject) {
+          deleteECR(ecrName,function() {
+          console.log('Del ECR completed ' + ecrName);
+          resolve();
           });
-          Promise.all(logspromises)
+          }));
+          });
+          }
+          if(stackNames.length > 0){
+          stackNames.forEach(function(stackName) {
+          promiseCollection.push(new Promise(function(resolve, reject) {
+          deleteStack(stackName,function() {
+          console.log('Del Stack completed ' + stackName);
+          resolve();
+          });
+          }));
+          });
+          }
+          console.log(JSON.stringify(promiseCollection));
+          Promise.all(promiseCollection)
           .then(function() {
-          console.log('all logs deleted');
+          console.log("All Operations Completed.");
           response.send(event, context, response.SUCCESS);
           })
           .catch(console.error);
-          }
-          else{
-          response.send(event, context, response.SUCCESS);
-          }
-          })
-          .catch(console.error);
+
           }
           else{
           response.send(event, context, response.SUCCESS);
@@ -419,7 +449,7 @@ Resources:
           emptyBucket(bName, function(bool){
           if(bool==true){
           s3.deleteBucket(params, function(err, data) {
-          if (err) console.log('Failed to Delete Bucket: ',bName,'Error: ', err, err.stack);
+          if (err) console.log('Delete Bucket Failed: ',bName,'Error: ', err, err.stack);
           else console.log('Bucket Deleted: ', bName);
           callback();
           });
@@ -467,8 +497,32 @@ Resources:
           logGroupName: lgName
           };
           cloudwatchlogs.deleteLogGroup(params, function(err, data) {
-          if (err) console.log('Failed to Delete Log Group: ',lgName,'Error: ', err, err.stack);
-          else console.log('Log Group Deleted: ', lgName);
+          if (err) console.log('Delete Logs Failed: ',lgName,'Error: ', err, err.stack);
+          else console.log('Logs Deleted: ', lgName);
+          callback();
+          });
+          }
+
+          function deleteECR(ecrName, callback){
+          var params = {
+          force: true,
+          repositoryName: ecrName
+          };
+          ecr.deleteRepository(params, function(err, data) {
+          if (err) console.log('Delete ECR Failed: ',ecrName,'Error: ', err, err.stack);
+          else console.log('ECR Deleted: ', ecrName);
+          callback();
+          });
+          }
+
+          function deleteStack(stackName, callback){
+          var params = {
+          StackName: stackName,
+          RoleARN: process.env.CF_CLEANUP_ROLE_ARN
+          };
+          cloudformation.deleteStack(params, function(err, data) {
+          if (err) console.log('Delete Stack Failed: ',stackName,'Error: ', err, err.stack);
+          else console.log('Stack Deleted: ', stackName);
           callback();
           });
           }

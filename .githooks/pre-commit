@@ -32,8 +32,8 @@ if ! which shellcheck 2>&1 >/dev/null ; then
 	exit 1
 fi
 
-#�NOTE: tr is just usefull to debug the json!
-#�Rules doc: http://yamllint.readthedocs.io/en/latest/rules.html
+# NOTE: tr is just usefull to debug the json!
+# Rules doc: http://yamllint.readthedocs.io/en/latest/rules.html
 YAMLLINT_CONFIG=$(cat <<-END | tr '\n' ' '
 {
 	extends: default,

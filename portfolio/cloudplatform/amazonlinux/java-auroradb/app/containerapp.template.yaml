@@ -17,6 +17,8 @@ Parameters:
   # Configurations
   ParentStackName:
     Type: String
+  ResourcePrefix:
+    Type: String
   DBAddress:
     Type: String
   DockerImage:
@@ -46,7 +48,7 @@ Resources:
   MyAppDefinition:
     Type: AWS::ECS::TaskDefinition
     Properties:
-      Family: !Sub "${AWS::StackName}-myapp"
+      Family: !Sub "${ResourcePrefix}-myapp"
       TaskRoleArn: !Ref TaskRole
       ContainerDefinitions:
         - Name: myapp
@@ -81,7 +83,7 @@ Resources:
   AutoscalingRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub ${AWS::StackName}-ECS-Service-AutoScaling
+      RoleName: !Sub ${ResourcePrefix}-ECS-Service-AutoScaling
       AssumeRolePolicyDocument:
         Statement:
           - Effect: Allow
@@ -127,7 +129,7 @@ Resources:
   ALB500sAlarmScaleUp:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub ${AWS::StackName}-ALB_500s_alarm_scale_up
+      AlarmName: !Sub ${ResourcePrefix}-ALB_500s_alarm_scale_up
       EvaluationPeriods: 1
       Statistic: Average
       Threshold: 10

@@ -515,9 +515,69 @@ Resources:
     Condition: cEnableCleanup
     Properties:
       ServiceToken: !ImportValue 'CleanupLambdaArn'
-      ResourcePrefix: !Ref 'ResourcePrefix'
-      IsDelLogs: true
-
+      BucketNames:
+        - !Ref 'ArtifactStoreS3Location'
+        - !Ref 'LogStoreS3Location'
+        - !If
+          - cEnableAdvancedLogging
+          - !Ref 'ELBAccessLogsBucket'
+          - !Ref 'AWS::NoValue'
+        - !If
+          - cEnableESIntegrated
+          - !Ref 'ElasticSearchSnapshotS3Location'
+          - !Ref 'AWS::NoValue'
+      LogGroupNames:
+        - !Ref 'CodeBuildArtifactLogGroup'
+        - !Ref 'LogGroupAppLog'
+        - !Ref 'LogGroupCloudInit'
+        - !If
+          - cEnableAdvancedLogging
+          - !Ref 'EncryptLambdaLogsGroup'
+          - !Ref 'AWS::NoValue'
+        - !If
+          - cEnableAdvancedLogging
+          - !Ref 'LogGroupELBLog'
+          - !Ref 'AWS::NoValue'
+        - !If
+          - cEnableAdvancedLogging
+          - !Ref 'ELBLogsToCWLambdaLogGroup'
+          - !Ref 'AWS::NoValue'
+        - !If
+          - cEnableAdvancedLogging
+          - !Ref 'LogGroupSysLog'
+          - !Ref 'AWS::NoValue'
+        - !If
+          - cEnableAdvancedLogging
+          - !Ref 'LogMigrationLambdaLogGroup'
+          - !Ref 'AWS::NoValue'
+        - !If
+          - cEnableAdvancedLogging
+          - !Ref 'TrailLogGroup'
+          - !Ref 'AWS::NoValue'
+        - !If
+          - cEnableAdvancedLogging
+          - !Ref 'VPCFlowLogsLogGroup'
+          - !Ref 'AWS::NoValue'
+        - !If
+          - cEnableES
+          - !Ref 'CodeBuildKibanaLogGroup'
+          - !Ref 'AWS::NoValue'
+        - !If
+          - cEnableEmailNoticationsAndLambdaLogging
+          - !Ref 'AddTargetWithTransformLambdaLogGroup'
+          - !Ref 'AWS::NoValue'
+        - !If
+          - cEnableElasticSearchAdvancedLogging
+          - !Ref 'LogStreamerLogsGroup'
+          - !Ref 'AWS::NoValue'
+        - !If
+          - cEnableIntegratedElasticSearchAdvancedLogging
+          - !Ref 'SnapshotLambdaLogGroup'
+          - !Ref 'AWS::NoValue'
+        - !If
+          - cEnableSlackAndLambdaLogging
+          - !Ref 'SlackLambdaLogsGroup'
+          - !Ref 'AWS::NoValue'
   ####################################################################################
   # Start of networking
   ####################################################################################
