@@ -15,10 +15,10 @@ Mappings:
     us-east-2:
       Ubuntu16x04: ami-8b92b4ee
       MongoDB: ami-490d2a2c
-    # North California
-    us-west-1:
-      Ubuntu16x04: ami-73f7da13
-      MongoDB: ami-89be99e9
+    # # North California
+    # us-west-1:
+    #   Ubuntu16x04: ami-73f7da13
+    #   MongoDB: ami-89be99e9
     # Oregon
     us-west-2:
       Ubuntu16x04: ami-835b4efa

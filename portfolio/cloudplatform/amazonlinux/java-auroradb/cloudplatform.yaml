@@ -13,9 +13,9 @@ Mappings:
     # Ohio
     us-east-2:
       Amazon: ami-8a7859ef
-    # North California
-    us-west-1:
-      Amazon: ami-327f5352
+    # # North California
+    # us-west-1:
+    #   Amazon: ami-327f5352
     # Oregon
     us-west-2:
       Amazon: ami-6df1e514
@@ -261,7 +261,7 @@ Parameters:
     Default: Disable
     Type: String
   ElasticsearchStack:
-    Description: Central Logging ES Stack Name. (Required when using Central ES)
+    Description: Central Logging ES Stack's Resource Prefix Name. (Required when using Central ES)
     MaxLength: 64
     MinLength: 0
     Type: String
@@ -469,6 +469,8 @@ Metadata:
         default: Database User Name
       DBPassword:
         default: Database Password
+      DBEncryption:
+        default: Database Encryption
       DBClass:
         default: Database Instance Class
       KeyPairName:
@@ -482,7 +484,7 @@ Metadata:
       ElasticsearchLogs:
         default: Deploy Elasticsearch
       ElasticsearchStack:
-        default: Central Logging Elasticsearch Stack Name
+        default: Central Logging Elasticsearch Stack's Resource Prefix Name
       ClusterSize:
         default: Amazon ES cluster size
       IPAccess:

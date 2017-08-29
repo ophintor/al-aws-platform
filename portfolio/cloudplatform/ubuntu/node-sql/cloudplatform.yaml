@@ -13,9 +13,9 @@ Mappings:
     # Ohio
     us-east-2:
       Ubuntu16x04: ami-8b92b4ee
-    # North California
-    us-west-1:
-      Ubuntu16x04: ami-73f7da13
+    # # North California
+    # us-west-1:
+    #   Ubuntu16x04: ami-73f7da13
     # Oregon
     us-west-2:
       Ubuntu16x04: ami-835b4efa
@@ -268,7 +268,7 @@ Parameters:
     Default: Disable
     Type: String
   ElasticsearchStack:
-    Description: Central Logging ES Stack Name. (Required when using Central ES)
+    Description: Central Logging ES Stack's Resource Prefix Name. (Required when using Central ES)
     MaxLength: 64
     MinLength: 0
     Type: String
@@ -479,6 +479,8 @@ Metadata:
         default: Database User Name
       DBPassword:
         default: Database Password
+      DBEncryption:
+        default: Database Encryption
       DBClass:
         default: Database Instance Class
       DBAllocatedStorage:
@@ -494,7 +496,7 @@ Metadata:
       ElasticsearchLogs:
         default: Deploy Elasticsearch
       ElasticsearchStack:
-        default: Central Logging Elasticsearch Stack Name
+        default: Central Logging Elasticsearch Stack's Resource Prefix Name
       ClusterSize:
         default: Amazon ES cluster size
       IPAccess:

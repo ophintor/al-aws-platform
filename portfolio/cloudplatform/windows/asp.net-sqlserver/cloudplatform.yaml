@@ -17,9 +17,9 @@ Mappings:
     # Ohio
     us-east-2:
       WindowsServer2016: ami-06b19063
-    # North California
-    us-west-1:
-      WindowsServer2016: ami-1f18367f
+    # # North California
+    # us-west-1:
+    #   WindowsServer2016: ami-1f18367f
     # Oregon
     us-west-2:
       WindowsServer2016: ami-c4ffe3bd
@@ -235,7 +235,7 @@ Parameters:
     Default: Disable
     Type: String
   ElasticsearchStack:
-    Description: Central Logging ES Stack Name. (Required when using Central ES)
+    Description: Central Logging ES Stack's Resource Prefix Name. (Required when using Central ES)
     MaxLength: 64
     MinLength: 0
     Type: String
@@ -456,7 +456,7 @@ Metadata:
       ElasticsearchLogs:
         default: Deploy Elasticsearch
       ElasticsearchStack:
-        default: Central Logging Elasticsearch Stack Name
+        default: Central Logging Elasticsearch Stack's Resource Prefix Name
       ClusterSize:
         default: Amazon ES cluster size
       IPAccess:
