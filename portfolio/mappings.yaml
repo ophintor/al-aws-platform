@@ -15,18 +15,22 @@ products:
     template: central-logging/central-logging-elasticsearch.yaml
     owner: info@automationlogic.com
     description: Creates a Standalone Elastic Search cluster to use with central logging.
-  - name: CloudPlatform-Windows-Demo
+  - name: Windows-CloudPlatform
     template: cloudplatform/windows/asp.net-sqlserver/cloudplatform.yaml
     owner: info@automationlogic.com
     description: Creates a ready-to-use infrastructure for your .NET App
-  - name: Java
+  - name: Java-CloudPlatform
     template: cloudplatform/amazonlinux/java-auroradb/cloudplatform.yaml
     owner: info@automationlogic.com
     description: Creates a ready to use infrastructure for your Java App
-  - name: Rails-MongoDB-CloudPlatform
+  - name: Rails-CloudPlatform
     template: cloudplatform/ubuntu/mongo-rails/cloudplatform.yaml
     owner: info@automationlogic.com
     description: Creates a ready-to-use infrastructure for your Rails App
+  - name: Django-CloudPlatform
+    template: cloudplatform/ubuntu/django-neo4j/cloudplatform.yaml
+    owner: info@automationlogic.com
+    description: Creates a ready-to-use infrastructure for your Django App with a Neo4j backend
 accounts:
   - identifier: AL
     number: 505076813643

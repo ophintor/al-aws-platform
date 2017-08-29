@@ -63,6 +63,10 @@ declare -a LOG_GROUPS=(
 	"${PREFIX}-elblog"
 	"${PREFIX}-syslog"
 	"${PREFIX}-vpcflowlog"
+	"${PREFIX}-db-debug"
+	"${PREFIX}-db-httpapi"
+	"${PREFIX}-db-security"
+	"${PREFIX}-db-cloudinitoutput"
 )
 
 LOG_GROUPS+=(

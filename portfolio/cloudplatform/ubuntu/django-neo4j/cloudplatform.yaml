@@ -1,0 +1,4241 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Automation Logic Cloud Platform
+Mappings:
+  DBEngines:
+    neo4j:
+      port1: 7474
+      port2: 7687
+  AWSRegion2AMI:
+    # ubuntu/images/hvm-ssd/ubuntu-xenial-16.04-amd64-server-20170113
+    # North Virginia
+    us-east-1:
+      Ubuntu16x04: ami-d15a75c7
+    # Ohio
+    us-east-2:
+      Ubuntu16x04: ami-8b92b4ee
+    # North California
+    us-west-1:
+      Ubuntu16x04: ami-73f7da13
+    # Oregon
+    us-west-2:
+      Ubuntu16x04: ami-835b4efa
+    # Ireland
+    eu-west-1:
+      Ubuntu16x04: ami-6d48500b
+    # Frankfurt
+    eu-central-1:
+      Ubuntu16x04: ami-1c45e273
+    # Sydney
+    ap-southeast-2:
+      Ubuntu16x04: ami-e94e5e8a
+    # Tokyo
+    ap-northeast-1:
+      Ubuntu16x04: ami-785c491f
+  AWSRegionECSAMI:
+    # amzn-ami-2016.09.f-amazon-ecs-optimized
+    # Latest Version 2017.03.d
+    # North Virginia
+    us-east-1:
+      ecs: ami-04351e12
+    # Ohio
+    us-east-2:
+      ecs: ami-207b5a45
+    # North California
+    us-west-1:
+      ecs: ami-7d664a1d
+    # Oregon
+    us-west-2:
+      ecs: ami-57d9cd2e
+    # Ireland
+    eu-west-1:
+      ecs: ami-809f84e6
+    # Frankfurt
+    eu-central-1:
+      ecs: ami-a3a006cc
+    # Sydney
+    ap-southeast-2:
+      ecs: ami-42e9f921
+    # Tokyo
+    ap-northeast-1:
+      ecs: ami-e4657283
+
+  # Elasticsearch
+  MasterSizing:
+    elasticsearch:
+      Large: m3.medium.elasticsearch
+      Medium: m3.medium.elasticsearch
+      Small: t2.small.elasticsearch
+      Tiny: t2.small.elasticsearch
+  instanceCount:
+    elasticsearch:
+      Large: '6'
+      Medium: '4'
+      Small: '2'
+      Tiny: '2'
+  instanceSizing:
+    elasticsearch:
+      Large: r3.8xlarge.elasticsearch
+      Medium: r3.2xlarge.elasticsearch
+      Small: m3.large.elasticsearch
+      Tiny: t2.medium.elasticsearch
+  ## Applied at the point CloudWatch log is sent to the LogStreamer Log Group
+  FilterPatternLookup:
+    CloudTrail:
+      Pattern: ''
+    Common:
+      Pattern:
+        '[host, ident, authuser, date, request, status, bytes, referrer, agent]'
+    FlowLogs:
+      Pattern:
+        '[version, account_id, interface_id, srcaddr != "-", dstaddr != "-",
+        srcport != "-", dstport != "-", protocol, packets, bytes, start, end,
+        action, log_status]'
+    ELBLogs:
+      Pattern:
+        '[type, timestamp, elb, client, target, request_processing_time,
+        target_processing_time, response_processing_time, elb_status_code,
+        target_status_code, received_bytes, sent_bytes, request, user_agent,
+        ssl_cipher, ssl_protocol, target_group_arn, trace_id]'
+    Lambda:
+      Pattern: '[timestamp=*Z, request_id="*-*", event]'
+    Other:
+      Pattern: ''
+    SpaceDelimited:
+      Pattern: '[]'
+    ECS:
+      Pattern: '"Container"'
+  # http://docs.aws.amazon.com/elasticloadbalancing/latest/classic/enable-access-logs.html#enable-access-logs-console
+  AWSELBAccountID:
+    us-east-1:
+      id: "127311923021"
+    us-east-2:
+      id: "033677994240"
+    us-west-1:
+      id: "027434742980"
+    us-west-2:
+      id: "797873946194"
+    ca-central-1:
+      id: "985666609251"
+    eu-west-1:
+      id: "156460612806"
+    eu-central-1:
+      id: "054676820928"
+    eu-west-2:
+      id: "652711504416"
+    ap-southeast-1:
+      id: "114774131450"
+    ap-southeast-2:
+      id: "783225319266"
+    ap-northeast-1:
+      id: "582318560864"
+    ap-northeast-2:
+      id: "600734575887"
+    ap-south-1:
+      id: "718504428378"
+    sa-east-1:
+      id: "507241528517"
+
+Outputs:
+  WebsiteURL:
+    Description: Website
+    Value: !Join ['', [
+      !If [cEnableHTTPS, 'https://', 'http://'],
+      !If [cEnableDNS, !Sub '${ResourcePrefix}.al-labs.co.uk/polls/', !Sub '${AppLoadBalancer.DNSName}']]
+    ]
+  RepoURL:
+    Description: Git Repository
+    Value: !GetAtt 'CodeRepo.CloneUrlSsh'
+  DashboardURL:
+    Value: !Sub 'https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${ResourcePrefix}-Dashboard'
+  PipelineUrl:
+    Value: !Sub 'https://console.aws.amazon.com/codepipeline/home?region=${AWS::Region}#/view/${CodePipeline}'
+  StackName:
+    Description: Stack Name
+    Value: !Sub ${AWS::StackName}
+    Export:
+      Name: !Sub ${ResourcePrefix}-stack-name
+  # These exported values are sent in every request by the lambda function, not sure where they get included
+  # This value below is already exported but not being picked up by the lambda function
+  DomainEndpoint:
+    Condition: cEnableES
+    Description: URL of domain endpoint - for lambda function
+    Value:
+      !If
+      - cEnableESCentral
+      - Fn::ImportValue:
+          !Sub '${ElasticsearchStack}-DomainEndpointES'
+      - !Sub '${ElasticsearchAWSLogs.DomainEndpoint}'
+  KibanaURL:
+    Condition: cEnableES
+    Description: URL of the Kibana dashboard
+    Value:
+      !If
+      - cEnableESCentral
+      - Fn::ImportValue:
+          !Sub '${ElasticsearchStack}-KibanaURL'
+      - !Sub 'https://${ElasticsearchAWSLogs.DomainEndpoint}/_plugin/kibana/'
+
+Parameters:
+  ResourcePrefix:
+    AllowedPattern: '[a-z][a-z0-9\-]*'
+    ConstraintDescription: must begin with a letter and contain only lowercase alphanumeric characters.
+    Default: presentation
+    Description: An easily identifiable prefix for the stack's resources. Enter the Stack Name of your choice.
+    MaxLength: 16
+    MinLength: 1
+    Type: String
+  Cleanup:
+    AllowedValues:
+      - Enable
+      - Disable
+    Default: Enable
+    Description: Auto Cleanup this products resources when the stack is deleted to simplify maintenance during testing. Do Not Enable on Production
+    Type: String
+  AdvancedLogging:
+    Description: Enable/Disable Advanced logging
+    AllowedValues:
+      - Enable
+      - Disable
+    Default: Disable
+    Type: String
+  AppPort:
+    ConstraintDescription: must be a valid TCP port number (1-65535)
+    Default: 8000
+    Description: Which TCP port the app listens on
+    MaxValue: 65535
+    MinValue: 1
+    Type: Number
+  DBClass:
+    AllowedValues:
+      - t2.micro
+      - m3.medium
+      - m3.large
+      - m3.xlarge
+      - m3.2xlarge
+      - m4.large
+      - m4.xlarge
+      - c3.large
+      - c3.xlarge
+      - c3.2xlarge
+      - c4.large
+      - c4.xlarge
+      - c4.2xlarge
+    ConstraintDescription: must select a valid ec2 instance type.
+    Default: t2.micro
+    Description: Database instance class
+    Type: String
+  DBName:
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+    ConstraintDescription: must begin with a letter and contain only alphanumeric characters.
+    Default: todo
+    Description: The database name
+    MaxLength: 64
+    MinLength: 1
+    Type: String
+  DBPassword:
+    AllowedPattern: '[a-zA-Z0-9]*'
+    ConstraintDescription: must contain only alphanumeric characters.
+    Default: password
+    Description: The database admin account password
+    MaxLength: 41
+    MinLength: 8
+    NoEcho: true
+    Type: String
+  DBUsername:
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+    ConstraintDescription: must begin with a letter and contain only alphanumeric characters.
+    Default: root
+    Description: The database admin account username
+    MaxLength: 16
+    MinLength: 1
+    NoEcho: true
+    Type: String
+  DBEngine:
+    AllowedValues: ["neo4j"]
+    Default: neo4j
+    Description: Which DB Engine to use
+    Type: String
+  ElasticsearchLogs:
+    Description: Enable/Disable Elasticsearch; Central Logging relies on a standalone stack with ES. Integrated starts an ES cluster as part of the stack's resources.
+    AllowedValues:
+      - Disable
+      - Enable - Central
+      - Enable - Integrated
+    Default: Disable
+    Type: String
+  ElasticsearchStack:
+    Description: Central Logging ES Stack Name. (Required when using Central ES)
+    MaxLength: 64
+    MinLength: 0
+    Type: String
+  ClusterSize:
+    AllowedValues:
+      - Tiny
+      - Small
+      - Medium
+      - Large
+    Default: Tiny
+    Description: 'Amazon ES cluster size: small (2 data nodes), medium (4 data nodes),
+      large (6 data nodes)'
+    Type: String
+  IPAccess:
+    AllowedPattern: (\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})
+    ConstraintDescription: must be a valid IP CIDR range of the form x.x.x.x/x.
+    Description: IP address range that can access Elasticsearch
+    Default: 0.0.0.0/0
+    MaxLength: '18'
+    MinLength: '9'
+    Type: String
+  UseContainers:
+    Description: Use Docker Containers
+    Type: String
+    Default: Disable
+    AllowedValues:
+      - Enable
+      - Disable
+  InstanceType:
+    AllowedValues:
+      - t2.micro
+      - m3.medium
+      - m3.large
+      - m3.xlarge
+      - m3.2xlarge
+      - m4.large
+      - m4.xlarge
+      - c3.large
+      - c3.xlarge
+      - c3.2xlarge
+      - c4.large
+      - c4.xlarge
+      - c4.2xlarge
+    ConstraintDescription: must be a valid EC2 instance type.
+    Default: t2.micro
+    Description: WebServer EC2 instance type
+    Type: String
+  InstanceCount:
+    Description: Number of Amazon EC2 instances to Launch. (Must be a number between
+      1 and 4).
+    Type: Number
+    Default: 1
+    ConstraintDescription: Must be a number between 1 and 4.
+    MinValue: 1
+    MaxValue: 4
+  InstanceMaxCount:
+    Description: Maximum Number of Amazon EC2 instances in an autoscaling group. (Must be a number between 4 and 8)
+    Type: Number
+    Default: 4
+    ConstraintDescription: Must be a number between 4 and 8.
+    MinValue: 4
+    MaxValue: 8
+  InstanceMinCount:
+    Description: Minimum Number of Amazon EC2 instances in an autoscaling group. (Must be a number between 1 and 4).
+    Type: Number
+    Default: 1
+    ConstraintDescription: Must be a number between 1 and 4.
+    MinValue: 1
+    MaxValue: 4
+  SSHLocation:
+    Description: The IP address range that can be used to connect using SSH or RDP
+      to the Amazon EC2 instances.
+    Type: String
+    Default: 0.0.0.0/0
+    AllowedPattern: (\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})
+    ConstraintDescription: Must be a valid IP CIDR range of the form x.x.x.x/x.
+  OperatingSystem:
+    AllowedValues:
+      - Ubuntu16x04
+    Default: Ubuntu16x04
+    Description: Operating System Type
+    Type: String
+  UseSpotInstances:
+    Description: Enable/Disable Spot Instances to lower pricing. Warning t2.micro Instance Type does not work with spot instances. Frankfurt, Singapore, Sydney and Tokio regions currently does not support spot instances.
+    AllowedValues:
+      - Enable
+      - Disable
+    Default: Disable
+    Type: String
+  SpotPricing:
+    Description: Price to bid on Spot Instances.
+    Type: Number
+    Default: 0.05
+    ConstraintDescription: Must be a Positive Number between 0 and 1
+    MinValue: 0
+    MaxValue: 1
+  KeyPairName:
+    ConstraintDescription: can contain only ASCII characters.
+    Description: Name of an existing EC2 KeyPair to enable SSH access to the instances
+    Type: AWS::EC2::KeyPair::KeyName
+  UseDNS:
+    Description: Enable/Disable DNS configurations
+    AllowedValues:
+      - Enable
+      - Disable
+    Default: Enable
+    Type: String
+  UseHTTPS:
+    Description: Enable/Disable HTTPs configuration
+    AllowedValues:
+      - Enable
+      - Disable
+    Default: Disable
+    Type: String
+  OperationsEmail:
+    Description: EMail address to notify if there are any autoscaling/cloudtrail operations or application errors
+    Type: String
+    AllowedPattern: (^$|([a-zA-Z0-9_\-\.+]+)@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.)|(([a-zA-Z0-9\-]+\.)+))([a-zA-Z]{2,4}|[0-9]{1,3})(\]?))
+    ConstraintDescription: Must be a valid email address.
+    Default: ''
+  EmailApprovals:
+    Description: Email used to send approval notifications
+    Type: String
+    AllowedPattern: (^$|([a-zA-Z0-9_\-\.+]+)@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.)|(([a-zA-Z0-9\-]+\.)+))([a-zA-Z]{2,4}|[0-9]{1,3})(\]?))
+    ConstraintDescription: Must be a valid email address.
+    Default: ''
+  SlackApprovalsWebhook:
+    Description: |
+      Slack channel incoming webhook to send approval notifications, check
+      https://api.slack.com/incoming-webhooks
+      If no URL is set, slack notifications will be disabled/not provisioned
+    Default: ''
+    NoEcho: true
+    Type: String
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: 'Resource Prefix'
+        Parameters:
+          - ResourcePrefix
+      - Label:
+          default: 'Domain Name:'
+        Parameters:
+          - UseDNS
+      - Label:
+          default: 'Database Configuration:'
+        Parameters:
+          - DBEngine
+          - DBName
+          - DBUsername
+          - DBPassword
+          - DBClass
+      - Label:
+          default: 'Application Settings:'
+        Parameters:
+          - AppPort
+      - Label:
+          default: 'Auto-Scaling Web Server Group''s Instance Configuration:'
+        Parameters:
+          - UseSpotInstances
+          - SpotPricing
+          - UseContainers
+          - InstanceType
+          - OperatingSystem
+          - InstanceCount
+          - InstanceMaxCount
+          - InstanceMinCount
+      - Label:
+          default: 'Security:'
+        Parameters:
+          - KeyPairName
+          - UseHTTPS
+          - SSHLocation
+      - Label:
+          default: 'Notification:'
+        Parameters:
+          - OperationsEmail
+          - EmailApprovals
+          - SlackApprovalsWebhook
+      - Label:
+          default: 'Logging:'
+        Parameters:
+          - AdvancedLogging
+          - ElasticsearchLogs
+          - ElasticsearchStack
+          - ClusterSize
+          - IPAccess
+      - Label:
+          default: 'Debug Mode'
+        Parameters:
+          - Cleanup
+    ParameterLabels:
+      AdvancedLogging:
+        default: Enable Advanced Logging Features
+      ResourcePrefix:
+        default: Resource Prefix Name / Stack Name
+      AppPort:
+        default: Application TCP Port
+      DBName:
+        default: Database Name
+      DBUsername:
+        default: Database User Name
+      DBPassword:
+        default: Database Password
+      DBClass:
+        default: Database Instance Class
+      KeyPairName:
+        default: Key Pair Name
+      UseHTTPS:
+        default: Use HTTPS
+      UseDNS:
+        default: Use DNS
+      UseContainers:
+        default: Use Docker Containers
+      ElasticsearchLogs:
+        default: Deploy Elasticsearch
+      ElasticsearchStack:
+        default: Central Logging Elasticsearch Stack Name
+      ClusterSize:
+        default: Amazon ES cluster size
+      IPAccess:
+        default: IP address range that can access Elasticsearch
+      UseSpotInstances:
+        default: Use Spot Instances
+      SpotPricing:
+        default: Spot Instance Bid Price
+      EmailApprovals:
+        default: Approval Email Address
+      OperationsEmail:
+        default: Notification Email Address
+      SlackApprovalsWebhook:
+        default: Slack Channel Webhook
+      Cleanup:
+        default: Auto Cleanup Stack
+
+Conditions:
+  cEnableDNS: !Equals [!Ref UseDNS, 'Enable']
+  cEnableHTTPS: !Equals [!Ref UseHTTPS, 'Enable']
+  cEnableESCentral: !Equals [!Ref ElasticsearchLogs, 'Enable - Central']
+  cEnableESIntegrated: !Equals [!Ref ElasticsearchLogs, 'Enable - Integrated']
+  cEnableES: !Or [!Condition cEnableESIntegrated, !Condition cEnableESCentral]
+  cEnableCleanup: !Equals [!Ref Cleanup, 'Enable']
+  SizeLarge: !Equals [!Ref 'ClusterSize', Large]
+  SizeMedium: !Equals [!Ref 'ClusterSize', Medium]
+  SizeSmall: !Equals [!Ref 'ClusterSize', Small]
+  SizeTiny: !Equals [!Ref 'ClusterSize', Tiny]
+  cEnableElasticSearchAdvancedLogging: !And [!Condition cEnableES, !Condition cEnableAdvancedLogging]
+  cEnableIntegratedElasticSearchAdvancedLogging: !And [!Condition cEnableESIntegrated, !Condition cEnableAdvancedLogging]
+  cMinInstancesGreaterThanOne: !Not [!Equals [!Ref InstanceMinCount, 1]]
+  cSpotPriceGreaterThanZero: !Not [!Equals [!Ref SpotPricing, 0]]
+  cEnableAdvancedLogging: !Equals [!Ref AdvancedLogging, 'Enable']
+  cEnableSpotInstances: !And
+    - !Equals [!Ref UseSpotInstances, 'Enable']
+    - !Condition cSpotPriceGreaterThanZero
+    - !Not [!Equals [!Sub '${AWS::Region}', 'eu-central-1']]
+    - !Not [!Equals [!Sub '${AWS::Region}', 'ap-southeast-1']]
+    - !Not [!Equals [!Sub '${AWS::Region}', 'ap-southeast-2']]
+    - !Not [!Equals [!Sub '${AWS::Region}', 'ap-northeast-1']]
+    - !Not [!Equals [!Ref InstanceType, 't2.micro']]
+  cEnableContainers: !Equals [!Ref UseContainers, 'Enable']
+  cEnableEC2: !Not [!Condition cEnableContainers]
+  cEnableApprovalEmails: !Not [!Equals [!Ref EmailApprovals, '']]
+  cEnableSlackApprovals: !Not [!Equals [!Ref SlackApprovalsWebhook, '']]
+  cEnableEmailNotications: !Not [!Equals [!Ref OperationsEmail, '']]
+  cEnableSlackAndLambdaLogging: !And [!Condition cEnableSlackApprovals, !Condition cEnableAdvancedLogging]
+  cEnableEmailNoticationsAndLambdaLogging: !And [!Condition cEnableEmailNotications, !Condition cEnableAdvancedLogging]
+
+# Resources documentation
+# http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-template-resource-type-ref.html
+Resources:
+  ####################################################################################
+  # Cleanup
+  ####################################################################################
+  AutoCleanup:
+    Type: Custom::AutoCleanup
+    Condition: cEnableCleanup
+    Properties:
+      ServiceToken: !ImportValue 'CleanupLambdaArn'
+      BucketNames:
+        - !Ref 'ArtifactStoreS3Location'
+        - !Ref 'LogStoreS3Location'
+        - !If
+          - cEnableAdvancedLogging
+          - !Ref 'ELBAccessLogsBucket'
+          - !Ref 'AWS::NoValue'
+        - !If
+          - cEnableESIntegrated
+          - !Ref 'ElasticSearchSnapshotS3Location'
+          - !Ref 'AWS::NoValue'
+      LogGroupNames:
+        - !Ref 'CodeBuildArtifactLogGroup'
+        - !Ref 'LogGroupAppLog'
+        - !Ref 'LogGroupCloudInit'
+        - !Ref 'LogGroupNeo4jHttp'
+        - !Ref 'LogGroupNeo4jCloudInit'
+        - !If
+          - cEnableAdvancedLogging
+          - !Ref 'EncryptLambdaLogsGroup'
+          - !Ref 'AWS::NoValue'
+        - !If
+          - cEnableAdvancedLogging
+          - !Ref 'LogGroupELBLog'
+          - !Ref 'AWS::NoValue'
+        - !If
+          - cEnableAdvancedLogging
+          - !Ref 'ELBLogsToCWLambdaLogGroup'
+          - !Ref 'AWS::NoValue'
+        - !If
+          - cEnableAdvancedLogging
+          - !Ref 'LogGroupSysLog'
+          - !Ref 'AWS::NoValue'
+        - !If
+          - cEnableAdvancedLogging
+          - !Ref 'LogMigrationLambdaLogGroup'
+          - !Ref 'AWS::NoValue'
+        - !If
+          - cEnableAdvancedLogging
+          - !Ref 'TrailLogGroup'
+          - !Ref 'AWS::NoValue'
+        - !If
+          - cEnableAdvancedLogging
+          - !Ref 'VPCFlowLogsLogGroup'
+          - !Ref 'AWS::NoValue'
+        - !If
+          - cEnableAdvancedLogging
+          - !Ref 'LogGroupNeo4jSecurity'
+          - !Ref 'AWS::NoValue'
+        - !If
+          - cEnableAdvancedLogging
+          - !Ref 'LogGroupNeo4jDebug'
+          - !Ref 'AWS::NoValue'
+        - !If
+          - cEnableContainers
+          - !Ref 'CodeBuildDockerImageLogGroup'
+          - !Ref 'AWS::NoValue'
+        - !If
+          - cEnableES
+          - !Ref 'CodeBuildKibanaLogGroup'
+          - !Ref 'AWS::NoValue'
+        - !If
+          - cEnableEmailNoticationsAndLambdaLogging
+          - !Ref 'AddTargetWithTransformLambdaLogGroup'
+          - !Ref 'AWS::NoValue'
+        - !If
+          - cEnableElasticSearchAdvancedLogging
+          - !Ref 'LogStreamerLogsGroup'
+          - !Ref 'AWS::NoValue'
+        - !If
+          - cEnableIntegratedElasticSearchAdvancedLogging
+          - !Ref 'SnapshotLambdaLogGroup'
+          - !Ref 'AWS::NoValue'
+        - !If
+          - cEnableSlackAndLambdaLogging
+          - !Ref 'SlackLambdaLogsGroup'
+          - !Ref 'AWS::NoValue'
+      ECRNames:
+        - !If
+          - cEnableContainers
+          - !Ref 'ECSRepository'
+          - !Ref 'AWS::NoValue'
+      StackNames:
+        - !If
+          - cEnableContainers
+          - !Sub '${AWS::StackName}-ContainerApp'
+          - !Ref 'AWS::NoValue'
+
+  ####################################################################################
+  # Start of networking
+  ####################################################################################
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: '10.0.0.0/16'
+      InstanceTenancy: 'default'
+      Tags:
+        - Key: Name
+          Value: !Sub '${ResourcePrefix}-VPC'
+  publicSubnet01:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: 'True'
+      Tags:
+        - Key: Name
+          Value: !Sub '${ResourcePrefix}-PublicSubnet01'
+  publicSubnet02:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: 'True'
+      Tags:
+        - Key: Name
+          Value: !Sub '${ResourcePrefix}-PublicSubnet02'
+  privateSubnet01:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.101.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub '${ResourcePrefix}-PrivateSubnet01'
+  privateSubnet02:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.102.0/24
+      AvailabilityZone: !Select [1, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub '${ResourcePrefix}-PrivateSubnet02'
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    DependsOn: [VPC]
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub '${ResourcePrefix}-InternetGateway'
+  AttachInternetGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+  InternetPublicRoutingTable:
+    Type: AWS::EC2::RouteTable
+    DependsOn: AttachInternetGateway
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${ResourcePrefix}-InternetRoutingTable'
+  InternetPublicRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref InternetPublicRoutingTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+  PublicSubnet01RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref publicSubnet01
+      RouteTableId: !Ref InternetPublicRoutingTable
+  PublicSubnet02RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref publicSubnet02
+      RouteTableId: !Ref InternetPublicRoutingTable
+  ####################################################################################
+  # End of networking
+  ####################################################################################
+
+  ####################################################################################
+  # Start of Set Parameter Function
+  ####################################################################################
+  MyKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: Master key used by Parameter Store
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: Allow administration of the key
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: '*'
+            Resource: '*'
+          - Effect: Allow
+            Action:
+              - kms:Encrypt
+            Principal:
+              AWS: !GetAtt 'EncryptLambdaRole.Arn'
+            Resource: '*'
+          - Effect: Allow
+            Action:
+              - kms:Decrypt
+            Principal:
+              AWS:
+                - !GetAtt 'DBInstanceRole.Arn'
+            Resource: '*'
+          - !If
+            - cEnableEC2
+            - Effect: Allow
+              Action:
+                - kms:Decrypt
+              Principal:
+                AWS:
+                  - !GetAtt 'EC2InstanceRole.Arn'
+              Resource: '*'
+            - Effect: Allow
+              Action:
+                - kms:Decrypt
+              Principal:
+                AWS:
+                  - !GetAtt 'TaskRole.Arn'
+              Resource: '*'
+  MyKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub 'alias/${ResourcePrefix}-masterkey'
+      TargetKeyId: !Ref MyKey
+
+  # Create Log Group to setup the Retention time of Lambda Logs
+  EncryptLambdaLogsGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    Condition: cEnableAdvancedLogging
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${ResourcePrefix}-set-param-store'
+      RetentionInDays: 1
+  EncryptLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ResourcePrefix}-Lambda-SetParamStore'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Statement:
+              # Create Log streams and write on it
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource:
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ResourcePrefix}-set-param-store'
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ResourcePrefix}-set-param-store:*'
+              # Allow Lambda Function to set values into Parameters Store in a specific name space
+              - Effect: Allow
+                Action:
+                  - ssm:PutParameter
+                  - ssm:DeleteParameter
+                Resource:
+                  - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}/db/*'
+                  # Used on AWS console to test the function ^.^
+                  - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}/fn.test'
+                  - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}/slack/*'
+  EncryptLambda:
+    Type: AWS::Lambda::Function
+    DependsOn: MyKeyAlias
+    Properties:
+      FunctionName: !Sub '${ResourcePrefix}-set-param-store'
+      Handler: index.lambda_handler
+      Role: !GetAtt 'EncryptLambdaRole.Arn'
+      Code:
+        # Lambda to Store Values in SSM Parameter Store.
+        # Ref: lambda/SetEC2Parameter.js
+        ZipFile: |
+          var AWS = require('aws-sdk');
+          var response = require('cfn-response');
+          exports.lambda_handler = function (event, context) {
+            try {
+              var ssm = new AWS.SSM();
+              if(event.RequestType == 'Delete') {
+                var params = {
+                  Name: event.ResourceProperties.Name
+                }
+                ssm.deleteParameter(params, function(err, data) {
+                  console.log('Delete Called');
+                  if (err){
+                    console.log('Error: ',err, err.stack); // an error occurred
+                  }
+                  else{
+                    console.log('Successfully Deleted Parameter: ',data);           // successful response
+                  }
+                });
+                response.send(event, context, response.SUCCESS);
+              }
+              else {
+                var params = {
+                  Name: event.ResourceProperties.Name,
+                  Type: event.ResourceProperties.Type,
+                  Description: event.ResourceProperties.Description,
+                  Value: event.ResourceProperties.Value,
+                  KeyId: event.ResourceProperties.KeyId,
+                  Overwrite: true
+                };
+                ssm.putParameter(params, function(err, data) {
+                    if (err){
+                      console.log('Error: ',err, err.stack); // an error occurred
+                      response.send(event, context, response.FAILED);
+                    }
+                    else{
+                      console.log('Successfully Put Parameter: ',data);           // successful response
+                      response.send(event, context, response.SUCCESS);
+                    }
+                });
+              }
+            }
+            catch (err) {
+              console.log('General Error.');
+              console.log(err);
+              response.send(event, context, response.FAILED);
+            }
+          };
+      Runtime: nodejs6.10
+      Timeout: 25
+  ####################################################################################
+  # End of Set Parameter Function
+  ####################################################################################
+
+  ####################################################################################
+  # Start of Neo4j resources
+  ####################################################################################
+  DBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow Internal access to RDS Instances
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - FromPort: !FindInMap [DBEngines, !Ref 'DBEngine', port1]
+          ToPort: !FindInMap [DBEngines, !Ref 'DBEngine', port1]
+          SourceSecurityGroupId: !Ref DBLBSecurityGroup
+          IpProtocol: tcp
+        - FromPort: !FindInMap [DBEngines, !Ref 'DBEngine', port2]
+          ToPort: !FindInMap [DBEngines, !Ref 'DBEngine', port2]
+          SourceSecurityGroupId: !Ref DBLBSecurityGroup
+          IpProtocol: tcp
+      Tags:
+        - Key: Name
+          Value: !Sub '${ResourcePrefix}-DB'
+  DBLBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow Internal access to RDS Instances
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - SourceSecurityGroupId: !If
+            - cEnableContainers
+            - !Sub ${ECSSecurityGroup.GroupId}
+            - !Sub ${AppSecurityGroup.GroupId}
+          IpProtocol: -1
+      Tags:
+        - Key: Name
+          Value: !Sub '${ResourcePrefix}-DBLB'
+  DBLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub '${ResourcePrefix}-DBloadbalancer'
+      Scheme: internal
+      Subnets:
+        - !Ref publicSubnet01
+        - !Ref publicSubnet02
+      SecurityGroups:
+        - !Ref DBLBSecurityGroup
+  DBLoadBalancerTargetGroupPort7687:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub '${ResourcePrefix}-DBTgtGrp7687'
+      HealthCheckPath: /
+      HealthCheckIntervalSeconds: 30
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 10
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 5
+      Matcher:
+        HttpCode: '200'
+      Port: 7687
+      Protocol: HTTP
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: 300
+      VpcId: !Ref VPC
+  DBLoadBalancerHTTPListenerPort7687:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref DBLoadBalancerTargetGroupPort7687
+      LoadBalancerArn: !Ref DBLoadBalancer
+      Port: 7687
+      Protocol: HTTP
+  DBLoadBalancerTargetGroupPort7474:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub '${ResourcePrefix}-DBTgtGrp7474'
+      HealthCheckPath: /
+      HealthCheckIntervalSeconds: 30
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 10
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 5
+      Matcher:
+        HttpCode: '200'
+      Port: 7474
+      Protocol: HTTP
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: 300
+      VpcId: !Ref VPC
+  DBLoadBalancerHTTPListenerPort7474:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref DBLoadBalancerTargetGroupPort7474
+      LoadBalancerArn: !Ref DBLoadBalancer
+      Port: 7474
+      Protocol: HTTP
+  LogGroupNeo4jHttp:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    Properties:
+      LogGroupName: !Sub '${ResourcePrefix}-db-httpapi'
+      RetentionInDays: 7
+  LogGroupNeo4jSecurity:
+    Type: AWS::Logs::LogGroup
+    Condition: cEnableAdvancedLogging
+    DeletionPolicy: Retain
+    Properties:
+      LogGroupName: !Sub '${ResourcePrefix}-db-security'
+      RetentionInDays: 7
+  LogGroupNeo4jDebug:
+    Type: AWS::Logs::LogGroup
+    Condition: cEnableAdvancedLogging
+    DeletionPolicy: Retain
+    Properties:
+      LogGroupName: !Sub '${ResourcePrefix}-db-debug'
+      RetentionInDays: 7
+  LogGroupNeo4jCloudInit:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    Properties:
+      LogGroupName: !Sub '${ResourcePrefix}-db-cloudinitoutput'
+      RetentionInDays: 7
+  DBLaunchConfig:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    DependsOn: [StoreDBUsername, StoreEncryptedDBPassword]
+    Metadata:
+      AWS::CloudFormation::Init:
+        config:
+          packages:
+            apt:
+              libwww-perl: []
+              libdatetime-perl: []
+              neo4j-enterprise: []
+            python:
+              awscli: []
+          sources:
+            /opt/cwmonitoring/: http://aws-cloudwatch.s3.amazonaws.com/downloads/CloudWatchMonitoringScripts-1.2.1.zip
+          files:
+            /tmp/cwlogs/logstreams.conf:
+              content: !Sub
+                - |
+                    [general]
+                    state_file= /var/awslogs/agent-state
+
+                    [neo4j-httplog]
+                    file = /var/log/neo4j/http.log
+                    log_group_name =  ${LogGroupNeo4jHttp}
+                    log_stream_name = neo4j.httplog-{instance_id}
+                    datetime_format = %Y-%m-%d %H:%M:%S.%f%z
+
+                    [cloud-init-outputlog]
+                    file = /var/log/cloud-init-output.log
+                    log_group_name =  ${LogGroupNeo4jCloudInit}
+                    log_stream_name = cloudinit.outputlog-{instance_id}
+                    datetime_format = %d/%b/%Y:%H:%M:%S
+
+                    ${advancedlogs}
+                - advancedlogs: !If
+                    - cEnableAdvancedLogging
+                    - !Sub |
+                        [neo4j-securitylog]
+                        file = /var/log/neo4j/security.log
+                        log_group_name = ${LogGroupNeo4jSecurity}
+                        log_stream_name = neo4j.securitylog-{instance_id}
+                        datetime_format = %Y-%m-%d %H:%M:%S.%f%z
+                        [neo4j-debuglog]
+                        file = /var/log/neo4j/debug.log
+                        log_group_name = ${LogGroupNeo4jDebug}
+                        log_stream_name = neo4j.debuglog-{instance_id}
+                        datetime_format = %Y-%m-%d %H:%M:%S.%f%z
+                    - ''
+              mode: '000400'
+              owner: root
+              group: root
+            /tmp/aws_monitoring.sh:
+              content: |
+                #!/usr/bin/env bash
+                set -xu
+                (crontab -l 2>/dev/null; echo '*/1 * * * * /opt/cwmonitoring/aws-scripts-mon/mon-put-instance-data.pl --mem-util --disk-space-util --disk-path=/ --auto-scaling=only --from-cron') | crontab -
+              mode: '000500'
+              owner: root
+              group: root
+            /tmp/db-setup.sh:
+              content: !Sub |
+                #!/bin/bash -e
+
+                DB_PARAMS=$(aws --region ${AWS::Region} ssm get-parameters-by-path --path "/${AWS::StackName}/db" --with-decryption --output text --query 'Parameters[].[Name,Value]')
+                IFS_SAVE=$IFS
+                IFS=$'\n'
+                for param in $DB_PARAMS ; do
+                  [ "$?" -eq "0" ] || continue
+                  IFS=$IFS_SAVE
+                  read -r key value <<< "${!param}"
+                  key="$(echo "${!key}" | sed "s/^\/${AWS::StackName}.//g" | tr '[:lower:]/' '[:upper:]_')"
+                  case "${!key}" in
+                    APP_PORT)
+                      export PORT="${!value}"
+                      ;;
+                    *)
+                      export "${!key}"="${!value}"
+                      ;;
+                  esac
+                done
+
+                sed -i 's/#dbms.connectors.default_listen_address=0.0.0.0/dbms.connectors.default_listen_address=0.0.0.0/' /etc/neo4j/neo4j.conf
+                sed -i 's/#dbms.logs.http.enabled=true/dbms.logs.http.enabled=true/' /etc/neo4j/neo4j.conf
+                neo4j-admin set-initial-password ${!DB_PASSWORD}
+                chown -R neo4j:adm /var/lib/neo4j/data/
+                systemctl enable neo4j
+                systemctl start neo4j
+
+                # Wait for cypher shell to start
+                while ! netstat -tln | grep 7687; do sleep 2; done
+                # Add a user with values passed as parameters to the template
+                cypher-shell -a localhost -u neo4j -p ${!DB_PASSWORD} "CALL dbms.security.createUser('${!DB_USERNAME}', '${!DB_PASSWORD}', false);"
+                cypher-shell -a localhost -u neo4j -p ${!DB_PASSWORD} "CALL dbms.security.addRoleToUser('architect', '${!DB_USERNAME}');"
+
+                exit 0
+              mode: '000500'
+            /tmp/awslogs-agent-setup.py:
+              source: https://s3.amazonaws.com/aws-cloudwatch/downloads/latest/awslogs-agent-setup.py
+              mode: '000400'
+          commands:
+            set_aws_region:
+              command: !Sub aws configure set region ${AWS::Region}
+            awslogs_setup:
+              command: !Sub python /tmp/awslogs-agent-setup.py -n -r ${AWS::Region} -c /tmp/cwlogs/logstreams.conf
+            neo4j_setup:
+              command: bash /tmp/db-setup.sh
+            cw_monitoring_setup:
+              command: bash /tmp/aws_monitoring.sh
+          services:
+            sysvinit:
+              awslogs:
+                enabled: "true"
+                ensureRunning: "true"
+                commands: awslogs_setup
+    Properties:
+      ImageId: !FindInMap [AWSRegion2AMI, !Ref 'AWS::Region', !Ref OperatingSystem]
+      SpotPrice: !If [cEnableSpotInstances, '0.05', !Ref 'AWS::NoValue']
+      InstanceType: !Ref DBClass
+      KeyName: !Ref KeyPairName
+      SecurityGroups: [!Ref DBSecurityGroup]
+      IamInstanceProfile: !Ref DBInstanceRoleInstanceProfile
+      InstanceMonitoring: true
+      UserData:
+        'Fn::Base64': !Sub |
+          #!/bin/bash -x
+
+          # We can "trap" errors and use cfn-signal to "stop" the deploy
+          function error_exit
+          {
+            cfn-signal -e 1 --stack ${AWS::StackName} --resource DBAutoScalingGroup --region ${AWS::Region}
+            exit 1
+          }
+
+          trap 'error_exit' ERR
+
+          # Update repo and get tool dependencies
+          wget -O - https://debian.neo4j.org/neotechnology.gpg.key | sudo apt-key add -
+          echo 'deb https://debian.neo4j.org/repo stable/' | sudo tee /etc/apt/sources.list.d/neo4j.list
+          apt-get -y update
+          apt-get install -y python-pip
+
+          # Intall CloudFormation tools
+          pip install https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz
+
+          # Call CFN-INIT to process the metadata for CloudFormation Init. Since ubuntu does not have the tools installed, we install the CFN Bootstrap in the previous step.
+          cfn-init -v --stack ${AWS::StackName} --resource DBLaunchConfig --region ${AWS::Region}
+
+          # All is well, so signal AutoScalingGroup.
+          $(which cfn-signal) -e 0 --stack ${AWS::StackName} --resource DBAutoScalingGroup --region ${AWS::Region}
+  DBInstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ResourcePrefix}-DB-InstanceRole'
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [ec2.amazonaws.com]
+            Action: ['sts:AssumeRole']
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cloudwatch:PutMetricData
+                  - cloudwatch:GetMetricStatistics
+                  - cloudwatch:ListMetrics
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - ssm:GetParametersByPath
+                Resource:
+                  - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}/db'
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource:
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${ResourcePrefix}*:*'
+      Path: /
+  DBInstanceRoleInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: /
+      Roles: [!Ref DBInstanceRole]
+  DBAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      LaunchConfigurationName: !Ref DBLaunchConfig
+      TargetGroupARNs:
+        - !Ref DBLoadBalancerTargetGroupPort7687
+        - !Ref DBLoadBalancerTargetGroupPort7474
+      DesiredCapacity: 1
+      MaxSize: 1
+      MinSize: 1
+      MetricsCollection:
+        - Granularity: 1Minute
+      VPCZoneIdentifier:
+        - !Ref publicSubnet01
+        - !Ref publicSubnet02
+      Tags:
+        - Key: Name
+          Value: !Sub '${ResourcePrefix}-DB'
+          PropagateAtLaunch: true
+    CreationPolicy:
+      ResourceSignal:
+        Timeout: PT15M
+        Count: 1
+  StoreDBAddress:
+    Type: AWS::SSM::Parameter
+    DeletionPolicy: Delete
+    Properties:
+      Name: !Sub '/${AWS::StackName}/db/connectionstring'
+      Value: !GetAtt 'DBLoadBalancer.DNSName'
+      Description: DataBase Address
+      Type: 'String'
+  StoreAppPort:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '/${AWS::StackName}/app/port'
+      Value: !Ref AppPort
+      Description: Application Port
+      Type: 'String'
+  StoreDBUsername:
+    Type: AWS::SSM::Parameter
+    DeletionPolicy: Delete
+    Properties:
+      Name: !Sub '/${AWS::StackName}/db/username'
+      Value: !Ref DBUsername
+      Description: DataBase username
+      Type: 'String'
+  StoreDBName:
+    Type: AWS::SSM::Parameter
+    DeletionPolicy: Delete
+    Properties:
+      Name: !Sub '/${AWS::StackName}/db/name'
+      Value: !Ref DBName
+      Description: DataBase Name
+      Type: 'String'
+  StoreEncryptedDBPassword:
+    Type: Custom::SetParameterStore
+    DependsOn:
+      - MyKeyAlias
+    Properties:
+      ServiceToken: !GetAtt 'EncryptLambda.Arn'
+      KeyId: !Sub 'alias/${ResourcePrefix}-masterkey'
+      Name: !Sub '/${AWS::StackName}/db/password'
+      Value: !Ref DBPassword
+      Description: 'Database Password'
+      Type: 'SecureString'
+      Overwrite: true
+  ####################################################################################
+  # End of Neo4j resources
+  ####################################################################################
+
+  ####################################################################################
+  # Start of ELB Logging buckets
+  ####################################################################################
+  ELBAccessLogsBucket:
+    Type: AWS::S3::Bucket
+    DependsOn: [ELBLogLambdaRole, ELBLogsToCWLambdaLogGroup, ELBLogsToCWLambda, ELBLogLambdaInvokePermission]
+    DeletionPolicy: Retain
+    Condition: cEnableAdvancedLogging
+    Properties:
+      BucketName: !Sub '${ResourcePrefix}-elb-logs'
+      NotificationConfiguration:
+        LambdaConfigurations:
+          - Function: !GetAtt 'ELBLogsToCWLambda.Arn'
+            Event: s3:ObjectCreated:*
+      LifecycleConfiguration:
+        Rules:
+          - Id: !Sub '${ResourcePrefix}-elb-logs-lifecycle'
+            ExpirationInDays: 90
+            Status: Enabled
+            Transitions:
+              - StorageClass: STANDARD_IA
+                TransitionInDays: 30
+              - StorageClass: GLACIER
+                TransitionInDays: 60
+  ELBAccessLogsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Condition: cEnableAdvancedLogging
+    Properties:
+      Bucket: !Ref ELBAccessLogsBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: ELBAccessLogsBucket
+            Effect: Allow
+            Resource:
+              - !Sub 'arn:aws:s3:::${ELBAccessLogsBucket}/ECS-ELB/AWSLogs/${AWS::AccountId}/*'
+              - !Sub 'arn:aws:s3:::${ELBAccessLogsBucket}/EC2-ELB/AWSLogs/${AWS::AccountId}/*'
+            Principal:
+              AWS:
+                - !FindInMap [AWSELBAccountID, !Ref 'AWS::Region', id]
+                - !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action:
+              - s3:PutObject
+  LogGroupELBLog:
+    Type: AWS::Logs::LogGroup
+    Condition: cEnableAdvancedLogging
+    DeletionPolicy: Retain
+    Properties:
+      LogGroupName: !Sub '${ResourcePrefix}-elblog'
+      RetentionInDays: 7
+  ELBLogLambdaRole:
+    Type: AWS::IAM::Role
+    Condition: cEnableAdvancedLogging
+    Metadata:
+      Comment: ELBLogLambdaRole allows Lambda to read from S3 and write to CloudWatch.
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - 'lambda.amazonaws.com'
+            Action:
+              - 'sts:AssumeRole'
+      Policies:
+        - PolicyName: ELBLogLambdaRolePolicy
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                  - 'logs:DescribeLogStreams'
+                Resource:
+                  - !Sub '${LogGroupELBLog.Arn}'
+                  - !Sub '${ELBLogsToCWLambdaLogGroup.Arn}'
+              - Effect: Allow
+                Action:
+                  - 's3:GetObject'
+                Resource:
+                  - !Sub 'arn:aws:s3:::${ResourcePrefix}-elb-logs/*'
+  ELBLogLambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Condition: cEnableAdvancedLogging
+    Properties:
+      FunctionName: !GetAtt 'ELBLogsToCWLambda.Arn'
+      Action: lambda:InvokeFunction
+      Principal: s3.amazonaws.com
+      SourceAccount: !Ref 'AWS::AccountId'
+  ELBLogsToCWLambdaLogGroup:
+    Type: AWS::Logs::LogGroup
+    Condition: cEnableAdvancedLogging
+    DeletionPolicy: Retain
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${ResourcePrefix}-elblogs-to-cw-migration'
+      RetentionInDays: 1
+  ELBLogsToCWLambda:
+    Type: AWS::Lambda::Function
+    Condition: cEnableAdvancedLogging
+    DependsOn: [ELBLogLambdaRole, ELBLogsToCWLambdaLogGroup, LogGroupELBLog]
+    Properties:
+      FunctionName: !Sub '${ResourcePrefix}-elblogs-to-cw-migration'
+      Description: 'This code will move your ELB logs from S3 to CloudWatch. It is
+        compressed, so quite hard to read. Original: github.com/awslabs/cloudwatch-logs-centralize-logs'
+      Role: !GetAtt 'ELBLogLambdaRole.Arn'
+      Handler: index.handler
+      Code:
+        # The Following Lambda has been minified to fit inline in Cloud Formation.
+        # The original version is available at "lambda/ELBLogsToCW.js"
+        ZipFile: !Sub |
+          'use strict';const aws=require('aws-sdk');var zlib=require('zlib');const s3=new aws.S3({apiVersion:'2006-03-01'});const cloudWatchLogs=new aws.CloudWatchLogs({apiVersion:'2014-03-28'});const readline=require('readline');const stream=require('stream');const logGroupName='${ResourcePrefix}-elblog';const logStreamName='ELB';exports.handler=(event,context,callback)=>{console.log('S3 object is:',event.Records[0].s3);const bucket=event.Records[0].s3.bucket.name;console.log('Name of S3 bucket is:',bucket);const key=decodeURIComponent(event.Records[0].s3.object.key.replace(/\\+/g,' '));const params={Bucket:bucket,Key:key,};s3.getObject(params,(err,data)=>{if(err){console.log(err);const message=`Error getting object ${!key}from bucket ${!bucket}.Make sure they exist and your bucket is in the same region as this function.`;console.log(message);callback(message)}else{zlib.gunzip(data.Body,function(a,b){if(a){console.log('Error uncompressing data',a);return}var c=b.toString('ascii');manageLogStreams(c)});callback(null,data.ContentType)}});function manageLogStreams(c){var d={logGroupName:logGroupName,logStreamNamePrefix:logStreamName};cloudWatchLogs.describeLogStreams(d,function(a,b){if(a){console.log('Error during describe log streams:',a);createLogStream(c)}else{if(!b.logStreams[0]){console.log('Need to  create log stream:',b);createLogStream(c)}else{console.log('Log Stream already defined:',logStreamName);putLogEvents(b.logStreams[0].uploadSequenceToken,c)}}})}function createLogStream(c){var d={logGroupName:logGroupName,logStreamName:logStreamName};cloudWatchLogs.createLogStream(d,function(a,b){if(a){console.log('error while creating log stream: ',a,a.stack);return}else{console.log('Success in creating log stream: ',logStreamName);putLogEvents(null,c)}})}function putLogEvents(a,b){const MAX_BATCH_SIZE=1048576;const MAX_BATCH_COUNT=10000;const LOG_EVENT_OVERHEAD=26;var c=[];var d=[];var e=0;var f=new stream.PassThrough();f.end(b);var g=readline.createInterface({input:f});var h=0;g.on('line',(line)=>{++h;var i=line.split(' ',2)[1];var j=Date.parse(i);var k=line.length+LOG_EVENT_OVERHEAD;e+=k;if(e>=MAX_BATCH_SIZE||d.length>=MAX_BATCH_COUNT){c.push(d);d=[];e=k}d.push({message:line,timestamp:j})});g.on('close',()=>{c.push(d);sendBatches(a,c)})}function sendBatches(e,f){var g=0;var h=0;function sendNextBatch(a,b){if(a){console.log('Error sending batch: ',a,a.stack);return}else{var c=f.shift();if(c){++h;g+=c.length;sendBatch(b,c,sendNextBatch)}else{var d=`Successfully put ${!g}events in ${!h}f`;console.log(d);callback(null,d)}}}sendNextBatch(null,e)}function sendBatch(c,d,e){var f={logEvents:d,logGroupName:logGroupName,logStreamName:logStreamName};if(c){f['sequenceToken']=c}f.logEvents.sort(function(a,b){if(a.timestamp>b.timestamp){return 1}if(a.timestamp<b.timestamp){return-1}return 0});cloudWatchLogs.putLogEvents(f,function(a,b){if(a){console.log('Error during put log events: ',a,a.stack);e(a,null)}else{console.log(`Success in putting ${!f.logEvents.length}events`);e(null,b.nextSequenceToken)}})}};
+      Environment:
+        Variables:
+          LOG_GROUP: !Sub '${ResourcePrefix}-elblog'
+          LOG_STREAM: 'ELB'
+      Runtime: nodejs6.10
+  ####################################################################################
+  # End of ELB Logging buckets
+  ####################################################################################
+
+  #####################################################################################
+  # Start of ECS for Application
+  #####################################################################################
+  ContainerCluster:
+    Type: AWS::ECS::Cluster
+    Condition: cEnableContainers
+    Properties:
+      ClusterName: !Sub '${ResourcePrefix}-cluster'
+  ECSAutoScalingNotifications:
+    Type: AWS::SNS::Topic
+    Condition: cEnableEmailNotications
+    Properties:
+      Subscription:
+        - Endpoint: !Ref OperationsEmail
+          Protocol: email
+  # complete example http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/quickref-ecs.html
+  ECSAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Condition: cEnableContainers
+    Properties:
+      VPCZoneIdentifier:
+        - !Ref publicSubnet01
+        - !Ref publicSubnet02
+      LaunchConfigurationName: !Ref ECSLaunchConfig
+      MinSize: !Ref 'InstanceMinCount'
+      MaxSize: !Ref 'InstanceMaxCount'
+      DesiredCapacity: !Ref 'InstanceCount'
+      MetricsCollection:
+        # No metrics specified, send all!
+        # http://docs.aws.amazon.com/AutoScaling/latest/APIReference/API_EnableMetricsCollection.html
+        - Granularity: 1Minute
+      Tags:
+        - Key: Name
+          Value: !Sub '${ResourcePrefix}-ECS'
+          PropagateAtLaunch: true
+      NotificationConfiguration: !If
+        - cEnableEmailNotications
+        - TopicARN: !Ref ECSAutoScalingNotifications
+          NotificationTypes:
+            - 'autoscaling:EC2_INSTANCE_LAUNCH'
+            - 'autoscaling:EC2_INSTANCE_LAUNCH_ERROR'
+            - 'autoscaling:EC2_INSTANCE_TERMINATE'
+            - 'autoscaling:EC2_INSTANCE_TERMINATE_ERROR'
+        - !Ref 'AWS::NoValue'
+    CreationPolicy:
+      ResourceSignal:
+        Timeout: PT15M
+    UpdatePolicy: !If
+      - cMinInstancesGreaterThanOne
+      - AutoScalingRollingUpdate:
+          MinInstancesInService: '1'
+          MaxBatchSize: '1'
+          PauseTime: PT15M
+          WaitOnResourceSignals: 'true'
+      - AutoScalingReplacingUpdate:
+          WillReplace: true
+  ECSLaunchConfig:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Condition: cEnableContainers
+    Metadata:
+      AWS::CloudFormation::Init:
+        config:
+          packages:
+            yum:
+              awslogs: []
+          files:
+            # Configuration file for awslogs (yum package) is needed as there is no other convenient way to pass region info
+            # EC2 launch config uses a python script where we directly pass parameters for region
+            /etc/awslogs/awscli.conf:
+              content: !Sub |
+                [plugins]
+                cwlogs = cwlogs
+                [default]
+                region = ${AWS::Region}
+              mode: '000400'
+              owner: root
+              group: root
+            /etc/awslogs/awslogs.conf:
+              content: !Join
+                - ""
+                - - !Sub |
+                    [general]
+                    state_file = /var/lib/awslogs/agent-state
+                    [cloud-init-outputlog]
+                    file = /var/log/cloud-init-output.log
+                    log_group_name =  ${LogGroupCloudInit}
+                    log_stream_name = cloudinit.outputlog-{instance_id}
+                    datetime_format = %d/%b/%Y:%H:%M:%S
+                  - !If
+                    - cEnableAdvancedLogging
+                    - !Sub |
+                      [system-log]
+                      file = /var/log/messages
+                      log_group_name =  ${LogGroupSysLog}
+                      log_stream_name = syslog-{instance_id}
+                      datetime_format = %b %d %H:%M:%S
+                    - !Ref AWS::NoValue
+              mode: '000400'
+              owner: root
+              group: root
+          services:
+            sysvinit:
+              awslogs:
+                enabled: true
+                ensureRunning: true
+                files:
+                  - "/etc/awslogs/awslogs.conf"
+                  - "/etc/awslogs/awscli.conf"
+    Properties:
+      # AMI list: http://docs.aws.amazon.com/AmazonECS/latest/developerguide/launch_container_instance.html
+      InstanceType: !Ref InstanceType
+      ImageId: !FindInMap [AWSRegionECSAMI, !Ref 'AWS::Region', 'ecs']
+      SpotPrice: !If [cEnableSpotInstances, !Ref SpotPricing, !Ref 'AWS::NoValue']
+      KeyName: !Ref KeyPairName
+      SecurityGroups: [!Ref ECSSecurityGroup]
+      IamInstanceProfile: !Ref ECSInstanceProfile
+      InstanceMonitoring: true
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash -xe
+
+          echo ECS_CLUSTER=${ContainerCluster} >> /etc/ecs/ecs.config
+          yum install -y aws-cfn-bootstrap
+
+          # We can "trap" errors and use cfn-signal to "stop" the deploy
+          function error_exit
+          {
+            /opt/aws/bin/cfn-signal -e 1 --stack ${AWS::StackName} --resource ECSAutoScalingGroup --region ${AWS::Region}
+            exit 1
+          }
+          trap 'error_exit' ERR
+
+          # Call CFN-INIT to process the metadata for CloudFormation Init.
+          /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource ECSLaunchConfig --region ${AWS::Region}
+
+          /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource ECSAutoScalingGroup --region ${AWS::Region}
+  ECSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Condition: cEnableContainers
+    Properties:
+      GroupDescription: ECS Security Group
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: tcp
+          FromPort: 31000
+          ToPort: 61000
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: tcp
+          FromPort: 7474
+          ToPort: 7474
+        - CidrIp: !Ref 'SSHLocation'
+          IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+      Tags:
+        - Key: Name
+          Value: !Sub '${ResourcePrefix}-ECS'
+  ECSInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Condition: cEnableContainers
+    Properties:
+      Path: /
+      Roles: [!Ref ECSInstanceRole]
+  ECSInstanceRole:
+    Type: AWS::IAM::Role
+    Condition: cEnableContainers
+    Properties:
+      RoleName: !Sub '${ResourcePrefix}-ECSInstanceRole'
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [ec2.amazonaws.com]
+            Action: ['sts:AssumeRole']
+      Path: /
+      Policies:
+
+        - PolicyName: root
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'ecs:CreateCluster'
+                  - 'ecs:DeregisterContainerInstance'
+                  - 'ecs:DiscoverPollEndpoint'
+                  - 'ecs:Poll'
+                  - 'ecs:RegisterContainerInstance'
+                  - 'ecs:StartTelemetrySession'
+                  - 'ecs:Submit*'
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                  - "ssm:GetParameters"
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - ecr:GetAuthorizationToken
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:GetDownloadUrlForLayer
+                  - ecr:GetRepositoryPolicy
+                  - ecr:DescribeRepositories
+                  - ecr:ListImages
+                  - ecr:DescribeImages
+                  - ecr:BatchGetImage
+                Resource: '*'
+  ECSServiceRole:
+    Type: AWS::IAM::Role
+    Condition: cEnableContainers
+    Properties:
+      RoleName: !Sub '${ResourcePrefix}-ECS-Service'
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [ecs.amazonaws.com]
+            Action: ['sts:AssumeRole']
+      Path: /
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'elasticloadbalancing:DeregisterInstancesFromLoadBalancer'
+                  - 'elasticloadbalancing:DeregisterTargets'
+                  - 'elasticloadbalancing:Describe*'
+                  - 'elasticloadbalancing:RegisterInstancesWithLoadBalancer'
+                  - 'elasticloadbalancing:RegisterTargets'
+                  - 'ec2:Describe*'
+                  - 'ec2:AuthorizeSecurityGroupIngress'
+                Resource: '*'
+  ECSRepository:
+    Type: AWS::ECR::Repository
+    Condition: cEnableContainers
+    Properties:
+      RepositoryName: !Sub '${ResourcePrefix}-containerimage'
+      RepositoryPolicyText:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowPushPull
+            Effect: Allow
+            Principal:
+              AWS:
+                - !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action:
+              - ecr:GetDownloadUrlForLayer
+              - ecr:BatchGetImage
+              - ecr:BatchCheckLayerAvailability
+              - ecr:PutImage
+              - ecr:InitiateLayerUpload
+              - ecr:UploadLayerPart
+              - ecr:CompleteLayerUpload
+  # Create Log Group to setup the retention time of ECS task logs
+  TaskRole:
+    Type: AWS::IAM::Role
+    Condition: cEnableContainers
+    Properties:
+      RoleName: !Sub '${ResourcePrefix}-ecs-task-role'
+      AssumeRolePolicyDocument:
+        Statement:
+          - Sid: '1'
+            Effect: Allow
+            Principal:
+              Service: [ecs-tasks.amazonaws.com]
+            Action: ['sts:AssumeRole']
+      Policies:
+        # Allow describe parameters to automate config process
+        - PolicyName: parameter-store-list
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ssm:DescribeParameters
+                  - ssm:GetParameters
+                Resource:
+                  - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:*'
+        - PolicyName: parameter-store-db-app
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameters
+                Resource:
+                  - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}/db/*'
+                  - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}/app/*'
+              - Effect: Allow
+                Action:
+                  - ssm:GetParametersByPath
+                Resource:
+                  - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}/db'
+                  - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}/app'
+  ECSScaleUpPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Condition: cEnableContainers
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref ECSAutoScalingGroup
+      Cooldown: 60
+      ScalingAdjustment: 1
+  ECSScaleDownPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Condition: cEnableContainers
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref ECSAutoScalingGroup
+      Cooldown: 60
+      ScalingAdjustment: -1
+  CPUAlarmHigh:
+    Type: AWS::CloudWatch::Alarm
+    Condition: cEnableContainers
+    Properties:
+      AlarmName: !Sub ${ResourcePrefix}-CPU_alarm_high
+      AlarmDescription: Scale-up ECS cluster if CPU > 90% for 10 minutes
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 90
+      AlarmActions: [!Ref ECSScaleUpPolicy]
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref ECSAutoScalingGroup
+      ComparisonOperator: GreaterThanThreshold
+  CPUAlarmLow:
+    Type: AWS::CloudWatch::Alarm
+    Condition: cEnableContainers
+    Properties:
+      AlarmName: !Sub ${ResourcePrefix}-CPU_alarm_low
+      AlarmDescription: Scale-down ECS cluster if CPU < 70% for 10 minutes
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 70
+      AlarmActions: [!Ref ECSScaleDownPolicy]
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref ECSAutoScalingGroup
+      ComparisonOperator: LessThanThreshold
+  #####################################################################################
+  # End of ECS for Application
+  #####################################################################################
+
+  #####################################################################################
+  # Start of EC2 Auto Scaling
+  #####################################################################################
+  EC2InstanceRole:
+    Type: AWS::IAM::Role
+    Condition: cEnableEC2
+    Properties:
+      RoleName: !Sub '${ResourcePrefix}-EC2-InstanceRole'
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [ec2.amazonaws.com]
+            Action: ['sts:AssumeRole']
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ec2:*
+                  - codedeploy:*
+                  - autoscaling:Describe*
+                  - cloudformation:Describe*
+                  - cloudformation:GetTemplate
+                  - s3:Get*
+                  - codepipeline:*
+                  - rds:DescribeDBInstances
+                  - cloudwatch:PutMetricData
+                  - cloudwatch:GetMetricStatistics
+                  - cloudwatch:ListMetrics
+                Resource: '*'
+              # Allow fetch from Parameters Store in a specific name space
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                  - ssm:GetParameters
+                Resource:
+                  - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}/db/*'
+                  - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}/app/*'
+              - Effect: Allow
+                Action:
+                  - ssm:GetParametersByPath
+                Resource:
+                  - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}/db'
+                  - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}/app'
+              # Allow describe parameters to automate config process
+              - Effect: Allow
+                Action:
+                  - ssm:DescribeParameters
+                Resource:
+                  - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:*'
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource:
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${ResourcePrefix}*:*'
+      Path: /
+  EC2InstanceRoleInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Condition: cEnableEC2
+    Properties:
+      Path: /
+      Roles: [!Ref EC2InstanceRole]
+  EC2AutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Condition: cEnableEC2
+    Properties:
+      VPCZoneIdentifier:
+        - !Ref publicSubnet01
+        - !Ref publicSubnet02
+      LaunchConfigurationName: !Ref EC2LaunchConfig
+      MinSize: !Ref 'InstanceMinCount'
+      MaxSize: !Ref 'InstanceMaxCount'
+      DesiredCapacity: !Ref 'InstanceCount'
+      TargetGroupARNs: [!Ref AppTargetGroup]
+      MetricsCollection:
+        # No metrics specified, send all!
+        # http://docs.aws.amazon.com/AutoScaling/latest/APIReference/API_EnableMetricsCollection.html
+        - Granularity: 1Minute
+      Tags:
+        - Key: Name
+          Value: !Sub '${ResourcePrefix}-EC2'
+          PropagateAtLaunch: true
+    CreationPolicy:
+      ResourceSignal:
+        Timeout: PT15M
+    UpdatePolicy: !If
+      - cMinInstancesGreaterThanOne
+      - AutoScalingRollingUpdate:
+          MinInstancesInService: '1'
+          MaxBatchSize: '1'
+          PauseTime: PT15M
+          WaitOnResourceSignals: 'true'
+      - AutoScalingReplacingUpdate:
+          WillReplace: true
+  EC2LaunchConfig:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Condition: cEnableEC2
+    Metadata:
+      AWS::CloudFormation::Init:
+        config:
+          services:
+            sysvinit:
+              codedeploy-agent:
+                enabled: true
+                ensureRunning: true
+          packages:
+            apt:
+              unzip: []
+              libwww-perl: []
+              libdatetime-perl: []
+          files:
+            /tmp/cwlogs/logstreams.conf:
+              content: !Join
+                - ""
+                - - !Sub |
+                    [general]
+                    state_file= /var/awslogs/agent-state
+                    [django-neo4j-serverlog]
+                    file = /tmp/server.log
+                    log_group_name =  ${LogGroupAppLog}
+                    log_stream_name = django-neo4j.serverlog-{instance_id}
+                    datetime_format = %d/%b/%Y:%H:%M:%S
+                    [cloud-init-outputlog]
+                    file = /var/log/cloud-init-output.log
+                    log_group_name =  ${LogGroupCloudInit}
+                    log_stream_name = cloudinit.outputlog-{instance_id}
+                    datetime_format = %d/%b/%Y:%H:%M:%S
+                  - !If
+                    - cEnableAdvancedLogging
+                    - !Sub |
+                      [system-log]
+                      file = /var/log/syslog
+                      log_group_name =  ${LogGroupSysLog}
+                      log_stream_name = syslog-{instance_id}
+                      datetime_format = %b %d %H:%M:%S
+                    - !Ref AWS::NoValue
+              mode: '000400'
+              owner: root
+              group: root
+            /lib/systemd/system/awslogs.service:
+              content: |
+                [Unit]
+                Description=The CloudWatch Logs agent
+                After=network.target
+                [Service]
+                Restart=always
+                TimeoutSec=infinity
+                ExecStart=/var/awslogs/bin/awslogs-agent-launcher.sh
+                [Install]
+                WantedBy=multi-user.target
+              mode: '000400'
+              owner: root
+              group: root
+            /tmp/aws_monitoring.sh:
+              content: |
+                #!/usr/bin/env bash
+                set -xu
+                (crontab -l 2>/dev/null; echo '*/1 * * * * /home/ubuntu/aws-scripts-mon/mon-put-instance-data.pl --mem-util --disk-space-util --disk-path=/ --auto-scaling=only --from-cron') | crontab -
+              mode: '000500'
+              owner: root
+              group: root
+    Properties:
+      ImageId: !FindInMap [AWSRegion2AMI, !Ref 'AWS::Region', !Ref OperatingSystem]
+      SpotPrice: !If [cEnableSpotInstances, '0.05', !Ref 'AWS::NoValue']
+      InstanceType: !Ref InstanceType
+      KeyName: !Ref KeyPairName
+      SecurityGroups: [!Ref AppSecurityGroup]
+      IamInstanceProfile: !Ref EC2InstanceRoleInstanceProfile
+      InstanceMonitoring: true
+      UserData:
+        'Fn::Base64': !Sub |
+          #!/bin/bash -ex
+
+          # We can "trap" errors and use cfn-signal to "stop" the deploy
+          function error_exit
+          {
+            cfn-signal -e 1 --stack ${AWS::StackName} --resource EC2AutoScalingGroup --region ${AWS::Region}
+            exit 1
+          }
+
+          trap 'error_exit' ERR
+
+          # Update repo and get tool dependencies
+          apt-get update
+          apt-get install -y python-pip ruby
+
+          # Intall CloudFormation tools....
+          pip install https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz
+
+          # AWS CLI Tools are used to get parameters from parameter store.
+          pip install awscli neo4django py2neo httpie
+          aws configure set region ${AWS::Region}
+
+          # Install the AWS CodeDeploy Agent.
+          cd /home/ubuntu
+          curl -O https://aws-codedeploy-${AWS::Region}.s3.amazonaws.com/latest/install
+          chmod +x ./install
+          ./install auto
+
+          # Call CFN-INIT to process the metadata for CloudFormation Init. Since ubuntu does not have the tools installed, we install the CFN Bootstrap in the previous step.
+          cfn-init -v --stack ${AWS::StackName} --resource EC2LaunchConfig --region ${AWS::Region}
+
+          #Download and Install the Cloudwatch Logs agent.
+          curl -O https://s3.amazonaws.com/aws-cloudwatch/downloads/latest/awslogs-agent-setup.py
+          python awslogs-agent-setup.py -n -r ${AWS::Region} -c /tmp/cwlogs/logstreams.conf
+
+          #Start the Cloudwatch logs agent service using the SYSTEMD Unit file created by cloudformation Init.
+          systemctl enable awslogs.service
+          systemctl start awslogs.service
+
+          #Download and Install the CloudWatch monitoring Script
+          curl -O http://aws-cloudwatch.s3.amazonaws.com/downloads/CloudWatchMonitoringScripts-1.2.1.zip
+          unzip CloudWatchMonitoringScripts-1.2.1.zip
+          rm CloudWatchMonitoringScripts-1.2.1.zip
+          cd /tmp/
+          sudo ./aws_monitoring.sh
+          rm ./aws_monitoring.sh
+
+          # All is well, so signal AutoScalingGroup.
+          $(which cfn-signal) -e 0 --stack ${AWS::StackName} --resource EC2AutoScalingGroup --region ${AWS::Region}
+
+  #####################################################################################
+  # End of EC2 Auto Scaling
+  #####################################################################################
+
+  #####################################################################################
+  # Common stuff between EC2/ECS
+  #####################################################################################
+
+  AppLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub '${ResourcePrefix}-LB'
+      Scheme: internet-facing
+      LoadBalancerAttributes:
+        - Key: idle_timeout.timeout_seconds
+          Value: '30'
+        - !If [cEnableAdvancedLogging, {Key: access_logs.s3.enabled, Value: true}, !Ref 'AWS::NoValue']
+        - !If [cEnableAdvancedLogging, {Key: access_logs.s3.bucket, Value: !Ref ELBAccessLogsBucket}, !Ref 'AWS::NoValue']
+        - !If [cEnableAdvancedLogging, {Key: access_logs.s3.prefix, Value: 'EC2-ELB'}, !Ref 'AWS::NoValue']
+      Subnets:
+        - !Ref publicSubnet01
+        - !Ref publicSubnet02
+      SecurityGroups: [!Ref AppSecurityGroup]
+      Tags:
+        - Key: custom:cloudformation:depends-on
+          Value: !If [cEnableAdvancedLogging, !Ref ELBAccessLogsBucketPolicy, !Ref 'AWS::NoValue']
+  AppTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub '${ResourcePrefix}-TG'
+      Port: !Ref AppPort
+      Protocol: HTTP
+      VpcId: !Ref VPC
+      HealthCheckPath: /polls/
+  AppLoadBalancerListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref AppTargetGroup
+      LoadBalancerArn: !Ref AppLoadBalancer
+      Port: 80
+      Protocol: HTTP
+  AppSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: SSH, HTTP and HTTPS
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - CidrIp: !Ref 'SSHLocation'
+          IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+        - !If
+          - cEnableEC2
+          - CidrIp: 0.0.0.0/0
+            IpProtocol: tcp
+            FromPort: !Ref AppPort
+            ToPort: !Ref AppPort
+          - !Ref 'AWS::NoValue'
+        - !If
+          - cEnableHTTPS
+          - CidrIp: 0.0.0.0/0
+            IpProtocol: tcp
+            FromPort: 443
+            ToPort: 443
+          - !Ref 'AWS::NoValue'
+      Tags:
+        - Key: Name
+          Value: !Sub '${ResourcePrefix}-app-security-group'
+
+  #####################################################################################
+  # Start of CI/CD
+  #####################################################################################
+  QAGroup:
+    Type: AWS::IAM::Group
+    Properties:
+      GroupName: !Sub '${ResourcePrefix}-QA'
+      ManagedPolicyArns: ['arn:aws:iam::aws:policy/IAMReadOnlyAccess', 'arn:aws:iam::aws:policy/IAMUserSSHKeys']
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # Pull repo
+              - Effect: Allow
+                Action:
+                  - codecommit:BatchGetRepositories
+                  - codecommit:List*
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - codecommit:Get*
+                  - codecommit:GitPull
+                Resource:
+                  - !Sub 'arn:aws:codecommit:${AWS::Region}:${AWS::AccountId}:${ResourcePrefix}-repo'
+              - Effect: Allow
+                Action:
+                  - 'codepipeline:GetPipeline'
+                  - 'codepipeline:GetPipelineState'
+                  - 'codepipeline:GetPipelineExecution'
+                Resource:
+                  # - !Sub 'arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId):*'
+                  - !Sub 'arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}'
+              - Effect: Allow
+                Action:
+                  - 'codepipeline:PutApprovalResult'
+                Resource:
+                  - !Sub 'arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:pm-MyApp/ApprovalProduction/QAApproval'
+  DevGroup:
+    Type: AWS::IAM::Group
+    Properties:
+      GroupName: !Sub '${ResourcePrefix}-Dev'
+      ManagedPolicyArns: ['arn:aws:iam::aws:policy/IAMReadOnlyAccess', 'arn:aws:iam::aws:policy/IAMUserSSHKeys']
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # List repo
+              - Effect: Allow
+                Action:
+                  - codecommit:BatchGetRepositories
+                  - codecommit:List*
+                Resource: '*'
+              # Pull repo
+              - Effect: Allow
+                Action:
+                  - codecommit:Get*
+                  - codecommit:GitPull
+                  - codecommit:GitPush
+                Resource:
+                  - !Sub 'arn:aws:codecommit:${AWS::Region}:${AWS::AccountId}:${ResourcePrefix}-repo'
+  CodeRepo:
+    Type: AWS::CodeCommit::Repository
+    Properties:
+      RepositoryName: !Sub '${ResourcePrefix}-repo'
+      RepositoryDescription: A code repo for the application
+  CodeBuildRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ResourcePrefix}-CodeBuild'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [codebuild.amazonaws.com]
+            Action: ['sts:AssumeRole']
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Statement:
+              # Login to ECR
+              - Effect: Allow
+                Action:
+                  - ecr:GetAuthorizationToken
+                Resource: '*'
+              # Publish to ECR
+              - Effect: Allow
+                Action:
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:CompleteLayerUpload
+                  - ecr:InitiateLayerUpload
+                  - ecr:PutImage
+                  - ecr:UploadLayerPart
+                Resource:
+                  # TODO: paramenterize pm=test => ImageName
+                  - !Sub 'arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/${ResourcePrefix}-containerimage'
+              # Pull repo
+              - Effect: Allow
+                Action:
+                  - codecommit:GitPull
+                Resource:
+                  # TODO: paramenterize pm=test => RepositoryName
+                  - !Sub 'arn:aws:codecommit:${AWS::Region}:${AWS::AccountId}:${ResourcePrefix}-repo'
+              # Write build logs
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource:
+                  # TODO: paramenterize pm=test => ProjectName
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${ResourcePrefix}-build:log-stream'
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${ResourcePrefix}-build:log-stream:*'
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${ResourcePrefix}-test:log-stream'
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${ResourcePrefix}-test:log-stream:*'
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${ResourcePrefix}-integration-test:log-stream'
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${ResourcePrefix}-integration-test:log-stream:*'
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${ResourcePrefix}-ecs-image:log-stream'
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${ResourcePrefix}-ecs-image:log-stream:*'
+                  - !If [cEnableES, !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${ResourcePrefix}-kibana:log-stream:', !Ref 'AWS::NoValue']
+                  - !If [cEnableES, !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${ResourcePrefix}-kibana:log-stream:*', !Ref 'AWS::NoValue']
+  CodeBuildArtifactLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    Properties:
+      LogGroupName: !Sub '/aws/codebuild/${ResourcePrefix}-build'
+      RetentionInDays: 1
+  CodeBuildDockerImageLogGroup:
+    Type: AWS::Logs::LogGroup
+    Condition: cEnableContainers
+    DeletionPolicy: Retain
+    Properties:
+      LogGroupName: !Sub '/aws/codebuild/${ResourcePrefix}-ecs-image'
+      RetentionInDays: 1
+  CodeBuildKibanaLogGroup:
+    Type: AWS::Logs::LogGroup
+    Condition: cEnableES
+    DeletionPolicy: Retain
+    Properties:
+      LogGroupName: !Sub '/aws/codebuild/${ResourcePrefix}-kibana'
+      RetentionInDays: 1
+  CodeBuildArtifact:
+    Type: AWS::CodeBuild::Project
+    DependsOn: [CodeRepo, CodeBuildRole, CodeBuildArtifactLogGroup]
+    Properties:
+      Name: !Sub '${ResourcePrefix}-build'
+      Description: A description about my project
+      ServiceRole: !GetAtt 'CodeBuildRole.Arn'
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        # Info: http://docs.aws.amazon.com/codebuild/latest/userguide/sample-docker.html
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        # List of Bukd Environments
+        # http://docs.aws.amazon.com/codebuild/latest/userguide/build-env-ref.html
+        Image: aws/codebuild/nodejs:7.0.0
+      Source:
+        Location: !GetAtt 'CodeRepo.CloneUrlHttp'
+        Type: CODEPIPELINE
+        BuildSpec: !Sub |
+          version: 0.2
+          phases:
+            build:
+              commands:
+                - echo I did a thing!
+          artifacts:
+            files:
+              - '**/*' # All files recursively within the app directory
+            base-directory: portfolio/cloudplatform/ubuntu/django-neo4j/app/
+      TimeoutInMinutes: 300  # 5min
+  CodeBuildKibana:
+    Type: AWS::CodeBuild::Project
+    DependsOn:
+      - CodeRepo
+      - CodeBuildRole
+      - CodeBuildKibanaLogGroup
+    Condition: cEnableES
+    Properties:
+      Name: !Sub '${ResourcePrefix}-kibana'
+      Description: This build will deploy your Kibana dashboard.
+      ServiceRole: !GetAtt 'CodeBuildRole.Arn'
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/ubuntu-base:14.04
+      Source:
+        Location: !GetAtt 'CodeRepo.CloneUrlHttp'
+        Type: CODEPIPELINE
+        BuildSpec: !Sub
+          - |
+            version: 0.2
+            phases:
+              build:
+                commands:
+                  - cd kibana/
+                  - ./load.sh -url 'https://${ES}'
+          - ES: !If
+              - cEnableESCentral
+              - Fn::ImportValue: !Sub '${ElasticsearchStack}-DomainEndpointES'
+              - !Sub '${ElasticsearchAWSLogs.DomainEndpoint}'
+      TimeoutInMinutes: 300
+  CodeBuildDockerImage:
+    Type: AWS::CodeBuild::Project
+    Condition: cEnableContainers
+    DependsOn: [CodeRepo, CodeBuildRole]
+    Properties:
+      Name: !Sub '${ResourcePrefix}-ecs-image'
+      Description: A description about my project
+      ServiceRole: !GetAtt 'CodeBuildRole.Arn'
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        # Info: http://docs.aws.amazon.com/codebuild/latest/userguide/sample-docker.html
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        # http://docs.aws.amazon.com/codebuild/latest/userguide/build-env-ref.html
+        Image: aws/codebuild/docker:1.12.1
+        EnvironmentVariables:
+          - Name: AWS_DEFAULT_REGION
+            Value: !Ref AWS::Region
+          - Name: IMAGE_REPO_NAME
+            Value: !Sub '${ResourcePrefix}-containerimage'
+          - Name: AWS_ACCOUNT_ID
+            Value: !Ref AWS::AccountId
+      Source:
+        Location: !GetAtt 'CodeRepo.CloneUrlHttp'
+        Type: CODEPIPELINE
+        BuildSpec: !Sub |
+          version: 0.2
+          phases:
+            pre_build:
+              commands:
+                - echo Logging in to Amazon ECR...
+                - echo -n "$CODEBUILD_BUILD_ID" | sed "s/.*:\([[:xdigit:]]\{7\}\).*/\1/" > /tmp/build_id
+                - printf "%s" "$REPOSITORY_URI" "$(cat /tmp/build_id)" > /tmp/build_tag
+                - printf '{"tag":"%s"}' "$(cat /tmp/build_id)" > /tmp/build.json
+                - $(aws ecr get-login --region $AWS_DEFAULT_REGION)
+            build:
+              commands:
+                - echo Build started on `date`
+                - echo Building the Docker image...
+                - cd portfolio/cloudplatform/ubuntu/django-neo4j/app/
+                - docker build --build-arg PORT=${AppPort} -t $IMAGE_REPO_NAME:$(cat /tmp/build_tag) .
+                - docker tag $IMAGE_REPO_NAME:$(cat /tmp/build_tag) $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME:$(cat /tmp/build_tag)
+            post_build:
+              commands:
+                - echo Build completed on `date`
+                - echo Pushing the Docker image...
+                - docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME:$(cat /tmp/build_tag)
+          artifacts:
+            files: /tmp/build.json
+            discard-paths: 'yes'
+      TimeoutInMinutes: 300 # 5min
+  CodeDeployTrustRole:
+    Type: AWS::IAM::Role
+    Condition: cEnableEC2
+    Properties:
+      RoleName: !Sub '${ResourcePrefix}-CodeDeploy'
+      AssumeRolePolicyDocument:
+        Statement:
+          - Sid: '1'
+            Effect: Allow
+            Principal:
+              Service: [codedeploy.amazonaws.com]
+            Action: ['sts:AssumeRole']
+      Policies:
+        - PolicyName: !Sub '${ResourcePrefix}-CodeDeploy-policy'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # Allow CodeDeploy to deploy code into EC2
+              - Effect: Allow
+                Action:
+                  - ec2:*
+                  - autoscaling:* # something is required for CodeDeployDefault.AllAtOnce
+                Resource: '*'
+      Path: /
+  CodeDeployApplication:
+    Type: AWS::CodeDeploy::Application
+    Condition: cEnableEC2
+  CodeDeployApplicationdeploymentGroup:
+    Type: AWS::CodeDeploy::DeploymentGroup
+    Condition: cEnableEC2
+    Properties:
+      ApplicationName: !Ref CodeDeployApplication
+      DeploymentConfigName: 'CodeDeployDefault.OneAtATime'
+      AutoScalingGroups: [!Ref EC2AutoScalingGroup]
+      ServiceRoleArn: !GetAtt 'CodeDeployTrustRole.Arn'
+  CodePipelineServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ResourcePrefix}-CodePipelineServiceRole'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [codepipeline.amazonaws.com]
+            Action: ['sts:AssumeRole']
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # Pull repo
+              - Effect: Allow
+                Action:
+                  - codecommit:BatchGetRepositories
+                  - codecommit:Get*
+                  - codecommit:GitPull
+                  - codecommit:List*
+                  - codecommit:UploadArchive
+                Resource:
+                  # TODO: paramenterize pm=test => RepositoryName
+                  - !Sub 'arn:aws:codecommit:${AWS::Region}:${AWS::AccountId}:${ResourcePrefix}-repo'
+              - Effect: Allow
+                Action:
+                  - ecr:BatchGetImage
+                Resource:
+                  - !Sub 'arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/${ResourcePrefix}-containerimage'
+              - Effect: Allow
+                Action:
+                  - codebuild:StartBuild
+                  - codebuild:BatchGetBuilds
+                  - cloudformation:*
+                  - iam:PassRole
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - codedeploy:*
+                Resource: '*'
+  ArtifactStoreS3Location:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    Properties:
+      BucketName: !Sub '${ResourcePrefix}-codepipeline-artifacts'
+  ArtifactStoreS3LocationPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ArtifactStoreS3Location
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Action:
+              - s3:*
+            Resource:
+              - !Sub 'arn:aws:s3:::${ResourcePrefix}-codepipeline-artifacts'
+              - !Sub 'arn:aws:s3:::${ResourcePrefix}-codepipeline-artifacts/*'
+            Principal: '*'
+  CloudFormationExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ResourcePrefix}-CloudFormationExecutionRole'
+      AssumeRolePolicyDocument:
+        Statement:
+          - Sid: '1'
+            Effect: Allow
+            Principal:
+              Service: [cloudformation.amazonaws.com]
+            Action: ['sts:AssumeRole']
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Resource: '*'
+                Effect: Allow
+                Action:
+                  - ecs:*
+                  - ecr:*
+                  - iam:*
+                  - application-autoscaling:*
+                  - cloudwatch:PutMetricAlarm
+                  - cloudwatch:DeleteAlarms
+                  - cloudwatch:DescribeAlarms
+  ApprovalTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: !Sub '${ResourcePrefix}-approvals'
+      TopicName: !Sub '${ResourcePrefix}-approvals'
+  ApprovalTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      # http://docs.aws.amazon.com/sns/latest/dg/AccessPolicyLanguage_SpecialInfo.html
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          # Allow Pipeline to publish into approvals topic
+          - Effect: Allow
+            Principal: # '*'
+              AWS:
+                - !Sub '${CodePipelineServiceRole.Arn}'
+            Action:
+              - 'sns:Publish'
+            Resource:
+              - !Ref ApprovalTopic
+      Topics:
+        - !Ref ApprovalTopic
+  QAEmailGroup:
+    Type: AWS::SNS::Subscription
+    Condition: cEnableApprovalEmails
+    Properties:
+      Endpoint: !Sub '${EmailApprovals}'
+      Protocol: email
+      TopicArn: !Ref ApprovalTopic
+  CodePipeline:
+    Type: AWS::CodePipeline::Pipeline
+    DependsOn:
+      - AppTargetGroup
+      - DBLoadBalancerTargetGroupPort7474
+      - DBLoadBalancerTargetGroupPort7687
+    Properties:
+      Name: !Sub '${ResourcePrefix}-pipeline'
+      RoleArn: !GetAtt 'CodePipelineServiceRole.Arn'
+      Stages:
+        - Name: Source
+          Actions:
+            - Name: SourceAction
+              ActionTypeId:
+                Category: Source
+                Owner: AWS
+                Version: 1
+                Provider: CodeCommit
+              OutputArtifacts:
+                - Name: SourceOutput
+              Configuration:
+                RepositoryName: !GetAtt 'CodeRepo.Name'
+                BranchName: master
+        - Name: Build
+          Actions:
+            - !If
+              - cEnableContainers
+              - Name: BuildDockerImage
+                InputArtifacts:
+                  - Name: SourceOutput
+                ActionTypeId:
+                  Category: Build
+                  Owner: AWS
+                  Version: 1
+                  Provider: CodeBuild
+                OutputArtifacts:
+                  - Name: DockerImageOutput
+                Configuration:
+                  ProjectName: !Ref CodeBuildDockerImage
+              - Name: BuildArtifact
+                InputArtifacts:
+                  - Name: SourceOutput
+                ActionTypeId:
+                  Category: Build
+                  Owner: AWS
+                  Version: 1
+                  Provider: CodeBuild
+                OutputArtifacts:
+                  - Name: BuildArtifact
+                Configuration:
+                  ProjectName: !Ref CodeBuildArtifact
+                RunOrder: 1
+            - !If
+              - cEnableES
+              - Name: BuildKibana
+                InputArtifacts:
+                  - Name: SourceOutput
+                ActionTypeId:
+                  Category: Build
+                  Owner: AWS
+                  Version: 1
+                  Provider: CodeBuild
+                Configuration:
+                  ProjectName: !Ref 'CodeBuildKibana'
+              - !Ref 'AWS::NoValue'
+        - Name: Beta
+          Actions:
+            - !If
+              - cEnableEC2
+              - Name: BetaEC2
+                InputArtifacts:
+                  - Name: BuildArtifact
+                ActionTypeId:
+                  Category: Deploy
+                  Owner: AWS
+                  Version: 1
+                  Provider: CodeDeploy
+                Configuration:
+                  ApplicationName: !Ref CodeDeployApplication
+                  DeploymentGroupName: !Ref CodeDeployApplicationdeploymentGroup
+              - !Ref 'AWS::NoValue'
+            - !If
+              - cEnableContainers
+              - Name: BetaECS
+                ActionTypeId:
+                  Category: Deploy
+                  Owner: AWS
+                  Version: 1
+                  Provider: CloudFormation
+                Configuration:
+                  ChangeSetName: Deploy
+                  ActionMode: CREATE_UPDATE
+                  StackName: !Sub '${ResourcePrefix}-ContainerApp'
+                  Capabilities: CAPABILITY_NAMED_IAM
+                  TemplatePath: SourceOutput::portfolio/cloudplatform/ubuntu/django-neo4j/app/containerapp.template.yaml
+                  RoleArn: !GetAtt 'CloudFormationExecutionRole.Arn'
+                  # Can't be a YAML object:  Value of property Configuration must be an object with String (or simple type) properties
+                  ParameterOverrides: !Sub |
+                    {
+                      "ParentStackName": "${AWS::StackName}",
+                      "ResourcePrefix": "${ResourcePrefix}",
+                      "Cluster": "${ContainerCluster}",
+                      "CloudwatchLogsGroup": "${LogGroupAppLog}",
+                      "DockerImageTag": { "Fn::GetParam" : ["DockerImageOutput", "build.json", "tag"] },
+                      "DockerImage": "${ResourcePrefix}-containerimage",
+                      "TaskRole": "${TaskRole}",
+                      "ECSTargetGroup": "${AppTargetGroup}",
+                      "ECSServiceRole": "${ECSServiceRole}",
+                      "DBAddress": "${DBLoadBalancer.DNSName}",
+                      "AppPort": "${AppPort}"
+                    }
+                InputArtifacts:
+                  - Name: DockerImageOutput
+                  - Name: SourceOutput
+              - !Ref 'AWS::NoValue'
+        - Name: ApprovalProduction
+          Actions:
+            - Name: QAApproval
+              ActionTypeId:
+                Category: Approval
+                Owner: AWS
+                Version: 1
+                Provider: Manual
+              Configuration:
+                NotificationArn: !Ref ApprovalTopic
+                CustomData: !Sub 'Approval or Reject this change after running Exploratory Tests: http://${AppLoadBalancer.DNSName}/'
+      ArtifactStore:
+        Type: S3
+        Location: !Ref ArtifactStoreS3Location
+  AddTargetWithTransformLambda:
+    Type: AWS::Lambda::Function
+    Condition: cEnableEmailNotications
+    Properties:
+      Handler: index.lambda_handler
+      FunctionName: !Sub ${ResourcePrefix}-add-target-with-transform
+      Role: !Sub ${AddTargetWithTransformLambdaRole.Arn}
+      Runtime: nodejs6.10
+      Timeout: 25
+      Code:
+        # Lambda to add CloudWatch event Targets using transforms.
+        # Ref: lambda/AddCW-EventTarget.js
+        ZipFile: |
+          var AWS = require('aws-sdk');
+          var response = require('cfn-response');
+          exports.lambda_handler = function (event, context) {
+            try {
+              var cloudwatchevents = new AWS.CloudWatchEvents();
+              if(event.RequestType == 'Delete') {
+                console.log('Delete Called');
+                var rmParams = {
+                  Rule: event.ResourceProperties.RuleName,
+                  Ids: [
+                    event.ResourceProperties.TargetId
+                  ]
+                };
+                cloudwatchevents.removeTargets(rmParams, function(err, data) {
+                  if (err){
+                    console.log(err, err.stack);
+                    response.send(event, context, response.FAILED);
+                  }
+                  else{
+                    console.log(data);
+                    response.send(event, context, response.SUCCESS);
+                  }
+                });
+              } else {
+                var params = {
+                  Rule: event.ResourceProperties.RuleName,
+                  Targets: [
+                    {
+                      Arn: event.ResourceProperties.TargetArn,
+                      Id: event.ResourceProperties.TargetId,
+                      InputTransformer: {
+                        InputPathsMap: {"build-id": "$.detail.build-id","project-name": "$.detail.project-name","build-status": "$.detail.build-status"},
+                        InputTemplate: '"Build <build-id> for build project <project-name> has reached the build status of <build-status>."',
+                      }
+                    }
+                  ]
+                };
+                cloudwatchevents.putTargets(params, function(err, data) {
+                  if (err){
+                    console.log(err, err.stack);
+                    response.send(event, context, response.FAILED);
+                  }
+                  else{
+                    console.log(data);
+                    response.send(event, context, response.SUCCESS);
+                  }
+                });
+              }
+            }
+            catch (err) {
+              console.log('General Error.');
+              console.log(err);
+              response.send(event, context, response.FAILED);
+            }
+          };
+  AddTargetWithTransformLambdaRole:
+    Type: AWS::IAM::Role
+    Condition: cEnableEmailNotications
+    Metadata:
+      Comment: Lambda role to allow AddTargetWithTransformLambda to setup an event rule target unsupported by CloudFormation
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: !Sub ${ResourcePrefix}-PutTargetRule
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - events:PutTargets
+                  - events:RemoveTargets
+                Resource: !Sub ${CodeBuildNotificationsRule.Arn}
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource:
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ResourcePrefix}-add-target-with-transform'
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ResourcePrefix}-add-target-with-transform:*'
+  AddTargetWithTransformLambdaLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    Condition: cEnableEmailNoticationsAndLambdaLogging
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${ResourcePrefix}-add-target-with-transform'
+      RetentionInDays: 1
+  AddTargetWithTransformation:
+    Type: AWS::CloudFormation::CustomResource
+    DependsOn: CodeBuildNotificationsRule
+    Condition: cEnableEmailNotications
+    Version: 1.0
+    Properties:
+      ServiceToken: !Sub ${AddTargetWithTransformLambda.Arn}
+      RuleName: !Sub ${CodeBuildNotificationsRule}
+      TargetArn: !Sub ${EmailNotificationTopic}
+      TargetId: !Sub ${EmailNotificationTopic.TopicName}
+  CodeBuildNotificationsRule:
+    Condition: cEnableEmailNotications
+    Type: AWS::Events::Rule
+    Properties:
+      Description: Notify subscribers when build steps are finished
+      Name: !Sub ${ResourcePrefix}-CodeBuildNotificationsRule
+      EventPattern: !Sub
+        - |
+          {
+            "source": [
+              "aws.codebuild"
+            ],
+            "detail-type": [
+              "CodeBuild Build State Change"
+            ],
+            "detail": {
+              "build-status": [
+                "SUCCEEDED",
+                "FAILED",
+                "STOPPED"
+              ],
+              "project-name": [
+                ${dockerImageBuild}
+                ${kibanaBuild}
+                "${CodeBuildArtifact}"
+              ]
+            }
+          }
+        - dockerImageBuild: !If
+            - cEnableContainers
+            - !Sub '"${CodeBuildDockerImage}",'
+            - ""
+          kibanaBuild: !If
+            - cEnableES
+            - !Sub '"${CodeBuildKibana}",'
+            - ""
+      State: ENABLED
+  #####################################################################################
+  # End of CI/CD
+  #####################################################################################
+
+  #####################################################################################
+  # Start of Log Groups
+  #####################################################################################
+  LogGroupAppLog:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    Properties:
+      LogGroupName: !Sub '${ResourcePrefix}-applog'
+      RetentionInDays: 7
+  LogGroupCloudInit:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    Properties:
+      LogGroupName: !Sub '${ResourcePrefix}-cloudinitoutput'
+      RetentionInDays: 7
+  LogGroupSysLog:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    Condition: cEnableAdvancedLogging
+    Properties:
+      LogGroupName: !Sub '${ResourcePrefix}-syslog'
+      RetentionInDays: 7
+  ######
+  LogStoreS3Location:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    Properties:
+      BucketName: !Sub '${ResourcePrefix}-logs'
+      LifecycleConfiguration:
+        Rules:
+          - ExpirationInDays: 90
+            Id: !Sub '${ResourcePrefix}-LogMigrationLifecycleRule'
+            Status: Enabled
+            Transitions:
+              - StorageClass: STANDARD_IA
+                TransitionInDays: 30
+              - StorageClass: GLACIER
+                TransitionInDays: 60
+  LogStoreS3LocationPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref 'LogStoreS3Location'
+      PolicyDocument:
+        Statement:
+          - Sid: AWSCloudWatchLogsAclCheck
+            Effect: Allow
+            Principal:
+              Service: !Sub 'logs.${AWS::Region}.amazonaws.com'
+            Action: s3:GetBucketAcl
+            Resource:
+              - !Sub 'arn:aws:s3:::${ResourcePrefix}-logs'
+          - Sid: AWSCloudWatchLogsWrite
+            Effect: Allow
+            Principal:
+              Service: !Sub 'logs.${AWS::Region}.amazonaws.com'
+            Action: s3:PutObject
+            Resource:
+              - !Sub 'arn:aws:s3:::${ResourcePrefix}-logs/*'
+            Condition:
+              StringEquals:
+                s3:x-amz-acl: bucket-owner-full-control
+          - Sid: AWSCloudTrailAclCheck
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource: !Sub 'arn:aws:s3:::${LogStoreS3Location}'
+          - Sid: AWSCloudTrailWrite
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub 'arn:aws:s3:::${LogStoreS3Location}/*'
+            Condition:
+              StringEquals:
+                s3:x-amz-acl: bucket-owner-full-control
+  LogMigrationLambdaRole:
+    Type: AWS::IAM::Role
+    Metadata:
+      Comment: Lambda Role to allow log migration from cloudwatch logs to S3
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: LogMigrationLambdaRolePolicy
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateExportTask
+                Resource:
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${ResourcePrefix}*:*'
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ResourcePrefix}-log-migration:*'
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                Resource:
+                  - !Sub 'arn:aws:s3:::${ResourcePrefix}-logs/*'
+  LogMigrationScheduledRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: ScheduledRule
+      ScheduleExpression: rate(59 minutes)
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt 'LogMigrationLambda.Arn'
+          Id: TargetFunctionV1
+  PermissionForEventsToInvokeLogMigrationLambda:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref 'LogMigrationLambda'
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt 'LogMigrationScheduledRule.Arn'
+  LogMigrationLambdaLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    Condition: cEnableAdvancedLogging
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${ResourcePrefix}-log-migration'
+      RetentionInDays: 1
+  LogMigrationLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: index.lambda_handler
+      FunctionName: !Sub '${ResourcePrefix}-log-migration'
+      Role: !GetAtt 'LogMigrationLambdaRole.Arn'
+      Code:
+        # Ref: lambda/CloudwatchLogsMigrateToS3.js
+        ZipFile: !Sub |
+          var AWS = require('aws-sdk');
+          exports.lambda_handler = function (event, context) {
+            try {
+              var cloudwatchlogs = new AWS.CloudWatchLogs();
+              var now = new Date();
+              var params = {
+                destination:'${ResourcePrefix}-logs',
+                from: now.getTime() - 3600000,
+                logGroupName:'${ResourcePrefix}-applog',
+                to: now.getTime(),
+                taskName: 'LogTask_applog_'+now.getTime().toString()
+              };
+              console.log('Log Migrate Action Called with Params : ' + JSON.stringify(params));
+              cloudwatchlogs.createExportTask(params, function(err, data) {
+                if (err){
+                  console.log('Error : ' + err, err.stack);
+                }
+                else {
+                  console.log('Success : ' + data);
+                }
+              });
+            }
+            catch (err) {
+              console.log('General Error.');
+              console.log(err);
+            }
+          };
+      Runtime: nodejs6.10
+      Timeout: '300'
+  #####################################################################################
+  # End of Log Groups
+  #####################################################################################
+
+  #####################################################################################
+  # Start of Metrics and Alerts
+  #####################################################################################
+  EmailNotificationTopic:
+    Type: AWS::SNS::Topic
+    Condition: cEnableEmailNotications
+    Properties:
+      TopicName: !Sub '${ResourcePrefix}-EmailSNSTopic'
+      Subscription:
+        - Endpoint: !Ref OperationsEmail
+          Protocol: email
+  EmailNotificationTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Condition: cEnableEmailNotications
+    Properties:
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Sid: '__statement_ID1'
+            Principal:
+              Service: 'events.amazonaws.com'
+            Action:
+              - 'sns:Publish'
+            Resource:
+              - !Ref EmailNotificationTopic
+          - Effect: Allow
+            Sid: '__statement_ID2'
+            Principal:
+              AWS: '*'
+            Action:
+              - 'sns:Publish'
+            Resource:
+              - !Ref EmailNotificationTopic
+            Condition:
+              ArnLike:
+                AWS:SourceArn: !Sub "arn:aws:cloudwatch:*:${AWS::AccountId}:*"
+      Topics:
+        - !Ref EmailNotificationTopic
+  ### LogGroupAppLog
+  AppRestartMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref 'LogGroupAppLog'
+      FilterPattern: App listening on port
+      MetricTransformations:
+        - MetricNamespace: !Sub '${ResourcePrefix}-ApplicationMetrics'
+          MetricName: App Restarts
+          MetricValue: '1'
+  AppGETsMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref 'LogGroupAppLog'
+      FilterPattern: '[ip, timestamp, method=G, url, status_code,bytes,responsetime,useragent]'
+      MetricTransformations:
+        - MetricNamespace: !Sub '${ResourcePrefix}-ApplicationMetrics'
+          MetricName: GETs
+          MetricValue: '1'
+  AppPOSTsMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref 'LogGroupAppLog'
+      FilterPattern: '[ip, timestamp, method=POST, url, status_code,bytes,responsetime,useragent]'
+      MetricTransformations:
+        - MetricNamespace: !Sub '${ResourcePrefix}-ApplicationMetrics'
+          MetricName: POSTs
+          MetricValue: '1'
+  AppDELETEsMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref 'LogGroupAppLog'
+      FilterPattern: '[ip, timestamp, method=DELETE, url, status_code,bytes,responsetime,useragent]'
+      MetricTransformations:
+        - MetricNamespace: !Sub '${ResourcePrefix}-ApplicationMetrics'
+          MetricName: DELETEs
+          MetricValue: '1'
+  AppBytesOutMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref 'LogGroupAppLog'
+      FilterPattern: '[ip, timestamp, method, url, status_code,bytes,responsetime,useragent]'
+      MetricTransformations:
+        - MetricNamespace: !Sub '${ResourcePrefix}-ApplicationMetrics'
+          MetricName: Bytes_Out
+          MetricValue: $bytes
+  App4xxsMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref 'LogGroupAppLog'
+      FilterPattern: '[ip, timestamp, method, url, status_code=4*,bytes,responsetime,useragent]'
+      MetricTransformations:
+        - MetricNamespace: !Sub '${ResourcePrefix}-ApplicationMetrics'
+          MetricName: 4xx_error_count
+          MetricValue: '1'
+  App200sMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref 'LogGroupAppLog'
+      FilterPattern: '[ip, timestamp, method, url, status_code=200,bytes,responsetime,useragent]'
+      MetricTransformations:
+        - MetricNamespace: !Sub '${ResourcePrefix}-ApplicationMetrics'
+          MetricName: HTTP OK
+          MetricValue: '1'
+  AppChromeUsersMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref 'LogGroupAppLog'
+      FilterPattern: '[ip, timestamp, method, url, status_code,bytes,responsetime,useragent=*Chrome*]'
+      MetricTransformations:
+        - MetricNamespace: !Sub '${ResourcePrefix}-ApplicationMetrics'
+          MetricName: Chrome Users
+          MetricValue: '1'
+  AppFirefoxUsersMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref 'LogGroupAppLog'
+      FilterPattern: '[ip, timestamp, method, url, status_code,bytes,responsetime,useragent=*Firefox*]'
+      MetricTransformations:
+        - MetricNamespace: !Sub '${ResourcePrefix}-ApplicationMetrics'
+          MetricName: Firefox Users
+          MetricValue: '1'
+  App4xxRateAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Notify the Operator Email if the 4xx Error Rate is higher
+        than 5 every 5 minutes
+      AlarmName: !Sub '${ResourcePrefix}-4xx_Error_count_alarm'
+      MetricName: 4xx_error_count
+      Namespace: !Sub '${ResourcePrefix}-ApplicationMetrics'
+      Statistic: Sum
+      Period: '300'
+      EvaluationPeriods: '1'
+      Threshold: '5'
+      AlarmActions:
+        - !If [cEnableEmailNotications, !Ref EmailNotificationTopic, !Ref 'AWS::NoValue']
+      ComparisonOperator: GreaterThanThreshold
+  AppBytesOutAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Sample Alarm to demonstrate CloudWatch Alarms. Triggers when
+        Average Bytes out is greater than 1000 every 5 minutes
+      MetricName: Bytes_Out
+      AlarmName: !Sub '${ResourcePrefix}-Bytes_Out_Alarm'
+      Namespace: !Sub '${ResourcePrefix}-ApplicationMetrics'
+      Statistic: Average
+      Period: '300'
+      EvaluationPeriods: '1'
+      Threshold: '1000'
+      AlarmActions:
+        - !If [cEnableEmailNotications, !Ref EmailNotificationTopic, !Ref 'AWS::NoValue']
+      ComparisonOperator: GreaterThanThreshold
+
+  ### TrailLogGroup
+  SecurityGroupChangesMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref 'TrailLogGroup'
+      FilterPattern: '{ ($.eventName = AuthorizeSecurityGroupIngress) || ($.eventName
+        = AuthorizeSecurityGroupEgress) || ($.eventName = RevokeSecurityGroupIngress)
+        || ($.eventName = RevokeSecurityGroupEgress) || ($.eventName = CreateSecurityGroup)
+        || ($.eventName = DeleteSecurityGroup) }'
+      MetricTransformations:
+        - MetricNamespace: !Sub '${ResourcePrefix}-CloudTrailMetrics'
+          MetricName: SecurityGroupEventCount
+          MetricValue: '1'
+    Condition: cEnableAdvancedLogging
+  SecurityGroupChangesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ResourcePrefix}-CloudTrailSecurityGroupChanges'
+      AlarmDescription: Alarms when an API call is made to create, update or delete
+        a Security Group.
+      AlarmActions:
+        - !If [cEnableEmailNotications, !Ref EmailNotificationTopic, !Ref 'AWS::NoValue']
+      MetricName: SecurityGroupEventCount
+      Namespace: !Sub '${ResourcePrefix}-CloudTrailMetrics'
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      EvaluationPeriods: '1'
+      Period: '300'
+      Statistic: Sum
+      Threshold: '1'
+    Condition: cEnableAdvancedLogging
+  NetworkAclChangesMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref 'TrailLogGroup'
+      FilterPattern: '{ ($.eventName = CreateNetworkAcl) || ($.eventName = CreateNetworkAclEntry)
+        || ($.eventName = DeleteNetworkAcl) || ($.eventName = DeleteNetworkAclEntry)
+        || ($.eventName = ReplaceNetworkAclEntry) || ($.eventName = ReplaceNetworkAclAssociation)
+        }'
+      MetricTransformations:
+        - MetricNamespace: !Sub '${ResourcePrefix}-CloudTrailMetrics'
+          MetricName: NetworkAclEventCount
+          MetricValue: '1'
+    Condition: cEnableAdvancedLogging
+  NetworkAclChangesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ResourcePrefix}-CloudTrailNetworkAclChanges'
+      AlarmDescription: Alarms when an API call is made to create, update or delete
+        a Network ACL.
+      AlarmActions:
+        - !If [cEnableEmailNotications, !Ref EmailNotificationTopic, !Ref 'AWS::NoValue']
+      MetricName: NetworkAclEventCount
+      Namespace: !Sub '${ResourcePrefix}-CloudTrailMetrics'
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      EvaluationPeriods: '1'
+      Period: '300'
+      Statistic: Sum
+      Threshold: '1'
+    Condition: cEnableAdvancedLogging
+  GatewayChangesMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref 'TrailLogGroup'
+      FilterPattern: '{ ($.eventName = CreateCustomerGateway) || ($.eventName = DeleteCustomerGateway)
+        || ($.eventName = AttachInternetGateway) || ($.eventName = CreateInternetGateway)
+        || ($.eventName = DeleteInternetGateway) || ($.eventName = DetachInternetGateway)
+        }'
+      MetricTransformations:
+        - MetricNamespace: !Sub '${ResourcePrefix}-CloudTrailMetrics'
+          MetricName: GatewayEventCount
+          MetricValue: '1'
+    Condition: cEnableAdvancedLogging
+  GatewayChangesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ResourcePrefix}-CloudTrailGatewayChanges'
+      AlarmDescription: Alarms when an API call is made to create, update or delete
+        a Customer or Internet Gateway.
+      AlarmActions:
+        - !If [cEnableEmailNotications, !Ref EmailNotificationTopic, !Ref 'AWS::NoValue']
+      MetricName: GatewayEventCount
+      Namespace: !Sub '${ResourcePrefix}-CloudTrailMetrics'
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      EvaluationPeriods: '1'
+      Period: '300'
+      Statistic: Sum
+      Threshold: '1'
+    Condition: cEnableAdvancedLogging
+  VpcChangesMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref 'TrailLogGroup'
+      FilterPattern: '{ ($.eventName = CreateVpc) || ($.eventName = DeleteVpc) ||
+        ($.eventName = ModifyVpcAttribute) || ($.eventName = AcceptVpcPeeringConnection)
+        || ($.eventName = CreateVpcPeeringConnection) || ($.eventName = DeleteVpcPeeringConnection)
+        || ($.eventName = RejectVpcPeeringConnection) || ($.eventName = AttachClassicLinkVpc)
+        || ($.eventName = DetachClassicLinkVpc) || ($.eventName = DisableVpcClassicLink)
+        || ($.eventName = EnableVpcClassicLink) }'
+      MetricTransformations:
+        - MetricNamespace: !Sub '${ResourcePrefix}-CloudTrailMetrics'
+          MetricName: VpcEventCount
+          MetricValue: '1'
+    Condition: cEnableAdvancedLogging
+  VpcChangesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ResourcePrefix}-CloudTrailVpcChanges'
+      AlarmDescription: Alarms when an API call is made to create, update or delete
+        a VPC, VPC peering connection or VPC connection to classic.
+      AlarmActions:
+        - !If [cEnableEmailNotications, !Ref EmailNotificationTopic, !Ref 'AWS::NoValue']
+      MetricName: VpcEventCount
+      Namespace: !Sub '${ResourcePrefix}-CloudTrailMetrics'
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      EvaluationPeriods: '1'
+      Period: '300'
+      Statistic: Sum
+      Threshold: '1'
+    Condition: cEnableAdvancedLogging
+  EC2InstanceChangesMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref 'TrailLogGroup'
+      FilterPattern: '{ ($.eventName = RunInstances) || ($.eventName = RebootInstances)
+        || ($.eventName = StartInstances) || ($.eventName = StopInstances) || ($.eventName
+        = TerminateInstances) }'
+      MetricTransformations:
+        - MetricNamespace: !Sub '${ResourcePrefix}-CloudTrailMetrics'
+          MetricName: EC2InstanceEventCount
+          MetricValue: '1'
+    Condition: cEnableAdvancedLogging
+  EC2InstanceChangesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ResourcePrefix}-CloudTrailEC2InstanceChanges'
+      AlarmDescription: Alarms when an API call is made to create, terminate, start,
+        stop or reboot an EC2 instance.
+      AlarmActions:
+        - !If [cEnableEmailNotications, !Ref EmailNotificationTopic, !Ref 'AWS::NoValue']
+      MetricName: EC2InstanceEventCount
+      Namespace: !Sub '${ResourcePrefix}-CloudTrailMetrics'
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      EvaluationPeriods: '1'
+      Period: '300'
+      Statistic: Sum
+      Threshold: '1'
+    Condition: cEnableAdvancedLogging
+  EC2LargeInstanceChangesMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref 'TrailLogGroup'
+      FilterPattern: '{ ($.eventName = RunInstances) && (($.requestParameters.instanceType
+        = *.8xlarge) || ($.requestParameters.instanceType = *.4xlarge)) }'
+      MetricTransformations:
+        - MetricNamespace: !Sub '${ResourcePrefix}-CloudTrailMetrics'
+          MetricName: EC2LargeInstanceEventCount
+          MetricValue: '1'
+    Condition: cEnableAdvancedLogging
+  EC2LargeInstanceChangesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ResourcePrefix}-CloudTrailEC2LargeInstanceChanges'
+      AlarmDescription: Alarms when an API call is made to create, terminate, start,
+        stop or reboot a 4x or 8x-large EC2 instance.
+      AlarmActions:
+        - !If [cEnableEmailNotications, !Ref EmailNotificationTopic, !Ref 'AWS::NoValue']
+      MetricName: EC2LargeInstanceEventCount
+      Namespace: !Sub '${ResourcePrefix}-CloudTrailMetrics'
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      EvaluationPeriods: '1'
+      Period: '300'
+      Statistic: Sum
+      Threshold: '1'
+    Condition: cEnableAdvancedLogging
+  CloudTrailChangesMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref 'TrailLogGroup'
+      FilterPattern: '{ ($.eventName = CreateTrail) || ($.eventName = UpdateTrail)
+        || ($.eventName = DeleteTrail) || ($.eventName = StartLogging) || ($.eventName
+        = StopLogging) }'
+      MetricTransformations:
+        - MetricNamespace: !Sub '${ResourcePrefix}-CloudTrailMetrics'
+          MetricName: CloudTrailEventCount
+          MetricValue: '1'
+    Condition: cEnableAdvancedLogging
+  CloudTrailChangesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ResourcePrefix}-CloudTrailChanges'
+      AlarmDescription: Alarms when an API call is made to create, update or delete
+        a CloudTrail trail, or to start or stop logging to a trail.
+      AlarmActions:
+        - !If [cEnableEmailNotications, !Ref EmailNotificationTopic, !Ref 'AWS::NoValue']
+      MetricName: CloudTrailEventCount
+      Namespace: !Sub '${ResourcePrefix}-CloudTrailMetrics'
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      EvaluationPeriods: '1'
+      Period: '300'
+      Statistic: Sum
+      Threshold: '1'
+    Condition: cEnableAdvancedLogging
+  ConsoleSignInFailuresMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref 'TrailLogGroup'
+      FilterPattern: '{ ($.eventName = ConsoleLogin) && ($.errorMessage = "Failed
+        authentication") }'
+      MetricTransformations:
+        - MetricNamespace: !Sub '${ResourcePrefix}-CloudTrailMetrics'
+          MetricName: ConsoleSignInFailureCount
+          MetricValue: '1'
+    Condition: cEnableAdvancedLogging
+  ConsoleSignInFailuresAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ResourcePrefix}-CloudTrailConsoleSignInFailures'
+      AlarmDescription: Alarms when an unauthenticated API call is made to sign into
+        the console.
+      AlarmActions:
+        - !If [cEnableEmailNotications, !Ref EmailNotificationTopic, !Ref 'AWS::NoValue']
+      MetricName: ConsoleSignInFailureCount
+      Namespace: !Sub '${ResourcePrefix}-CloudTrailMetrics'
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      EvaluationPeriods: '1'
+      Period: '300'
+      Statistic: Sum
+      Threshold: '3'
+    Condition: cEnableAdvancedLogging
+  AuthorizationFailuresMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref 'TrailLogGroup'
+      FilterPattern: '{ ($.errorCode = "*UnauthorizedOperation") || ($.errorCode =
+        "AccessDenied*") }'
+      MetricTransformations:
+        - MetricNamespace: !Sub '${ResourcePrefix}-CloudTrailMetrics'
+          MetricName: AuthorizationFailureCount
+          MetricValue: '1'
+    Condition: cEnableAdvancedLogging
+  AuthorizationFailuresAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ResourcePrefix}-CloudTrailAuthorizationFailures'
+      AlarmDescription: Alarms when an unauthorized API call is made.
+      AlarmActions:
+        - !If [cEnableEmailNotications, !Ref EmailNotificationTopic, !Ref 'AWS::NoValue']
+      MetricName: AuthorizationFailureCount
+      Namespace: !Sub '${ResourcePrefix}-CloudTrailMetrics'
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      EvaluationPeriods: '1'
+      Period: '300'
+      Statistic: Sum
+      Threshold: '1'
+    Condition: cEnableAdvancedLogging
+  LogTamperMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref 'TrailLogGroup'
+      FilterPattern: '{ ($.eventSource = s3*) && (($.errorCode = "*UnauthorizedOperation") || ($.errorCode = "AccessDenied*")) }'
+      MetricTransformations:
+        - MetricNamespace: !Sub '${ResourcePrefix}-CloudTrailMetrics'
+          MetricName: LogTamperCount
+          MetricValue: '1'
+    Condition: cEnableAdvancedLogging
+  LogTamperAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ResourcePrefix}-CloudTrailLogTamperAlarm'
+      AlarmDescription: Alarms when an unauthorized action on the log bucket occurs.
+      AlarmActions:
+        - !If [cEnableEmailNotications, !Ref EmailNotificationTopic, !Ref 'AWS::NoValue']
+      MetricName: LogTamperCount
+      Namespace: !Sub '${ResourcePrefix}-CloudTrailMetrics'
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: '1'
+      Period: '60'
+      Statistic: Sum
+      Threshold: '1'
+    Condition: cEnableAdvancedLogging
+  IAMPolicyChangesMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref 'TrailLogGroup'
+      FilterPattern: '{($.eventName=DeleteGroupPolicy)||($.eventName=DeleteRolePolicy)||($.eventName=DeleteUserPolicy)||($.eventName=PutGroupPolicy)||($.eventName=PutRolePolicy)||($.eventName=PutUserPolicy)||($.eventName=CreatePolicy)||($.eventName=DeletePolicy)||($.eventName=CreatePolicyVersion)||($.eventName=DeletePolicyVersion)||($.eventName=AttachRolePolicy)||($.eventName=DetachRolePolicy)||($.eventName=AttachUserPolicy)||($.eventName=DetachUserPolicy)||($.eventName=AttachGroupPolicy)||($.eventName=DetachGroupPolicy)}'
+      MetricTransformations:
+        - MetricNamespace: !Sub '${ResourcePrefix}-CloudTrailMetrics'
+          MetricName: IAMPolicyEventCount
+          MetricValue: '1'
+    Condition: cEnableAdvancedLogging
+  IAMPolicyChangesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ResourcePrefix}-CloudTrailIAMPolicyChanges'
+      AlarmDescription: Alarms when an API call is made to change an IAM policy.
+      AlarmActions:
+        - !If [cEnableEmailNotications, !Ref EmailNotificationTopic, !Ref 'AWS::NoValue']
+      MetricName: IAMPolicyEventCount
+      Namespace: !Sub '${ResourcePrefix}-CloudTrailMetrics'
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      EvaluationPeriods: '1'
+      Period: '300'
+      Statistic: Sum
+      Threshold: '1'
+    Condition: cEnableAdvancedLogging
+
+  ### CloudWatch Dashboard
+  BasicDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub '${ResourcePrefix}-Dashboard'
+      DashboardBody: !Sub
+        - |
+            {
+              "widgets": [
+                ${EC2metrics}
+                ${ECSmetrics}
+                ${Advancedwidget}
+                ${DBwidget}
+                ${APPwidget}
+              ]
+            }
+        - EC2metrics: !If
+            - cEnableEC2
+            - !Sub |
+                {"type":"metric","x":0,"y":0,"width":6,"height":6,"properties":{"view":"timeSeries","stacked":false,"metrics":[["AWS/EC2","CPUUtilization","AutoScalingGroupName","${EC2AutoScalingGroup}"]],"region":"${AWS::Region}","title":"CPUUtilisation of EC2 Autoscaling Group (%)"}},
+                {"type":"metric","x":6,"y":0,"width":6,"height":6,"properties":{"view":"timeSeries","stacked":false,"metrics":[["System/Linux","MemoryUtilization","AutoScalingGroupName","${EC2AutoScalingGroup}"]],"region":"${AWS::Region}","title":"MemoryUtilization  of EC2 Autoscaling Group (%)"}},
+                {"type":"metric","x":0,"y":6,"width":18,"height":6,"properties":{"view":"singleValue","stacked":true,"metrics":[["AWS/EC2","NetworkPacketsIn","AutoScalingGroupName","${EC2AutoScalingGroup}"],[".","NetworkPacketsOut",".","."],[".","StatusCheckFailed",".","."],[".","StatusCheckFailed_System",".","."],[".","StatusCheckFailed_Instance",".","."],[".","DiskWriteBytes",".","."],[".","DiskReadOps",".","."],[".","DiskWriteOps",".","."],[".","NetworkOut",".","."],[".","NetworkIn",".","."],[".","DiskReadBytes",".","."]],"region":"${AWS::Region}","title":"EC2 Autoscaling Group Metrics"}},
+                {"type":"metric","x":12,"y":0,"width":6,"height":6,"properties":{"view":"timeSeries","stacked":false,"metrics":[["System/Linux","DiskSpaceUtilization","MountPath","/","AutoScalingGroupName","${EC2AutoScalingGroup}","Filesystem","/dev/xvda1"]],"region":"${AWS::Region}","period":300,"title":"DiskSpaceUtilisation on EC2 AutoScalingGroup (%)"}},
+            - ''
+          ECSmetrics: !If
+            - cEnableContainers
+            - !Sub |
+                {"type":"metric","x":6,"y":0,"width":6,"height":6,"properties":{"view":"timeSeries","stacked":false,"metrics":[["AWS/ECS","MemoryUtilization","ClusterName","${ResourcePrefix}-cluster"]],"region":"${AWS::Region}","title":"MemoryUtilization of ECS Cluster (%)"}},
+                {"type":"metric","x":0,"y":0,"width":6,"height":6,"properties":{"view":"timeSeries","stacked":false,"metrics":[["AWS/ECS","CPUUtilization","ClusterName","${ResourcePrefix}-cluster"]],"region":"${AWS::Region}","title":"CPUUtilisation of ECS Cluster (%)"}},
+                {"type":"metric","x":15,"y":0,"width":3,"height":6,"properties":{"view":"singleValue","stacked":true,"metrics":[["AWS/ECS","MemoryReservation","ClusterName","${ResourcePrefix}-cluster"],[".","CPUReservation",".","."]],"region":"${AWS::Region}","title":"ECS Cluster Metrics"}},
+                {"type":"metric","x":12,"y":3,"width":3,"height":3,"properties":{"title":"ALARM: Scale-down ECS cluster if CPU < 70% for 10 minutes","annotations":{"alarms":["arn:aws:cloudwatch:${AWS::Region}:${AWS::AccountId}:alarm:${ResourcePrefix}-CPU_alarm_low"]},"view":"singleValue","stacked":false}},
+                {"type":"metric","x":12,"y":0,"width":3,"height":3,"properties":{"title":"ALARM: Scale-up ECS cluster if CPU > 90% for 10 minutes","annotations":{"alarms":["arn:aws:cloudwatch:${AWS::Region}:${AWS::AccountId}:alarm:${ResourcePrefix}-CPU_alarm_high"]},"view":"singleValue","stacked":false}},
+                {"type":"metric","x":15,"y":6,"width":3,"height":3,"properties":{"title":"ALARM: HTTPCode ELB 5XX Count > 10 for 1 minute","annotations":{"alarms":["arn:aws:cloudwatch:${AWS::Region}:${AWS::AccountId}:alarm:${ResourcePrefix}-ALB_500s_alarm_scale_up"]},"view":"singleValue","stacked":false}},
+            - ''
+          Advancedwidget: !If
+            - cEnableAdvancedLogging
+            - !Sub |
+                {"type":"metric","x":18,"y":0,"width":6,"height":6,"properties":{"view":"timeSeries","stacked":false,"metrics":[["AWS/ApplicationELB","RequestCount","TargetGroup", "${AppTargetGroup.TargetGroupFullName}" ,"LoadBalancer", "${AppLoadBalancer.LoadBalancerFullName}" ,{"stat":"Sum","period":300}]],"region":"${AWS::Region}","title":"Request Count ApplicationELB","period":300}},
+                {"type":"metric","x":6,"y":15,"width":6,"height":3,"properties":{"title":"ALARM: No. of unauthorised access to logs","annotations":{"alarms":["arn:aws:cloudwatch:${AWS::Region}:${AWS::AccountId}:alarm:${ResourcePrefix}-CloudTrailLogTamperAlarm"]},"view":"singleValue"}},
+                {"type":"metric","x":6,"y":18,"width":6,"height":3,"properties":{"title":"ALARM: No. of VPC changes","annotations":{"alarms":["arn:aws:cloudwatch:${AWS::Region}:${AWS::AccountId}:alarm:${ResourcePrefix}-CloudTrailVpcChanges"]},"view":"singleValue"}},
+            - ''
+          DBwidget: !Sub |
+            {"type":"metric","x":0,"y":6,"width":15,"height":6,"properties":{"view":"singleValue","stacked":true,"metrics":[["AWS/EC2","NetworkPacketsIn","AutoScalingGroupName","${DBAutoScalingGroup}"],[".","NetworkPacketsOut",".","."],[".","StatusCheckFailed",".","."],[".","StatusCheckFailed_System",".","."],[".","StatusCheckFailed_Instance",".","."],[".","DiskWriteBytes",".","."],[".","DiskReadOps",".","."],[".","DiskWriteOps",".","."],[".","NetworkOut",".","."],[".","NetworkIn",".","."],[".","DiskReadBytes",".","."]],"region":"${AWS::Region}","title":"Database Metrics"}},
+          APPwidget: !Sub |
+            {"type":"metric","x":6,"y":9,"width":12,"height":6,"properties":{"view":"singleValue","metrics":[["${ResourcePrefix}-ApplicationMetrics","App Restarts",{"period":21600}],[".","Bytes_Out",{"period":21600}],[".","HTTP OK",{"period":21600}],[".","DELETEs",{"period":21600}],[".","POSTs",{"period":21600}]],"region":"${AWS::Region}","title":"Deployed Application Metrics","period":300}},
+            {"type":"metric","x":0,"y":9,"width":6,"height":3,"properties":{"title":"ALARM: Average Bytes out >1000 every 10 minutes","annotations":{"alarms":["arn:aws:cloudwatch:${AWS::Region}:${AWS::AccountId}:alarm:${ResourcePrefix}-Bytes_Out_Alarm"]},"view":"singleValue","stacked":false}},
+            {"type":"metric","x":0,"y":12,"width":6,"height":3,"properties":{"title":"ALARM: 4xx Error Rate is >5 every hour","annotations":{"alarms":["arn:aws:cloudwatch:${AWS::Region}:${AWS::AccountId}:alarm:${ResourcePrefix}-4xx_Error_count_alarm"]},"view":"singleValue","stacked":false}}
+  #####################################################################################
+  # End of Metrics and Filters
+  #####################################################################################
+
+  #####################################################################################
+  # Start of Public DNS
+  #####################################################################################
+  LBCertifcate:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName: !Sub '${ResourcePrefix}.al-labs.co.uk'
+      DomainValidationOptions:
+        - DomainName: !Sub '${ResourcePrefix}.al-labs.co.uk'
+          ValidationDomain: 'al-labs.co.uk'
+    Condition: cEnableHTTPS
+  ALBHTTPSListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref AppTargetGroup
+      LoadBalancerArn: !Ref AppLoadBalancer
+      Port: 443
+      Protocol: HTTPS
+      Certificates:
+        - CertificateArn: !Ref LBCertifcate
+    Condition: cEnableHTTPS
+  DNSRecord:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      HostedZoneName: al-labs.co.uk.
+      Comment: Zone apex alias targeted to myELB LoadBalancer.
+      RecordSets:
+        - Name: !Sub '${ResourcePrefix}.al-labs.co.uk.'
+          Type: A
+          AliasTarget:
+            HostedZoneId: !GetAtt 'AppLoadBalancer.CanonicalHostedZoneID'
+            DNSName: !GetAtt 'AppLoadBalancer.DNSName'
+    Condition: cEnableDNS
+  #####################################################################################
+  # End of Public DNS
+  #####################################################################################
+  #####################################################################################
+  # Start of CloudTrail to CloudWatch
+  #####################################################################################
+  # Mapping Log groups to the Lambda that ships them to Elasticsearch
+  Trail:
+    DependsOn: LogStoreS3LocationPolicy
+    Condition: cEnableAdvancedLogging
+    Properties:
+      CloudWatchLogsLogGroupArn: !GetAtt 'TrailLogGroup.Arn'
+      CloudWatchLogsRoleArn: !GetAtt 'TrailLogGroupRole.Arn'
+      IncludeGlobalServiceEvents: true
+      IsLogging: true
+      IsMultiRegionTrail: true
+      S3BucketName: !Ref LogStoreS3Location
+      TrailName: !Sub '${ResourcePrefix}-LogTrail'
+    Type: AWS::CloudTrail::Trail
+  TrailLogGroup:
+    Properties:
+      LogGroupName: !Sub '/aws/cloudtrail/${ResourcePrefix}'
+      RetentionInDays: 7
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    Condition: cEnableAdvancedLogging
+  TrailLogGroupRole:
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+        Version: '2012-10-17'
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action: logs:CreateLogStream
+                Effect: Allow
+                Resource: !GetAtt 'TrailLogGroup.Arn'
+              - Action:
+                  - logs:PutLogEvents
+                Effect: Allow
+                Resource: !GetAtt 'TrailLogGroup.Arn'
+            Version: '2012-10-17'
+          PolicyName: cloudtrail-policy
+    Type: AWS::IAM::Role
+    Condition: cEnableAdvancedLogging
+  TamperLambdaTrigger:
+    DependsOn: TamperLambda
+    Condition: cEnableAdvancedLogging
+    Type: "Custom::TamperLambdaTrigger"
+    Properties:
+      ServiceToken: !GetAtt TamperLambda.Arn
+      Trail: !Sub '${ResourcePrefix}-LogTrail'
+  TamperLambda:
+    DependsOn: Trail
+    Condition: cEnableAdvancedLogging
+    Type: "AWS::Lambda::Function"
+    Properties:
+      FunctionName: !Sub '${ResourcePrefix}-TamperLambda'
+      Code:
+        # Ref: lambda/TamperLambda.py
+        ZipFile: |
+          import boto3
+          import base64
+          import uuid
+          import httplib
+          import urlparse
+          import json
+          import cfnresponse
+
+          def send_response(request, response, context, status=None, reason=None):
+            if status is not None:
+              response['Status'] = status
+            if reason is not None:
+              response['Reason'] = reason
+            try:
+              if 'ResponseURL' in request and request['ResponseURL']:
+                url = urlparse.urlparse(request['ResponseURL'])
+                body = json.dumps(response)
+                https = httplib.HTTPSConnection(url.hostname)
+                https.request('PUT', url.path+'?'+url.query, body)
+                cfnresponse.send(request, context, cfnresponse.SUCCESS, response, response['PhysicalResourceId'])
+            except Exception as e:
+              cfnresponse.send(request, context, cfnresponse.FAILED, response, response['PhysicalResourceId'])
+            return response
+
+          def handler(event, context):
+            client = boto3.client('cloudtrail')
+            s3client = boto3.client('s3')
+
+            body = s3client.list_buckets()
+            bucketList = []
+            buckets_remain = True
+            bucket_num = 0
+            while( buckets_remain == True ):
+              try:
+                bucketList.append(body["Buckets"][bucket_num]["Name"])
+                bucket_num += 1
+              except:
+                buckets_remain = False
+            bucketList = ["arn:aws:s3:::"+x+"/AWS" for x in bucketList if "logs" in x and "elb" not in x]
+
+            response = client.put_event_selectors(
+              TrailName = event['ResourceProperties']['Trail'],
+              EventSelectors=[
+                {
+                  'ReadWriteType': 'All',
+                  'IncludeManagementEvents': True,
+                  'DataResources': [
+                    {
+                      'Type': 'AWS::S3::Object',
+                      'Values': bucketList
+                    },
+                  ]
+                },
+              ]
+            )
+            if 'PhysicalResourceId' in event:
+              response['PhysicalResourceId'] = event['PhysicalResourceId']
+            else:
+              response['PhysicalResourceId'] = str(uuid.uuid4())
+            if event['RequestType'] == 'Delete':
+              return send_response(event, response, context)
+            return send_response(event, response, context)
+      Handler: index.handler
+      Role: !GetAtt TamperLambdaRole.Arn
+      Runtime: "python2.7"
+  TamperLambdaRole:
+    DependsOn: Trail
+    Condition: cEnableAdvancedLogging
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+        Version: '2012-10-17'
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action: "cloudtrail:*"
+                Effect: "Allow"
+                Resource: !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${ResourcePrefix}-LogTrail'
+              - Action: "s3:List*"
+                Effect: "Allow"
+                Resource: "arn:aws:s3:::*"
+            Version: '2012-10-17'
+          PolicyName: tamperlambda-policy
+
+  #####################################################################################
+  # End of CloudTrail to CloudWatch
+  #####################################################################################
+
+  #####################################################################################
+  # VPC FLOW LOGS
+  #####################################################################################
+  MyFlowLog:
+    Type: AWS::EC2::FlowLog
+    Condition: cEnableAdvancedLogging
+    Properties:
+      DeliverLogsPermissionArn: !GetAtt 'flowlogsRole.Arn'
+      LogGroupName: !Ref VPCFlowLogsLogGroup
+      ResourceId: !Ref VPC
+      ResourceType: VPC
+      TrafficType: ALL
+  VPCFlowLogsLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    Condition: cEnableAdvancedLogging
+    Properties:
+      LogGroupName: !Sub '${ResourcePrefix}-vpcflowlog'
+      RetentionInDays: 7
+  flowlogsRole:
+    Type: AWS::IAM::Role
+    Condition: cEnableAdvancedLogging
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - vpc-flow-logs.amazonaws.com
+        Version: '2012-10-17'
+      Path: /
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:DescribeLogGroups
+                  - logs:DescribeLogStreams
+                  - logs:PutLogEvents
+                Effect: Allow
+                Resource: '*'
+            Version: '2012-10-17'
+          PolicyName: LogRolePolicy
+  #####################################################################################
+  # END OF VPC FLOW LOGS
+  #####################################################################################
+  #####################################################################################
+  # Start of Elasticsearch logging domain
+  # Logs => CloudWatch logs => CloudWatch/ LogStreamer which triggers lambda
+  #####################################################################################
+  ElasticsearchAWSLogs:
+    Type: AWS::Elasticsearch::Domain
+    Condition: cEnableESIntegrated
+    Properties:
+      AccessPolicies:
+        Statement:
+          - Action: es:*
+            Condition:
+              IpAddress:
+                aws:SourceIp:
+                  - !Ref 'IPAccess'
+            Effect: Allow
+            Principal:
+              AWS: '*'
+            Resource: '*'
+        Version: '2012-10-17'
+      AdvancedOptions:
+        rest.action.multi.allow_explicit_index: 'true'
+      DomainName: !Sub 'logs-${ResourcePrefix}'
+      EBSOptions:
+        Fn::If:
+          - SizeTiny
+          - EBSEnabled: true
+            Iops: 0
+            VolumeSize: 10
+            VolumeType: gp2
+          - Fn::If:
+              - SizeSmall
+              - EBSEnabled: true
+                Iops: 0
+                VolumeSize: 50
+                VolumeType: gp2
+              - EBSEnabled: false
+      ElasticsearchClusterConfig:
+        DedicatedMasterCount: '2'
+        DedicatedMasterEnabled: 'true'
+        DedicatedMasterType: !FindInMap [MasterSizing, elasticsearch, !Ref 'ClusterSize']
+        InstanceCount: !FindInMap [instanceCount, elasticsearch, !Ref 'ClusterSize']
+        InstanceType: !FindInMap [instanceSizing, elasticsearch, !Ref 'ClusterSize']
+        ZoneAwarenessEnabled: 'true'
+      ElasticsearchVersion: '5.3'
+      SnapshotOptions:
+        AutomatedSnapshotStartHour: '1'
+  LambdaInvokePermission:
+    Condition: cEnableES
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref LogStreamer
+      Principal: !Sub 'logs.${AWS::Region}.amazonaws.com'
+      SourceAccount: !Ref AWS::AccountId
+    Type: AWS::Lambda::Permission
+  applogLogStreamerInvokePermission:
+    Type: AWS::Lambda::Permission
+    Condition: cEnableES
+    Properties:
+      FunctionName: !GetAtt [LogStreamer, Arn]
+      Action: lambda:InvokeFunction
+      Principal: !Sub 'logs.${AWS::Region}.amazonaws.com'
+      SourceAccount: !Ref 'AWS::AccountId'
+      SourceArn: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${ResourcePrefix}-applog:*'
+  syslogLogStreamerInvokePermission:
+    Type: AWS::Lambda::Permission
+    Condition: cEnableES
+    Properties:
+      FunctionName: !GetAtt [LogStreamer, Arn]
+      Action: lambda:InvokeFunction
+      Principal: !Sub 'logs.${AWS::Region}.amazonaws.com'
+      SourceAccount: !Ref 'AWS::AccountId'
+      SourceArn: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${ResourcePrefix}-syslog:*'
+
+  ## Mapping Log groups to the Lambda that ships them to Elasticsearch
+  LogGrouptoLambdaMappingAppLogs:
+    Type: AWS::Logs::SubscriptionFilter
+    Condition: cEnableES
+    DependsOn: applogLogStreamerInvokePermission
+    Properties:
+      DestinationArn: !GetAtt [LogStreamer, Arn]
+      FilterPattern: '[ip, date, method, request, statuscode, bytes, responsetime,
+        user_agent]'
+      LogGroupName: !Ref LogGroupAppLog
+  LogGrouptoLambdaMappingSysLogs:
+    Type: AWS::Logs::SubscriptionFilter
+    DependsOn: syslogLogStreamerInvokePermission
+    Condition: cEnableElasticSearchAdvancedLogging
+    Properties:
+      DestinationArn: !GetAtt [LogStreamer, Arn]
+      FilterPattern: '[month, day, hour, host, service, message]'
+      LogGroupName: !Ref LogGroupSysLog
+  LogGrouptoLambdaMappingCloudTrail:
+    Type: AWS::Logs::SubscriptionFilter
+    Condition: cEnableElasticSearchAdvancedLogging
+    DependsOn: LambdaInvokePermission
+    Properties:
+      DestinationArn: !GetAtt 'LogStreamer.Arn'
+      FilterPattern: !FindInMap [FilterPatternLookup, CloudTrail, Pattern]
+      LogGroupName: !Ref TrailLogGroup
+  LogGrouptoLambdaMappingFlowLogs:
+    Type: AWS::Logs::SubscriptionFilter
+    Condition: cEnableElasticSearchAdvancedLogging
+    DependsOn: LambdaInvokePermission
+    Properties:
+      DestinationArn: !GetAtt 'LogStreamer.Arn'
+      FilterPattern: !FindInMap [FilterPatternLookup, FlowLogs, Pattern]
+      LogGroupName: !Ref VPCFlowLogsLogGroup
+  LogGrouptoLambdaMappingELBLogs:
+    Type: AWS::Logs::SubscriptionFilter
+    DependsOn: LambdaInvokePermission
+    Condition: cEnableElasticSearchAdvancedLogging
+    Properties:
+      DestinationArn: !GetAtt 'LogStreamer.Arn'
+      FilterPattern: !FindInMap [FilterPatternLookup, ELBLogs, Pattern]
+      LogGroupName: !Ref LogGroupELBLog
+  LogStreamerLogsGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    Condition: cEnableElasticSearchAdvancedLogging
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${ResourcePrefix}-log-streamer'
+      RetentionInDays: 1
+  LogStreamer:
+    Type: AWS::Lambda::Function
+    Condition: cEnableES
+    Properties:
+      # The following Function Name for the Lambda needs to contain two - symbols (eg: -log-streamer). This is to ensure that the AWS provided lambda is able to pick up the correct stack name.
+      # Since this lambda is provided by AWS from their bucket, we cannot modify it.
+      FunctionName: !Sub '${ResourcePrefix}-log-streamer'
+      Code:
+        S3Bucket: !Sub 'solutions-${AWS::Region}'
+        S3Key: centralized-logging/v1/centralizedLoggingDownload.zip
+      Description: Lambda function for moving log data to AES.
+      Handler: index.handler
+      Role: !GetAtt 'LogStreamerRole.Arn'
+      Runtime: nodejs4.3
+      Timeout: 300
+  LogStreamerRole:
+    Type: AWS::IAM::Role
+    Condition: cEnableES
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+        Version: '2012-10-17'
+      Path: /
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource:
+                  !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ResourcePrefix}*'
+              - Effect: Allow
+                Action:
+                  - es:ESHttpPost
+                Resource: arn:aws:es:*:*:*
+              - Effect: Allow
+                Action:
+                  - cloudformation:DescribeStacks
+                  - Cloudformation:ListStackResources
+                Resource: !Sub 'arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}*'
+            Version: '2012-10-17'
+          PolicyName: My_Lambda_Function_Permissions
+  # Elasticsearch buckets
+  ElasticSearchSnapshotS3Location:
+    Type: AWS::S3::Bucket
+    Condition: cEnableESIntegrated
+    DeletionPolicy: Retain
+    Properties:
+      BucketName: !Sub '${ResourcePrefix}-snapshots'
+      LifecycleConfiguration:
+        Rules:
+          - ExpirationInDays: 90
+            Id: !Sub '${ResourcePrefix}-SnapshotMigrationLifecycleRule'
+            Status: Enabled
+            Transitions:
+              - StorageClass: STANDARD_IA
+                TransitionInDays: 30
+              - StorageClass: GLACIER
+                TransitionInDays: 60
+  ElasticSearchSnapshotRole:
+    Type: AWS::IAM::Role
+    Condition: cEnableESIntegrated
+    Metadata:
+      Comment: IAM Role for the Amazon ElasticSearch Service to Store Snapshots in an S3 Bucket
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: es.amazonaws.com
+      Policies:
+        - PolicyName: ElasticSearchSnapshotPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Action:
+                  - s3:ListBucket
+                Effect: Allow
+                Resource:
+                  - !Sub 'arn:aws:s3:::${ResourcePrefix}-snapshots'
+              - Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                  - iam:PassRole
+                Effect: Allow
+                Resource:
+                  - !Sub 'arn:aws:s3:::${ResourcePrefix}-snapshots/*'
+      Path: /
+  SnapshotLambdaRole:
+    Type: AWS::IAM::Role
+    Condition: cEnableESIntegrated
+    Metadata:
+      Comment: IAM Role for the Lambda to create a Elastic Search Snapshot on the
+        S3 Bucket repo
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+      Policies:
+        - PolicyName: ElasticSearchSnapshotLambdaPolicy
+          PolicyDocument:
+            Statement:
+              # Create Log streams and write on it
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ResourcePrefix}-SnapshotLambda:*'
+              # Allow lambda to execute _snapshot actions
+              - Effect: Allow
+                Action:
+                  - es:ESHttpGet
+                  - es:ESHttpPost
+                Resource:
+                  - !Sub "arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${ElasticsearchAWSLogs}/_snapshot"
+                  - !Sub "arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${ElasticsearchAWSLogs}/_snapshot/*"
+              # Allow lambda to pass role to ES
+              - Effect: Allow
+                Action:
+                  - iam:PassRole
+                Resource: '*'
+      Path: /
+  SnapshotLambdaLogGroup:
+    Type: AWS::Logs::LogGroup
+    Condition: cEnableIntegratedElasticSearchAdvancedLogging
+    DeletionPolicy: Retain
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${ResourcePrefix}-SnapshotLambda'
+      RetentionInDays: 1
+  SnapshotLambda:
+    Type: AWS::Lambda::Function
+    Condition: cEnableESIntegrated
+    DependsOn:
+      - ElasticsearchAWSLogs
+    Properties:
+      FunctionName: !Sub '${ResourcePrefix}-SnapshotLambda'
+      Code:
+        # Lambda function to automate the process of creating manual snapshots for Elastic Search.
+        # Ref: lambda/ES-SnapshotLambda.js
+        ZipFile: |
+          var AWS = require('aws-sdk');
+          var response = require('cfn-response');
+          exports.handler = (event, context) => {
+              console.log(event)
+              console.log(context)
+              const region = process.env.AWS_REGION;
+              const endpoint =  new AWS.Endpoint(event.ResourceProperties.ESDomainEndpoint);
+              const isDelete = event.RequestType === 'Delete';
+              const doc = {
+                type: 's3',
+                settings: {
+                  bucket: event.ResourceProperties.ESBackupBucket,
+                  region: region,
+                  role_arn: event.ResourceProperties.RoleArn,
+                },
+              };
+              var creds = new AWS.EnvironmentCredentials('AWS');
+              var req = new AWS.HttpRequest(endpoint);
+              const now = new Date();
+              req.method = isDelete ? 'DELETE' : 'POST';
+              req.region = region;
+              if (event.ResourceProperties.doSnap === true) {
+                  req.path = `/_snapshot/${event.ResourceProperties.ESSnapshotRepo}/snap-${now.getFullYear()}.${("0" + (now.getMonth() + 1)).slice(-2)}.${("0" + (now.getDate())).slice(-2)}`;
+              } else {
+                  if (!isDelete) {
+                      req.body = JSON.stringify(doc);
+                  }
+                  req.path = `/_snapshot/${event.ResourceProperties.ESSnapshotRepo}`;
+              }
+              req.headers['presigned-expires'] = false;
+              req.headers.Host = endpoint.host;
+
+              // Sign the request (Sigv4)
+              var signer = new AWS.Signers.V4(req, 'es');
+              signer.addAuthorization(creds, new Date());
+
+              // Post document to ES
+              var send = new AWS.NodeHttpClient();
+              send.handleRequest(req, null, (httpResp) => {
+
+                  var body = '';
+                  httpResp.on('data', (chunk) => {
+                      body += chunk;
+                  });
+                  httpResp.on('end', (chunk) => {
+                      console.log('Response: ' + body);
+                      if (event.LogicalResourceId) {
+                          response.send(event, context, response.SUCCESS, {}, event.LogicalResourceId);
+                      } else {
+                          context.succeed();
+                      }
+                  });
+              }, (err) => {
+                  console.log('Error: ' + err);
+                  if (event.LogicalResourceId) {
+                      response.send(event, context, response.FAILED, {}, event.LogicalResourceId);
+                  } else {
+                      context.fail();
+                  }
+              });
+          }
+      Description: Lambda function for Creating a Snapshot on S3 SnapshotRepo for Amazon Elasticsearch.
+      Handler: index.handler
+      Role: !GetAtt [SnapshotLambdaRole, Arn]
+      Runtime: nodejs6.10
+      Timeout: '300'
+  SnapshotCreateScheduledRule:
+    Type: AWS::Events::Rule
+    Condition: cEnableESIntegrated
+    Properties:
+      Name: !Sub "${ResourcePrefix}-SnapshotLambda"
+      Description: ScheduledRule
+      ScheduleExpression: rate(1 day)
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt [SnapshotLambda, Arn]
+          Id: TargetFunctionV1
+          Input: !Sub >-
+            {
+              "ResourceProperties": {
+                "doSnap": true,
+                "ESDomainEndpoint": "${ElasticsearchAWSLogs.DomainEndpoint}",
+                "ESSnapshotRepo": "${ResourcePrefix}_repo"
+              }
+            }
+  CreateSnapshotRepo:
+    Type: AWS::CloudFormation::CustomResource
+    Version: '1.0'
+    Condition: cEnableESIntegrated
+    DependsOn:
+      - ElasticsearchAWSLogs
+      - ElasticSearchSnapshotS3Location
+    Properties:
+      Description: "Creeate Elasticsearch Snapshots"
+      ServiceToken: !GetAtt [SnapshotLambda, Arn]
+      doSnap: 'False'
+      ESBackupBucket: !Sub '${ResourcePrefix}-snapshots'
+      ESDomainEndpoint: !Sub "${ElasticsearchAWSLogs.DomainEndpoint}"
+      RoleArn: !Sub "${ElasticSearchSnapshotRole.Arn}"
+      ESSnapshotRepo: !Sub "${ResourcePrefix}_repo"
+  PermissionForEventsToInvokeSnapshotLambda:
+    Type: AWS::Lambda::Permission
+    Condition: cEnableESIntegrated
+    Properties:
+      FunctionName: !Ref 'SnapshotLambda'
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt [SnapshotCreateScheduledRule, Arn]
+  ###########################################
+  # End of Elasticsearch logging domain
+  ###########################################
+  SlackLambdaLogsGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    Condition: cEnableSlackAndLambdaLogging
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${ResourcePrefix}-slack-notifications'
+      RetentionInDays: 1
+  SlackLambdaRole:
+    Type: AWS::IAM::Role
+    Condition: cEnableSlackApprovals
+    Properties:
+      RoleName: !Sub '${ResourcePrefix}-slack-notifications'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Statement:
+              # Create Log streams and write on it
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource:
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ResourcePrefix}-slack-notifications'
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ResourcePrefix}-slack-notifications:*'
+              # Allow lambda to use KMS to decrypt Env Vars
+              - Effect: Allow
+                Action:
+                  - kms:Decrypt
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameters
+                Resource:
+                  - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}/slack/*'
+  StoreEncryptedSlackWebhook:
+    Type: Custom::SetParameterStore
+    Condition: cEnableSlackApprovals
+    Properties:
+      ServiceToken: !GetAtt 'EncryptLambda.Arn'
+      KeyId: !Sub 'alias/${ResourcePrefix}-masterkey'
+      ParameterStoreName: !Sub '/${AWS::StackName}/slack/webhooks'
+      Value: !Ref SlackApprovalsWebhook
+      Description: Webhook URL for approvals notifications
+      Type: 'SecureString'
+      Overwrite: true
+  SlackNotificationsLambda:
+    Type: AWS::Lambda::Function
+    DependsOn: MyKeyAlias
+    Condition: cEnableSlackApprovals
+    Properties:
+      FunctionName: !Sub '${ResourcePrefix}-slack-notifications'
+      Description: |
+        Lambda Function to send approvals notifications to slack channel
+      Handler: index.handler
+      Role: !GetAtt 'SlackLambdaRole.Arn'
+      Code:
+        # Ref: lambda/SlackApproval.js
+        ZipFile: |
+          'use strict';
+          const AWS = require('aws-sdk');
+          const url = require('url');
+          const https = require('https');
+
+          // The base-64 encoded, encrypted key (CiphertextBlob) stored in the kmsEncryptedHookUrl environment variable
+          const kmsEncryptedHookUrl = process.env.kmsEncryptedHookUrl;
+          // The Slack channel to send a message to stored in the slackChannel environment variable
+          const slackChannel = process.env.slackChannel;
+          let hookUrl;
+
+
+          function postMessage(message, callback) {
+            const body = JSON.stringify(message);
+            const options = url.parse(hookUrl);
+            options.method = 'POST';
+            options.headers = {
+              'Content-Type': 'application/json',
+              'Content-Length': Buffer.byteLength(body),
+            };
+
+            const postReq = https.request(options, (res) => {
+              const chunks = [];
+              res.setEncoding('utf8');
+              res.on('data', (chunk) => chunks.push(chunk));
+              res.on('end', () => {
+                if (callback) {
+                  callback({
+                    body: chunks.join(''),
+                    statusCode: res.statusCode,
+                    statusMessage: res.statusMessage,
+                  });
+                }
+              });
+              return res;
+            });
+
+            postReq.write(body);
+            postReq.end();
+          }
+
+          function processEvent(event, callback) {
+            const message = JSON.parse(event.Records[0].Sns.Message);
+
+            const alarmName = message.AlarmName;
+            //var oldState = message.OldStateValue;
+            const newState = message.NewStateValue;
+            const reason = message.NewStateReason;
+
+            const slackMessage = {
+              "text": `Pipeline "${message.approval.pipelineName}" approval required, action "${message.approval.actionName}"`,
+              "attachments": [
+              {
+                "author_name": "Cloud Platform AWS approval",
+                "author_icon": "https://i0.wp.com/reillytop10.com/wp-content/uploads/2016/12/Screen-Shot-2016-12-12-at-3.42.49-PM.png",
+                "image_url": [
+                  "https://media.giphy.com/media/3o7abrH8o4HMgEAV9e/giphy.gif",
+                  "https://media.giphy.com/media/UsmcxQeK7BRBK/giphy.gif",
+                  "https://media.giphy.com/media/QynHhYJiwfoJO/giphy.gif",
+                  "https://media.giphy.com/media/Dih5LeyxL8fny/giphy.gif",
+                ][Math.floor((Math.random() * 4))]
+              },
+              {
+                "text": `${message.approval.customData}`,
+                "fields": [
+                {
+                  "title": "Approval link",
+                  "value": `${message.approval.approvalReviewLink}`,
+                  "short": true,
+                },
+                ]
+              },
+              {
+                "fields": [
+                {
+                  "title": "Pipeline",
+                  "value": `${message.consoleLink}`,
+                  "short": true,
+                },
+                ]
+              }
+              ]
+            }
+
+            postMessage(slackMessage, (response) => {
+              if (response.statusCode < 400) {
+                console.info('Message posted successfully');
+                callback(null);
+              } else if (response.statusCode < 500) {
+                console.error(`Error posting message to Slack API: ${response.statusCode} - ${response.statusMessage}`);
+                callback(null);  // Don't retry because the error is due to a problem with the request
+              } else {
+                // Let Lambda retry
+                callback(`Server error when processing message: ${response.statusCode} - ${response.statusMessage}`);
+              }
+            });
+          }
+
+          exports.handler = (event, context, callback) => {
+            return new Promise((resolve, reject) => {
+              if (hookUrl) {
+                return resolve(hookUrl)
+              }
+
+              const ssm = new AWS.SSM()
+              return ssm.getParameters({
+                Names: ['pm.slack.webhooks'],
+                WithDecryption: true
+              }).promise()
+              .then((data) => {
+                hookUrl = data.Parameters[0].Value;
+              })
+              .then(resolve)
+            })
+            .then(() => {
+              processEvent(event, callback);
+            })
+            .catch(callback)
+          };
+      Runtime: nodejs6.10
+      Timeout: 25
+  SlackNotificationsLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Condition: cEnableSlackApprovals
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref SlackNotificationsLambda
+      Principal: !Sub 'sns.amazonaws.com'
+      SourceArn: !Ref ApprovalTopic
+  SlackNotificationsApprovalSubscription:
+    Type: AWS::SNS::Subscription
+    Condition: cEnableSlackApprovals
+    Properties:
+      Endpoint: !Sub '${SlackNotificationsLambda.Arn}'
+      Protocol: lambda
+      TopicArn: !Ref ApprovalTopic
