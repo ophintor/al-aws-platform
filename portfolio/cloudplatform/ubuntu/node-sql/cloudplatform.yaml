@@ -134,7 +134,10 @@ Mappings:
       id: "718504428378"
     sa-east-1:
       id: "507241528517"
-
+  RepositoryURL:
+    UseGitHub:
+      Enable: "https://github.com/${GitHubUser}/${GitHubRepo}.git"
+      Disable: "!GetAtt 'CodeRepo.CloneUrlHttp'"
 Outputs:
   WebsiteURL:
     Description: Website
@@ -144,7 +147,11 @@ Outputs:
     ]
   RepoURL:
     Description: Git Repository
-    Value: !GetAtt 'CodeRepo.CloneUrlSsh'
+    Value:
+      !If
+      - cEnableCodeCommit
+      - !GetAtt 'CodeRepo.CloneUrlSsh'
+      - !Sub 'ssh://git@github.com:${GitHubUser}/${GitHubRepo}.git'
   DashboardURL:
     Value: !Sub 'https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${ResourcePrefix}-Dashboard'
   PipelineUrl:
@@ -258,6 +265,28 @@ Parameters:
     AllowedValues: ["MySQL"]
     Default: MySQL
     Description: Which DB Engine to use
+    Type: String
+  UseGitHub:
+    Description: Enable/Disable GitHub
+    AllowedValues:
+      - Enable
+      - Disable
+    Default: Disable
+    Type: String
+  GitHubUser:
+    Description: Username for GitHub Repo
+    Type: String
+  GitHubRepo:
+    Description: GitHub Repository Name
+    Type: String
+    MaxLength: 100
+  GitHubBranch:
+    Description: Branch Name
+    Type: String
+    Default: master
+  GitHubToken:
+    Description: Personal Token generated from GitHub
+    NoEcho: true
     Type: String
   ElasticsearchLogs:
     Description: Enable/Disable Elasticsearch; Central Logging relies on a standalone stack with ES. Integrated starts an ES cluster as part of the stack's resources.
@@ -418,6 +447,14 @@ Metadata:
         Parameters:
           - UseDNS
       - Label:
+          default: 'Repository Settings:'
+        Parameters:
+          - UseGitHub
+          - GitHubUser
+          - GitHubRepo
+          - GitHubBranch
+          - GitHubToken
+      - Label:
           default: 'Database Configuration:'
         Parameters:
           - DBEngine
@@ -473,6 +510,16 @@ Metadata:
         default: Resource Prefix Name / Stack Name
       AppPort:
         default: Application TCP Port
+      UseGitHub:
+        default: Use GitHub
+      GitHubUser:
+        default: GitHub Username
+      GitHubRepo:
+        default: Repository Name
+      GitHubBranch:
+        default: Branch Name
+      GitHubToken:
+        default: Personal Token
       DBName:
         default: Database Name
       DBUsername:
@@ -549,6 +596,7 @@ Conditions:
   cEnableEmailNotications: !Not [!Equals [!Ref OperationsEmail, '']]
   cEnableSlackAndLambdaLogging: !And [!Condition cEnableSlackApprovals, !Condition cEnableAdvancedLogging]
   cEnableEmailNoticationsAndLambdaLogging: !And [!Condition cEnableEmailNotications, !Condition cEnableAdvancedLogging]
+  cEnableCodeCommit: !Equals [!Ref UseGitHub, 'Disable']
 
 # Resources documentation
 # http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-template-resource-type-ref.html
@@ -1837,6 +1885,7 @@ Resources:
                 Resource:
                   - !Sub 'arn:aws:codecommit:${AWS::Region}:${AWS::AccountId}:${ResourcePrefix}-repo'
   CodeRepo:
+    Condition: cEnableCodeCommit
     Type: AWS::CodeCommit::Repository
     Properties:
       RepositoryName: !Sub '${ResourcePrefix}-repo'
@@ -1930,7 +1979,7 @@ Resources:
       RetentionInDays: 1
   CodeBuildArtifact:
     Type: AWS::CodeBuild::Project
-    DependsOn: [CodeRepo, CodeBuildRole, CodeBuildArtifactLogGroup]
+    DependsOn: [CodeBuildRole, CodeBuildArtifactLogGroup]
     Properties:
       Name: !Sub '${ResourcePrefix}-build'
       Description: A description about my project
@@ -1945,7 +1994,7 @@ Resources:
         # http://docs.aws.amazon.com/codebuild/latest/userguide/build-env-ref.html
         Image: aws/codebuild/nodejs:7.0.0
       Source:
-        Location: !GetAtt 'CodeRepo.CloneUrlHttp'
+        Location: !FindInMap [RepositoryURL, UseGitHub, !Ref UseGitHub]
         Type: CODEPIPELINE
         BuildSpec: !Sub |
           version: 0.2
@@ -1964,7 +2013,6 @@ Resources:
   CodeBuildKibana:
     Type: AWS::CodeBuild::Project
     DependsOn:
-      - CodeRepo
       - CodeBuildRole
       - CodeBuildKibanaLogGroup
     Condition: cEnableES
@@ -1993,10 +2041,11 @@ Resources:
               - cEnableESCentral
               - Fn::ImportValue: !Sub '${ElasticsearchStack}-DomainEndpointES'
               - !Sub '${ElasticsearchAWSLogs.DomainEndpoint}'
+
       TimeoutInMinutes: 300
   CodePipelineTestArtifact:
     Type: AWS::CodeBuild::Project
-    DependsOn: [CodeRepo, CodeBuildRole, CodePipelineTestArtifactLogGroup]
+    DependsOn: [CodeBuildRole, CodePipelineTestArtifactLogGroup]
     Properties:
       Name: !Sub '${ResourcePrefix}-test'
       Description: A description about my project
@@ -2011,7 +2060,7 @@ Resources:
         # http://docs.aws.amazon.com/codebuild/latest/userguide/build-env-ref.html
         Image: aws/codebuild/nodejs:7.0.0
       Source:
-        Location: !GetAtt 'CodeRepo.CloneUrlHttp'
+        Location: !FindInMap [RepositoryURL, UseGitHub, !Ref UseGitHub]
         Type: CODEPIPELINE
         BuildSpec: !Sub |
           version: 0.2
@@ -2024,7 +2073,7 @@ Resources:
       TimeoutInMinutes: 300 # 5min
   IntegrationTestArtifact:
     Type: AWS::CodeBuild::Project
-    DependsOn: [CodeRepo, CodeBuildRole, IntegrationTestArtifactLogGroup]
+    DependsOn: [CodeBuildRole, IntegrationTestArtifactLogGroup]
     Properties:
       Name: !Sub '${ResourcePrefix}-integration-test'
       Description: A description about my project
@@ -2052,7 +2101,7 @@ Resources:
           - Name: DB_NAME
             Value: !Sub '${DBName}'
       Source:
-        Location: !GetAtt 'CodeRepo.CloneUrlHttp'
+        Location: !FindInMap [RepositoryURL, UseGitHub, !Ref UseGitHub]
         Type: CODEPIPELINE
         BuildSpec: !Sub |
           version: 0.2
@@ -2066,7 +2115,7 @@ Resources:
   CodeBuildDockerImage:
     Type: AWS::CodeBuild::Project
     Condition: cEnableContainers
-    DependsOn: [CodeRepo, CodeBuildRole]
+    DependsOn: [CodeBuildRole]
     Properties:
       Name: !Sub '${ResourcePrefix}-ecs-image'
       Description: A description about my project
@@ -2087,7 +2136,7 @@ Resources:
           - Name: AWS_ACCOUNT_ID
             Value: !Ref AWS::AccountId
       Source:
-        Location: !GetAtt 'CodeRepo.CloneUrlHttp'
+        Location: !FindInMap [RepositoryURL, UseGitHub, !Ref UseGitHub]
         Type: CODEPIPELINE
         BuildSpec: !Sub |
           version: 0.2
@@ -2279,17 +2328,33 @@ Resources:
       Stages:
         - Name: Source
           Actions:
-            - Name: SourceAction
-              ActionTypeId:
-                Category: Source
-                Owner: AWS
-                Version: 1
-                Provider: CodeCommit
-              OutputArtifacts:
-                - Name: SourceOutput
-              Configuration:
-                RepositoryName: !GetAtt 'CodeRepo.Name'
-                BranchName: master
+            - !If
+              - cEnableCodeCommit
+              - Name: SourceAction
+                ActionTypeId:
+                  Category: Source
+                  Owner: AWS
+                  Version: 1
+                  Provider: CodeCommit
+                OutputArtifacts:
+                  - Name: SourceOutput
+                Configuration:
+                  RepositoryName: !GetAtt 'CodeRepo.Name'
+                  BranchName: master
+              - Name: SourceAction
+                ActionTypeId:
+                  Category: Source
+                  Owner: ThirdParty
+                  Version: 1
+                  Provider: GitHub
+                OutputArtifacts:
+                  - Name: SourceOutput
+                Configuration:
+                  Owner: !Ref GitHubUser
+                  Repo: !Ref GitHubRepo
+                  Branch: !Ref GitHubBranch
+                  OAuthToken: !Ref GitHubToken
+                  PollForSourceChanges: 'true'
         - Name: Build
           Actions:
             - Name: BuildArtifact
@@ -2327,7 +2392,7 @@ Resources:
                   Version: 1
                   Provider: CodeBuild
                 Configuration:
-                  ProjectName: !Ref 'CodeBuildKibana'
+                  ProjectName: !Ref CodeBuildKibana
               - !Ref 'AWS::NoValue'
             - !If
               - cEnableContainers
