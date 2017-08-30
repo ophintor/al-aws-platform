@@ -22,5 +22,4 @@ RUN echo $(date) > ./build.date
 
 EXPOSE ${PORT}
 
-# CMD [ "/entrypoint.sh", "python", "/public/django/manage.py" ]
-CMD scripts/container_start.sh
+CMD scripts/entrypoint.sh scripts/container_start.sh

@@ -9,28 +9,28 @@ Mappings:
     # ubuntu/images/hvm-ssd/ubuntu-xenial-16.04-amd64-server-20170113
     # North Virginia
     us-east-1:
-      Amazon: ami-a4c7edb2
+      AmazonLinux: ami-a4c7edb2
     # Ohio
     us-east-2:
-      Amazon: ami-8a7859ef
+      AmazonLinux: ami-8a7859ef
     # # North California
     # us-west-1:
-    #   Amazon: ami-327f5352
+    #   AmazonLinux: ami-327f5352
     # Oregon
     us-west-2:
-      Amazon: ami-6df1e514
+      AmazonLinux: ami-6df1e514
     # Ireland
     eu-west-1:
-      Amazon: ami-d7b9a2b1
+      AmazonLinux: ami-d7b9a2b1
     # Frankfurt
     eu-central-1:
-      Amazon: ami-82be18ed
+      AmazonLinux: ami-82be18ed
     # Sydney
     ap-southeast-2:
-      Amazon: ami-527b4031
+      AmazonLinux: ami-527b4031
     # Tokyo
     ap-northeast-1:
-      Amazon: ami-3bd3c45c
+      AmazonLinux: ami-3bd3c45c
   AWSRegionECSAMI:
     # amzn-ami-2016.09.f-amazon-ecs-optimized
     # Latest Version 2017.03.d
@@ -340,8 +340,8 @@ Parameters:
     ConstraintDescription: Must be a valid IP CIDR range of the form x.x.x.x/x.
   OperatingSystem:
     AllowedValues:
-      - Amazon
-    Default: Amazon
+      - AmazonLinux
+    Default: AmazonLinux
     Description: Operating System Type
     Type: String
   UseSpotInstances:

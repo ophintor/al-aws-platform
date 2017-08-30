@@ -1926,7 +1926,7 @@ Resources:
           pip install https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz
 
           # AWS CLI Tools are used to get parameters from parameter store.
-          pip install awscli neo4django py2neo httpie
+          pip install awscli neo4django==0.1.8 py2neo httpie
           aws configure set region ${AWS::Region}
 
           # Install the AWS CodeDeploy Agent.
