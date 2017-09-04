@@ -80,8 +80,56 @@ Mappings:
       Tiny: t2.medium.elasticsearch
   ## Applied at the point CloudWatch log is sent to the LogStreamer Log Group
   FilterPatternLookup:
+    AppLogs:
+      Restart: App listening on port
+      Get: '[ip, timestamp, method=GET, url, status_code, bytes, responsetime, useragent]'
+      Post: '[ip, timestamp, method=POST, url, status_code, bytes, responsetime, useragent]'
+      Delete: '[ip, timestamp, method=DELETE, url, status_code, bytes, responsetime, useragent]'
+      BytesOut: '[ip, timestamp, method, url, status_code, bytes, responsetime, useragent]'
+      4xxs: '[ip, timestamp, method, url, status_code=4*, bytes, responsetime, useragent]'
+      200s: '[ip, timestamp, method, url, status_code=200, bytes, responsetime, useragent]'
+      ChromeUsers: '[ip, timestamp, method, url, status_code, bytes, responsetime, useragent=*Chrome*]'
+      FirefoxUsers: '[ip, timestamp, method, url, status_code, bytes, responsetime, useragent=*Firefox*]'
     CloudTrail:
       Pattern: ''
+      SecurityGroupChanges: '{ ($.eventName = AuthorizeSecurityGroupIngress) || ($.eventName
+        = AuthorizeSecurityGroupEgress) || ($.eventName = RevokeSecurityGroupIngress)
+        || ($.eventName = RevokeSecurityGroupEgress) || ($.eventName = CreateSecurityGroup)
+        || ($.eventName = DeleteSecurityGroup) }'
+      NetworkACLChanges: '{ ($.eventName = CreateNetworkAcl) || ($.eventName = CreateNetworkAclEntry)
+        || ($.eventName = DeleteNetworkAcl) || ($.eventName = DeleteNetworkAclEntry)
+        || ($.eventName = ReplaceNetworkAclEntry) || ($.eventName = ReplaceNetworkAclAssociation)
+        }'
+      GatewayChanges: '{ ($.eventName = CreateCustomerGateway) || ($.eventName = DeleteCustomerGateway)
+        || ($.eventName = AttachInternetGateway) || ($.eventName = CreateInternetGateway)
+        || ($.eventName = DeleteInternetGateway) || ($.eventName = DetachInternetGateway)
+        }'
+      VPCChanges: '{ ($.eventName = CreateVpc) || ($.eventName = DeleteVpc) ||
+        ($.eventName = ModifyVpcAttribute) || ($.eventName = AcceptVpcPeeringConnection)
+        || ($.eventName = CreateVpcPeeringConnection) || ($.eventName = DeleteVpcPeeringConnection)
+        || ($.eventName = RejectVpcPeeringConnection) || ($.eventName = AttachClassicLinkVpc)
+        || ($.eventName = DetachClassicLinkVpc) || ($.eventName = DisableVpcClassicLink)
+        || ($.eventName = EnableVpcClassicLink) }'
+      EC2InstanceChanges: '{ ($.eventName = RunInstances) || ($.eventName = RebootInstances)
+        || ($.eventName = StartInstances) || ($.eventName = StopInstances) || ($.eventName
+        = TerminateInstances) }'
+      EC2LargeInstanceChanges: '{ ($.eventName = RunInstances) && (($.requestParameters.instanceType
+        = *.8xlarge) || ($.requestParameters.instanceType = *.4xlarge)) }'
+      CloudTrailChanges: '{ ($.eventName = CreateTrail) || ($.eventName = UpdateTrail)
+        || ($.eventName = DeleteTrail) || ($.eventName = StartLogging) || ($.eventName
+        = StopLogging) }'
+      ConsoleSignInFailures: '{ ($.eventName = ConsoleLogin) && ($.errorMessage = "Failed
+        authentication") }'
+      AuthorizationFailures: '{ ($.errorCode = "*UnauthorizedOperation") || ($.errorCode =
+        "AccessDenied*") }'
+      LogTamper: '{ ($.eventSource = s3*) && (($.errorCode = "*UnauthorizedOperation") ||
+        ($.errorCode = "AccessDenied*")) }'
+      IAMPolicyChanges: '{ ($.eventName=DeleteGroupPolicy) || ($.eventName=DeleteRolePolicy) ||
+        ($.eventName=DeleteUserPolicy) || ($.eventName=PutGroupPolicy) || ($.eventName=PutRolePolicy) ||
+        ($.eventName=PutUserPolicy) || ($.eventName=CreatePolicy) || ($.eventName=DeletePolicy) ||
+        ($.eventName=CreatePolicyVersion) || ($.eventName=DeletePolicyVersion) ||
+        ($.eventName=AttachRolePolicy) || ($.eventName=DetachRolePolicy) || ($.eventName=AttachUserPolicy) ||
+        ($.eventName=DetachUserPolicy) || ($.eventName=AttachGroupPolicy) || ($.eventName=DetachGroupPolicy) }'
     Common:
       Pattern:
         '[host, ident, authuser, date, request, status, bytes, referrer, agent]'
@@ -138,6 +186,7 @@ Mappings:
     UseGitHub:
       Enable: "https://github.com/${GitHubUser}/${GitHubRepo}.git"
       Disable: "!GetAtt 'CodeRepo.CloneUrlHttp'"
+
 Outputs:
   WebsiteURL:
     Description: Website
@@ -2907,7 +2956,7 @@ Resources:
     Type: AWS::Logs::MetricFilter
     Properties:
       LogGroupName: !Ref 'LogGroupAppLog'
-      FilterPattern: App listening on port
+      FilterPattern: !FindInMap [FilterPatternLookup, AppLogs, Restart]
       MetricTransformations:
         - MetricNamespace: !Sub '${ResourcePrefix}-ApplicationMetrics'
           MetricName: App Restarts
@@ -2916,7 +2965,7 @@ Resources:
     Type: AWS::Logs::MetricFilter
     Properties:
       LogGroupName: !Ref 'LogGroupAppLog'
-      FilterPattern: '[ip, timestamp, method=G, url, status_code,bytes,responsetime,useragent]'
+      FilterPattern: !FindInMap [FilterPatternLookup, AppLogs, Get]
       MetricTransformations:
         - MetricNamespace: !Sub '${ResourcePrefix}-ApplicationMetrics'
           MetricName: GETs
@@ -2925,7 +2974,7 @@ Resources:
     Type: AWS::Logs::MetricFilter
     Properties:
       LogGroupName: !Ref 'LogGroupAppLog'
-      FilterPattern: '[ip, timestamp, method=POST, url, status_code,bytes,responsetime,useragent]'
+      FilterPattern: !FindInMap [FilterPatternLookup, AppLogs, Post]
       MetricTransformations:
         - MetricNamespace: !Sub '${ResourcePrefix}-ApplicationMetrics'
           MetricName: POSTs
@@ -2934,7 +2983,7 @@ Resources:
     Type: AWS::Logs::MetricFilter
     Properties:
       LogGroupName: !Ref 'LogGroupAppLog'
-      FilterPattern: '[ip, timestamp, method=DELETE, url, status_code,bytes,responsetime,useragent]'
+      FilterPattern: !FindInMap [FilterPatternLookup, AppLogs, Delete]
       MetricTransformations:
         - MetricNamespace: !Sub '${ResourcePrefix}-ApplicationMetrics'
           MetricName: DELETEs
@@ -2943,7 +2992,7 @@ Resources:
     Type: AWS::Logs::MetricFilter
     Properties:
       LogGroupName: !Ref 'LogGroupAppLog'
-      FilterPattern: '[ip, timestamp, method, url, status_code,bytes,responsetime,useragent]'
+      FilterPattern: !FindInMap [FilterPatternLookup, AppLogs, BytesOut]
       MetricTransformations:
         - MetricNamespace: !Sub '${ResourcePrefix}-ApplicationMetrics'
           MetricName: Bytes_Out
@@ -2952,7 +3001,7 @@ Resources:
     Type: AWS::Logs::MetricFilter
     Properties:
       LogGroupName: !Ref 'LogGroupAppLog'
-      FilterPattern: '[ip, timestamp, method, url, status_code=4*,bytes,responsetime,useragent]'
+      FilterPattern: !FindInMap [FilterPatternLookup, AppLogs, 4xxs]
       MetricTransformations:
         - MetricNamespace: !Sub '${ResourcePrefix}-ApplicationMetrics'
           MetricName: 4xx_error_count
@@ -2961,7 +3010,7 @@ Resources:
     Type: AWS::Logs::MetricFilter
     Properties:
       LogGroupName: !Ref 'LogGroupAppLog'
-      FilterPattern: '[ip, timestamp, method, url, status_code=200,bytes,responsetime,useragent]'
+      FilterPattern: !FindInMap [FilterPatternLookup, AppLogs, 200s]
       MetricTransformations:
         - MetricNamespace: !Sub '${ResourcePrefix}-ApplicationMetrics'
           MetricName: HTTP OK
@@ -2970,7 +3019,7 @@ Resources:
     Type: AWS::Logs::MetricFilter
     Properties:
       LogGroupName: !Ref 'LogGroupAppLog'
-      FilterPattern: '[ip, timestamp, method, url, status_code,bytes,responsetime,useragent=*Chrome*]'
+      FilterPattern: !FindInMap [FilterPatternLookup, AppLogs, ChromeUsers]
       MetricTransformations:
         - MetricNamespace: !Sub '${ResourcePrefix}-ApplicationMetrics'
           MetricName: Chrome Users
@@ -2979,7 +3028,7 @@ Resources:
     Type: AWS::Logs::MetricFilter
     Properties:
       LogGroupName: !Ref 'LogGroupAppLog'
-      FilterPattern: '[ip, timestamp, method, url, status_code,bytes,responsetime,useragent=*Firefox*]'
+      FilterPattern: !FindInMap [FilterPatternLookup, AppLogs, FirefoxUsers]
       MetricTransformations:
         - MetricNamespace: !Sub '${ResourcePrefix}-ApplicationMetrics'
           MetricName: Firefox Users
@@ -3020,10 +3069,7 @@ Resources:
     Type: AWS::Logs::MetricFilter
     Properties:
       LogGroupName: !Ref 'TrailLogGroup'
-      FilterPattern: '{ ($.eventName = AuthorizeSecurityGroupIngress) || ($.eventName
-        = AuthorizeSecurityGroupEgress) || ($.eventName = RevokeSecurityGroupIngress)
-        || ($.eventName = RevokeSecurityGroupEgress) || ($.eventName = CreateSecurityGroup)
-        || ($.eventName = DeleteSecurityGroup) }'
+      FilterPattern: !FindInMap [FilterPatternLookup, CloudTrail, SecurityGroupChanges]
       MetricTransformations:
         - MetricNamespace: !Sub '${ResourcePrefix}-CloudTrailMetrics'
           MetricName: SecurityGroupEventCount
@@ -3049,10 +3095,7 @@ Resources:
     Type: AWS::Logs::MetricFilter
     Properties:
       LogGroupName: !Ref 'TrailLogGroup'
-      FilterPattern: '{ ($.eventName = CreateNetworkAcl) || ($.eventName = CreateNetworkAclEntry)
-        || ($.eventName = DeleteNetworkAcl) || ($.eventName = DeleteNetworkAclEntry)
-        || ($.eventName = ReplaceNetworkAclEntry) || ($.eventName = ReplaceNetworkAclAssociation)
-        }'
+      FilterPattern: !FindInMap [FilterPatternLookup, CloudTrail, NetworkACLChanges]
       MetricTransformations:
         - MetricNamespace: !Sub '${ResourcePrefix}-CloudTrailMetrics'
           MetricName: NetworkAclEventCount
@@ -3078,10 +3121,7 @@ Resources:
     Type: AWS::Logs::MetricFilter
     Properties:
       LogGroupName: !Ref 'TrailLogGroup'
-      FilterPattern: '{ ($.eventName = CreateCustomerGateway) || ($.eventName = DeleteCustomerGateway)
-        || ($.eventName = AttachInternetGateway) || ($.eventName = CreateInternetGateway)
-        || ($.eventName = DeleteInternetGateway) || ($.eventName = DetachInternetGateway)
-        }'
+      FilterPattern: !FindInMap [FilterPatternLookup, CloudTrail, GatewayChanges]
       MetricTransformations:
         - MetricNamespace: !Sub '${ResourcePrefix}-CloudTrailMetrics'
           MetricName: GatewayEventCount
@@ -3107,12 +3147,7 @@ Resources:
     Type: AWS::Logs::MetricFilter
     Properties:
       LogGroupName: !Ref 'TrailLogGroup'
-      FilterPattern: '{ ($.eventName = CreateVpc) || ($.eventName = DeleteVpc) ||
-        ($.eventName = ModifyVpcAttribute) || ($.eventName = AcceptVpcPeeringConnection)
-        || ($.eventName = CreateVpcPeeringConnection) || ($.eventName = DeleteVpcPeeringConnection)
-        || ($.eventName = RejectVpcPeeringConnection) || ($.eventName = AttachClassicLinkVpc)
-        || ($.eventName = DetachClassicLinkVpc) || ($.eventName = DisableVpcClassicLink)
-        || ($.eventName = EnableVpcClassicLink) }'
+      FilterPattern: !FindInMap [FilterPatternLookup, CloudTrail, VPCChanges]
       MetricTransformations:
         - MetricNamespace: !Sub '${ResourcePrefix}-CloudTrailMetrics'
           MetricName: VpcEventCount
@@ -3138,9 +3173,7 @@ Resources:
     Type: AWS::Logs::MetricFilter
     Properties:
       LogGroupName: !Ref 'TrailLogGroup'
-      FilterPattern: '{ ($.eventName = RunInstances) || ($.eventName = RebootInstances)
-        || ($.eventName = StartInstances) || ($.eventName = StopInstances) || ($.eventName
-        = TerminateInstances) }'
+      FilterPattern: !FindInMap [FilterPatternLookup, CloudTrail, EC2InstanceChanges]
       MetricTransformations:
         - MetricNamespace: !Sub '${ResourcePrefix}-CloudTrailMetrics'
           MetricName: EC2InstanceEventCount
@@ -3166,8 +3199,7 @@ Resources:
     Type: AWS::Logs::MetricFilter
     Properties:
       LogGroupName: !Ref 'TrailLogGroup'
-      FilterPattern: '{ ($.eventName = RunInstances) && (($.requestParameters.instanceType
-        = *.8xlarge) || ($.requestParameters.instanceType = *.4xlarge)) }'
+      FilterPattern: !FindInMap [FilterPatternLookup, CloudTrail, EC2LargeInstanceChanges]
       MetricTransformations:
         - MetricNamespace: !Sub '${ResourcePrefix}-CloudTrailMetrics'
           MetricName: EC2LargeInstanceEventCount
@@ -3193,9 +3225,7 @@ Resources:
     Type: AWS::Logs::MetricFilter
     Properties:
       LogGroupName: !Ref 'TrailLogGroup'
-      FilterPattern: '{ ($.eventName = CreateTrail) || ($.eventName = UpdateTrail)
-        || ($.eventName = DeleteTrail) || ($.eventName = StartLogging) || ($.eventName
-        = StopLogging) }'
+      FilterPattern: !FindInMap [FilterPatternLookup, CloudTrail, CloudTrailChanges]
       MetricTransformations:
         - MetricNamespace: !Sub '${ResourcePrefix}-CloudTrailMetrics'
           MetricName: CloudTrailEventCount
@@ -3221,8 +3251,7 @@ Resources:
     Type: AWS::Logs::MetricFilter
     Properties:
       LogGroupName: !Ref 'TrailLogGroup'
-      FilterPattern: '{ ($.eventName = ConsoleLogin) && ($.errorMessage = "Failed
-        authentication") }'
+      FilterPattern: !FindInMap [FilterPatternLookup, CloudTrail, ConsoleSignInFailures]
       MetricTransformations:
         - MetricNamespace: !Sub '${ResourcePrefix}-CloudTrailMetrics'
           MetricName: ConsoleSignInFailureCount
@@ -3248,8 +3277,7 @@ Resources:
     Type: AWS::Logs::MetricFilter
     Properties:
       LogGroupName: !Ref 'TrailLogGroup'
-      FilterPattern: '{ ($.errorCode = "*UnauthorizedOperation") || ($.errorCode =
-        "AccessDenied*") }'
+      FilterPattern: !FindInMap [FilterPatternLookup, CloudTrail, AuthorizationFailures]
       MetricTransformations:
         - MetricNamespace: !Sub '${ResourcePrefix}-CloudTrailMetrics'
           MetricName: AuthorizationFailureCount
@@ -3274,7 +3302,7 @@ Resources:
     Type: AWS::Logs::MetricFilter
     Properties:
       LogGroupName: !Ref 'TrailLogGroup'
-      FilterPattern: '{ ($.eventSource = s3*) && (($.errorCode = "*UnauthorizedOperation") || ($.errorCode = "AccessDenied*")) }'
+      FilterPattern: !FindInMap [FilterPatternLookup, CloudTrail, LogTamper]
       MetricTransformations:
         - MetricNamespace: !Sub '${ResourcePrefix}-CloudTrailMetrics'
           MetricName: LogTamperCount
@@ -3299,7 +3327,7 @@ Resources:
     Type: AWS::Logs::MetricFilter
     Properties:
       LogGroupName: !Ref 'TrailLogGroup'
-      FilterPattern: '{($.eventName=DeleteGroupPolicy)||($.eventName=DeleteRolePolicy)||($.eventName=DeleteUserPolicy)||($.eventName=PutGroupPolicy)||($.eventName=PutRolePolicy)||($.eventName=PutUserPolicy)||($.eventName=CreatePolicy)||($.eventName=DeletePolicy)||($.eventName=CreatePolicyVersion)||($.eventName=DeletePolicyVersion)||($.eventName=AttachRolePolicy)||($.eventName=DetachRolePolicy)||($.eventName=AttachUserPolicy)||($.eventName=DetachUserPolicy)||($.eventName=AttachGroupPolicy)||($.eventName=DetachGroupPolicy)}'
+      FilterPattern: !FindInMap [FilterPatternLookup, CloudTrail, IAMPolicyChanges]
       MetricTransformations:
         - MetricNamespace: !Sub '${ResourcePrefix}-CloudTrailMetrics'
           MetricName: IAMPolicyEventCount
