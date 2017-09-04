@@ -12,6 +12,18 @@
 		"ParameterValue": ""
 	},
 	{
+		"ParameterKey": "GitHubRepo",
+		"ParameterValue": ""
+	},
+	{
+		"ParameterKey": "GitHubUser",
+		"ParameterValue": ""
+	},
+	{
+		"ParameterKey": "GitHubToken",
+		"ParameterValue": ""
+	},
+	{
 		"ParameterKey": "DBName",
 		"ParameterValue": "todo"
 	},
