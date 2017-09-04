@@ -232,14 +232,6 @@ Parameters:
     Default: t2.micro
     Description: Database instance class
     Type: String
-  DBEncryption:
-    AllowedValues:
-      - "Yes (account default key)"
-      - "Yes (application-specific key)"
-      - "No"
-    Default: "Yes (account default key)"
-    Description: "Whether to encrypt this stack's database."
-    Type: String
   DBName:
     AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
     ConstraintDescription: must begin with a letter and contain only alphanumeric characters.
@@ -437,7 +429,6 @@ Metadata:
           - DBUsername
           - DBPassword
           - DBClass
-          - DBEncryption
       - Label:
           default: 'Application Settings:'
         Parameters:
@@ -522,7 +513,6 @@ Metadata:
         default: Auto Cleanup Stack
 
 Conditions:
-  cUseStackKMSKey: !Equals [!Ref DBEncryption, "Yes (application-specific key)"]
   cEnableDNS: !Equals [!Ref UseDNS, 'Enable']
   cEnableHTTPS: !Equals [!Ref UseHTTPS, 'Enable']
   cEnableESCentral: !Equals [!Ref ElasticsearchLogs, 'Enable - Central']
@@ -547,9 +537,6 @@ Conditions:
     - !Not [!Equals [!Sub '${AWS::Region}', 'ap-northeast-1']]
     - !Not [!Equals [!Ref InstanceType, 't2.micro']]
   cEnableContainers: !Equals [!Ref UseContainers, 'Enable']
-  cEnableDBEncryption: !Or
-    - !Equals [!Ref DBEncryption, "Yes (application-specific key)"]
-    - !Equals [!Ref DBEncryption, "Yes (account default key)"]
   cEnableEC2: !Not [!Condition cEnableContainers]
   cEnableApprovalEmails: !Not [!Equals [!Ref EmailApprovals, '']]
   cEnableSlackApprovals: !Not [!Equals [!Ref SlackApprovalsWebhook, '']]
@@ -764,6 +751,7 @@ Resources:
               Principal:
                 AWS:
                   - !GetAtt 'EC2InstanceRole.Arn'
+                  - !GetAtt 'DBInstanceRole.Arn'
               Resource: '*'
             - Effect: Allow
               Action:
@@ -921,9 +909,42 @@ Resources:
       VpcId: !Ref 'VPC'
   MongoDBInstance:
     Type: AWS::EC2::Instance
+    Metadata:
+      AWS::CloudFormation::Init:
+        config:
+          packages:
+            python:
+              awscli: []
+          files:
+            /tmp/db-setup.sh:
+              content: !Sub |
+                #!/bin/bash -e
+
+                DB_PARAMS=$(aws --region ${AWS::Region} ssm get-parameters-by-path --path "/${AWS::StackName}/db" --with-decryption --output text --query 'Parameters[].[Name,Value]')
+                IFS_SAVE=$IFS
+                IFS=$'\n'
+                for param in $DB_PARAMS ; do
+                  [ "$?" -eq "0" ] || continue
+                  IFS=$IFS_SAVE
+                  read -r key value <<< "${!param}"
+                  key="$(echo "${!key}" | sed "s/^\/${AWS::StackName}.//g" | tr '[:lower:]/' '[:upper:]_')"
+                  export "${!key}"="${!value}"
+                done
+
+                while ! ps -ef | grep -v grep | grep mongod ; do sleep 5 ; done
+                /opt/bitnami/mongodb/bin/mongo admin -u root -p bitnami <<_END_
+                db.createUser({user:"${!DB_USERNAME}",pwd:"${!DB_PASSWORD}",roles:[{"role" : "readWriteAnyDatabase","db" : "admin"},{"role" : "userAdminAnyDatabase","db" : "admin"},{"role" : "dbAdminAnyDatabase","db" : "admin"},{"role" : "clusterAdmin","db" : "admin"}]})
+                db.dropUser("root")
+                _END_
+
+                exit 0
+              mode: '000500'
+          commands:
+            mongo_setup:
+              command: bash /tmp/db-setup.sh
     Properties:
-      SubnetId: !Ref 'privateSubnet01'
-      IamInstanceProfile: !Ref 'EC2InstanceRoleInstanceProfile'
+      SubnetId: !Ref 'publicSubnet01'
+      IamInstanceProfile: !Ref 'DBInstanceProfile'
       ImageId: !FindInMap [AWSRegion2AMI, !Ref 'AWS::Region', MongoDB]
       InstanceType: !Ref 'DBClass'
       KeyName: !Ref 'KeyPairName'
@@ -933,11 +954,41 @@ Resources:
         Fn::Base64: !Sub |
           #!/bin/bash -ex
 
-          while ! ps -ef | grep -v grep | grep mongod ; do sleep 5 ; done
-          /opt/bitnami/mongodb/bin/mongo admin -u root -p bitnami <<_END_
-          db.createUser({user:"${DBUsername}",pwd:"${DBPassword}",roles:[{"role" : "readWriteAnyDatabase","db" : "admin"},{"role" : "userAdminAnyDatabase","db" : "admin"},{"role" : "dbAdminAnyDatabase","db" : "admin"},{"role" : "clusterAdmin","db" : "admin"}]})
-          # db.dropUser("root")
-          _END_
+          # Install CloudFormation tools
+          apt-get update
+          apt-get -y install python-pip
+          pip install https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz
+
+          # Call CFN-INIT to process the metadata for CloudFormation Init. Since ubuntu does not have the tools installed, we install the CFN Bootstrap in the previous step.
+          cfn-init -v --stack ${AWS::StackName} --resource MongoDBInstance --region ${AWS::Region}
+      Tags:
+        - Key: Name
+          Value: !Sub '${ResourcePrefix}-MongoDB'
+  DBInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: /
+      Roles: [!Ref DBInstanceRole]
+  DBInstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ResourcePrefix}-DB-InstanceRole'
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [ec2.amazonaws.com]
+            Action: ['sts:AssumeRole']
+      Policies:
+        - PolicyName: parameter_access
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ssm:GetParametersByPath
+                Resource:
+                  - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}/db'
+      Path: /
   StoreDBAddress:
     Type: AWS::SSM::Parameter
     DeletionPolicy: Delete
