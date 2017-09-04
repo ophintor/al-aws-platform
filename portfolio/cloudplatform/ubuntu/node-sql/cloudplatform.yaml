@@ -143,7 +143,7 @@ Outputs:
     Description: Website
     Value: !Join ['', [
       !If [cEnableHTTPS, 'https://', 'http://'],
-      !If [cEnableDNS, !Sub '${ResourcePrefix}.al-labs.co.uk', !Sub '${AppLoadBalancer.DNSName}']]
+      !If [cEnableDNS, !Sub '${ResourcePrefix}.${DomainName}', !Sub '${AppLoadBalancer.DNSName}']]
     ]
   RepoURL:
     Description: Git Repository
@@ -407,6 +407,11 @@ Parameters:
       - Disable
     Default: Enable
     Type: String
+  DomainName:
+    Description: The domain name of your environment. Please note that the domain must be managed by Route53/AWS otherwise the stack creation will fail.
+    AllowedPattern: '^(?!.{256})([a-zA-Z0-9][a-zA-Z0-9-]{0,61}[a-zA-Z0-9]\.){1,}([a-zA-Z]{2,3})$'
+    Default: al-labs.co.uk
+    Type: String
   UseHTTPS:
     Description: Enable/Disable HTTPs configuration
     AllowedValues:
@@ -446,6 +451,7 @@ Metadata:
           default: 'Domain Name:'
         Parameters:
           - UseDNS
+          - DomainName
       - Label:
           default: 'Repository Settings:'
         Parameters:
@@ -538,6 +544,8 @@ Metadata:
         default: Use HTTPS
       UseDNS:
         default: Use DNS
+      DomainName:
+        default: Domain Name
       UseContainers:
         default: Use Docker Containers
       ElasticsearchLogs:
@@ -3335,10 +3343,10 @@ Resources:
   LBCertifcate:
     Type: AWS::CertificateManager::Certificate
     Properties:
-      DomainName: !Sub '${ResourcePrefix}.al-labs.co.uk'
+      DomainName: !Sub '${ResourcePrefix}.${DomainName}'
       DomainValidationOptions:
-        - DomainName: !Sub '${ResourcePrefix}.al-labs.co.uk'
-          ValidationDomain: 'al-labs.co.uk'
+        - DomainName: !Sub '${ResourcePrefix}.${DomainName}'
+          ValidationDomain: !Sub '${DomainName}'
     Condition: cEnableHTTPS
   ALBHTTPSListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
@@ -3355,10 +3363,10 @@ Resources:
   DNSRecord:
     Type: AWS::Route53::RecordSetGroup
     Properties:
-      HostedZoneName: al-labs.co.uk.
+      HostedZoneName: !Sub ${DomainName}.
       Comment: Zone apex alias targeted to myELB LoadBalancer.
       RecordSets:
-        - Name: !Sub '${ResourcePrefix}.al-labs.co.uk.'
+        - Name: !Sub '${ResourcePrefix}.${DomainName}.'
           Type: A
           AliasTarget:
             HostedZoneId: !GetAtt 'AppLoadBalancer.CanonicalHostedZoneID'
