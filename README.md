@@ -1,3 +1,47 @@
+- [Automation Logic Cloud Platform](#markdown-header-automation-logic-cloud-platform)
+  - [How to run](#markdown-header-how-to-run)
+    - [Prerequisites](#markdown-header-prerequisites)
+    - [Quick Start Steps](#markdown-header-quick-start-steps)
+    - [Parameters Conditions Explained](#markdown-header-parameters-conditions-explained)
+      - [__mastertemplate.yaml (service stack)__](#markdown-header-mastertemplateyaml-service-stack)
+        - [Debug Mode](#markdown-header-debug-mode)
+      - [__portfolio/cloudplatform/ubuntu/node-sql/cloudplatform.yaml (product stack)__](#markdown-header-portfoliocloudplatformubuntunode-sqlcloudplatformyaml-product-stack)
+        - [Resource Prefix](#markdown-header-resource-prefix)
+        - [Domain Name](#markdown-header-domain-name)
+        - [Database Configuration](#markdown-header-database-configuration)
+        - [Application Settings](#markdown-header-application-settings)
+        - [Auto-Scaling Web Server Group's Instance Configuration](#markdown-header-auto-scaling-web-server-groups-instance-configuration)
+        - [Security](#markdown-header-security)
+        - [Notification](#markdown-header-notification)
+        - [Logging](#markdown-header-logging)
+        - [Debug Mode](#markdown-header-debug-mode)
+      - [__portfolio/central-logging/central-logging-elasticsearch.yaml (product stack)__](#markdown-header-portfoliocentral-loggingcentral-logging-elasticsearchyaml-product-stack)
+        - [Resource Prefix](#markdown-header-resource-prefix)
+        - [Elastic Search](#markdown-header-elastic-search)
+        - [Debug Mode](#markdown-header-debug-mode)
+  - [Description of Operation](#markdown-header-description-of-operation)
+    - [Service Catalogue](#markdown-header-service-catalogue)
+    - [Cloud Platform](#markdown-header-cloud-platform)
+      - [CI / CD Pipeline](#markdown-header-ci-cd-pipeline)
+      - [Secrets and Config Management](#markdown-header-secrets-and-config-management)
+      - [Logging, Metrics and Monitoring](#markdown-header-logging-metrics-and-monitoring)
+        - [Log Groups and Alarms](#markdown-header-log-groups-and-alarms)
+        - [Log Retention](#markdown-header-log-retention)
+        - [Elastic Search Logging](#markdown-header-elastic-search-logging)
+        - [DASHBOARD](#markdown-header-dashboard)
+          - [CLOUDWATCH](#markdown-header-cloudwatch)
+          - [KIBANA](#markdown-header-kibana)
+  - [Description of files](#markdown-header-description-of-files)
+    - [portfolio/](#markdown-header-portfolio)
+      - [central-logging/](#markdown-header-central-logging)
+      - [cloudplatform/ubuntu/node-sql/](#markdown-header-cloudplatformubuntunode-sql)
+    - [servicecatalogue/lambda](#markdown-header-servicecataloguelambda)
+  - [Advanced Operations](#markdown-header-advanced-operations)
+    - [Launch the stack](#markdown-header-launch-the-stack)
+      - [Manual creation](#markdown-header-manual-creation)
+    - [Manual delete](#markdown-header-manual-delete)
+  - [Contributing](#markdown-header-contributing)
+
 # Automation Logic Cloud Platform
 
 This project is a modular cloud platform framework which is built on top of AWS services to provide a single-click, out of the box solution for running applications on the cloud in a secure, consistent and easy to manage manner. This cloud platform has been built based on Automation Logic's experience of creating and managing 55+ bespoke cloud platforms for our various clients.
@@ -10,7 +54,7 @@ The ALCP currently supports AWS as a cloud provider with an Azure specific versi
 
 This repository contains several simple CRUD applications written in a variety of different languages and all their associated configurations. These sample application stacks can be deployed from the AWS service catalog once the master template has been provisioned.
 
-Each application stack will create a templatized infrastructure with autoscaling instances or containers, load balancing, security, logging, metrics, monitoring and a continuous integration / continuous deployment (CI/CD) pipeline. Once the application code is pushed to the repository, the pipeline should build and deploy the web application automatically.
+Each application stack will create a templated infrastructure with autoscaling instances or containers, load balancing, security, logging, metrics, monitoring and a continuous integration / continuous deployment (CI/CD) pipeline. Once the application code is pushed to the repository, the pipeline should build and deploy the web application automatically.
 
 This project is released under the [Apache License](https://www.apache.org/licenses/LICENSE-2.0).
 
@@ -102,6 +146,7 @@ The following steps need to be run in order to get the demo to work;
 ### Parameters Conditions Explained
 
 #### __mastertemplate.yaml (service stack)__
+##### Debug Mode
 * Cleanup -> This option when enabled with create a cleanup lambda function and an cloudformation export of its ARN (in order for product stacks to find it). This lambda gets triggered when the product stack is deleted and takes care of deleting any retained resources from the product stack. This functionality is only to be used during testing. **NEVER ENABLE FOR PRODUCTION PLATFORMS**.
 
 
