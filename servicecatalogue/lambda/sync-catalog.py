@@ -130,7 +130,7 @@ def sync_service_catalog(s3, artifact, jobid):
                 create_portfolio_response = create_portfolio(objfile, bucket)
                 portfolioid = create_portfolio_response['PortfolioDetail']['Id']
                 associate_principal_with_portfolio(create_portfolio_response['PortfolioDetail'], objfile)
-                for productsInFile in objfile['products']:
+                for productsInFile in reversed(objfile['products']):
                     s3key = 'sc-templates/' + productsInFile['name'] + '/templates/' + str(
                         uuid.uuid4()) + '.yaml'
                     s3.upload_file(
