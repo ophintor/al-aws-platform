@@ -1228,17 +1228,17 @@ Resources:
               owner: root
               group: root
             /etc/awslogs/awslogs.conf:
-              content: !Join
-                - ""
-                - - !Sub |
+              content: !Sub
+                - |
                     [general]
                     state_file = /var/lib/awslogs/agent-state
                     [cloud-init-outputlog]
-                    file = /var/log/cloud-init-output.log
+                    file = /var/log/cfn-init.log
                     log_group_name =  ${LogGroupCloudInit}
                     log_stream_name = cloudinit.outputlog-{instance_id}
                     datetime_format = %d/%b/%Y:%H:%M:%S
-                  - !If
+                    ${logsadvanced}
+                - logsadvanced: !If
                     - cEnableAdvancedLogging
                     - !Sub |
                       [system-log]
@@ -1246,10 +1246,29 @@ Resources:
                       log_group_name =  ${LogGroupSysLog}
                       log_stream_name = syslog-{instance_id}
                       datetime_format = %b %d %H:%M:%S
-                    - !Ref AWS::NoValue
-              mode: '000400'
+                    - ''
+              mode: '000644'
               owner: root
               group: root
+            /etc/cfn/cfn-hup.conf:
+              content: !Sub |
+                [main]
+                stack=${AWS::StackName}
+                region=${AWS::Region}
+                interval=10
+              mode: '000600'
+            /etc/cfn/hooks.d/run-init.conf:
+              content: !Sub |
+                [runinit]
+                triggers=post.add, post.update
+                path=Resources.ECSLaunchConfig.Metadata
+                action=/opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource ECSLaunchConfig --region ${AWS::Region}
+                runas=root
+              mode: '000600'
+          commands:
+            aws-set-region:
+              command: !Sub aws configure set region ${AWS::Region}
+              test: !Sub '! cat /root/.aws/config | grep ${AWS::Region}'
           services:
             sysvinit:
               awslogs:
@@ -1258,6 +1277,12 @@ Resources:
                 files:
                   - "/etc/awslogs/awslogs.conf"
                   - "/etc/awslogs/awscli.conf"
+              cfn-hup:
+                enabled: true
+                ensureRunning: true
+                files:
+                  - /etc/cfn/cfn-hup.conf
+                  - /etc/cfn/hooks.d/run-init.conf
     Properties:
       # AMI list: http://docs.aws.amazon.com/AmazonECS/latest/developerguide/launch_container_instance.html
       InstanceType: !Ref InstanceType
@@ -1630,22 +1655,34 @@ Resources:
     Metadata:
       AWS::CloudFormation::Init:
         config:
-          services:
-            sysvint:
-              codedeploy-agent:
-                enabled: true
-                ensureRunning: true
           packages:
             apt:
+              ruby: []
+              nodejs: []
               mysql-client: []
-              unzip: []
               libwww-perl: []
               libdatetime-perl: []
+            python:
+              awscli: []
+          sources:
+            /opt: http://aws-cloudwatch.s3.amazonaws.com/downloads/CloudWatchMonitoringScripts-1.2.1.zip
           files:
-            /tmp/cwlogs/logstreams.conf:
-              content: !Join
-                - ""
-                - - !Sub |
+            /tmp/awslogs/awslogs-agent-setup.py:
+              source: https://s3.amazonaws.com/aws-cloudwatch/downloads/latest/awslogs-agent-setup.py
+            /tmp/codedeploy/install:
+              source: !Sub https://aws-codedeploy-${AWS::Region}.s3.amazonaws.com/latest/install
+              mode: '000500'
+            /tmp/cwmonitoring/aws_monitoring_cron.sh:
+              content: |
+                #!/usr/bin/env bash
+                set -xu
+                (crontab -l 2>/dev/null; echo '*/1 * * * * /opt/aws-scripts-mon/mon-put-instance-data.pl --mem-util --disk-space-util --disk-path=/ --auto-scaling=only --from-cron') | crontab -
+              mode: '000500'
+              owner: root
+              group: root
+            /var/awslogs/local/etc/awslogs.conf:
+              content: !Sub
+                - |
                     [general]
                     state_file= /var/awslogs/agent-state
                     [nodejs-serverlog]
@@ -1654,11 +1691,12 @@ Resources:
                     log_stream_name = nodejs.serverlog-{instance_id}
                     datetime_format = %d/%b/%Y:%H:%M:%S
                     [cloud-init-outputlog]
-                    file = /var/log/cloud-init-output.log
+                    file = /var/log/cfn-init.log
                     log_group_name =  ${LogGroupCloudInit}
                     log_stream_name = cloudinit.outputlog-{instance_id}
                     datetime_format = %d/%b/%Y:%H:%M:%S
-                  - !If
+                    ${logsadvanced}
+                - logsadvanced: !If
                     - cEnableAdvancedLogging
                     - !Sub |
                       [system-log]
@@ -1666,32 +1704,57 @@ Resources:
                       log_group_name =  ${LogGroupSysLog}
                       log_stream_name = syslog-{instance_id}
                       datetime_format = %b %d %H:%M:%S
-                    - !Ref AWS::NoValue
-              mode: '000400'
+                    - ''
+              mode: '0006444'
               owner: root
               group: root
-            /lib/systemd/system/awslogs.service:
-              content: |
-                [Unit]
-                Description=The CloudWatch Logs agent
-                After=network.target
-                [Service]
-                Restart=always
-                TimeoutSec=infinity
-                ExecStart=/var/awslogs/bin/awslogs-agent-launcher.sh
-                [Install]
-                WantedBy=multi-user.target
-              mode: '000400'
-              owner: root
-              group: root
-            /tmp/aws_monitoring.sh:
-              content: |
-                #!/usr/bin/env bash
-                set -xu
-                (crontab -l 2>/dev/null; echo '*/1 * * * * /home/ubuntu/aws-scripts-mon/mon-put-instance-data.pl --mem-util --disk-space-util --disk-path=/ --auto-scaling=only --from-cron') | crontab -
-              mode: '000500'
-              owner: root
-              group: root
+            /etc/cfn/cfn-hup.conf:
+              content: !Sub |
+                [main]
+                stack=${AWS::StackName}
+                region=${AWS::Region}
+                interval=10
+              mode: '000600'
+            /etc/cfn/hooks.d/run-init.conf:
+              content: !Sub |
+                [runinit]
+                triggers=post.add, post.update
+                path=Resources.EC2LaunchConfig.Metadata
+                action=cfn-init -v --stack ${AWS::StackName} --resource EC2LaunchConfig --region ${AWS::Region}
+                runas=root
+              mode: '000600'
+          commands:
+            aws-set-region:
+              command: !Sub aws configure set region ${AWS::Region}
+              test: !Sub '! cat /root/.aws/config | grep ${AWS::Region}'
+            codedeploy-agent-install:
+              command: /tmp/codedeploy/install auto
+              test: '! systemctl | grep codedeploy-agent.service'
+            cwlogs-agent-install:
+              command: !Sub python /tmp/awslogs/awslogs-agent-setup.py -n -r ${AWS::Region} -c /var/awslogs/local/etc/awslogs.conf
+              test: '! systemctl | grep awslogs.service'
+            cwmonitoring-cron:
+              command: bash /tmp/cwmonitoring/aws_monitoring_cron.sh
+              test: '! crontab -l | grep mon-put-instance-data.pl'
+            add-cfn-hup-to-systemd:
+              command: ln -s /usr/local/init/ubuntu/cfn-hup /etc/init.d/cfn-hup && chmod +x /etc/init.d/cfn-hup && update-rc.d cfn-hup defaults
+              test: '[ ! -L /etc/init.d/cfn-hup ]'
+          services:
+            sysvinit:
+              codedeploy-agent:
+                enabled: true
+                ensureRunning: true
+              awslogs:
+                enabled: true
+                ensureRunning: true
+                files:
+                  - /var/awslogs/local/etc/awslogs.conf
+              cfn-hup:
+                enabled: true
+                ensureRunning: true
+                files:
+                  - /etc/cfn/cfn-hup.conf
+                  - /etc/cfn/hooks.d/run-init.conf
     Properties:
       ImageId: !FindInMap [AWSRegion2AMI, !Ref 'AWS::Region', !Ref OperatingSystem]
       SpotPrice: !If [cEnableSpotInstances, '0.05', !Ref 'AWS::NoValue']
@@ -1714,47 +1777,19 @@ Resources:
           trap 'error_exit' ERR
 
           # Update repo and get tool dependencies
-          apt-get update
-          apt-get install -y python-pip ruby
+          # https://nodejs.org/en/download/package-manager/#debian-and-ubuntu-based-linux-distributions
+          # The script also runs 'apt-get update'
+          curl -sL https://deb.nodesource.com/setup_7.x | sudo -E bash -
+          apt-get install -y python-pip
 
           # Intall CloudFormation tools....
           pip install https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz
 
-          # AWS CLI Tools are used to get parameters from parameter store.
-          pip install awscli
-          aws configure set region ${AWS::Region}
-
-          # Install the AWS CodeDeploy Agent.
-          cd /home/ubuntu
-          curl -O https://aws-codedeploy-${AWS::Region}.s3.amazonaws.com/latest/install
-          chmod +x ./install
-          ./install auto
-
-          # https://nodejs.org/en/download/package-manager/#debian-and-ubuntu-based-linux-distributions
-          curl -sL https://deb.nodesource.com/setup_7.x | sudo -E bash -
-          apt-get install -y nodejs
-
           # Call CFN-INIT to process the metadata for CloudFormation Init. Since ubuntu does not have the tools installed, we install the CFN Bootstrap in the previous step.\n,
           cfn-init -v --stack ${AWS::StackName} --resource EC2LaunchConfig --region ${AWS::Region}
 
-          #Download and Install the Cloudwatch Logs agent.
-          curl -O https://s3.amazonaws.com/aws-cloudwatch/downloads/latest/awslogs-agent-setup.py
-          python awslogs-agent-setup.py -n -r ${AWS::Region} -c /tmp/cwlogs/logstreams.conf
-
-          #Start the Cloudwatch logs agent service using the SYSTEMD Unit file created by cloudformation Init.
-          systemctl enable awslogs.service
-          systemctl start awslogs.service
-
-          #Download and Install the CloudWatch monitoring Script \n,
-          curl -O http://aws-cloudwatch.s3.amazonaws.com/downloads/CloudWatchMonitoringScripts-1.2.1.zip
-          unzip CloudWatchMonitoringScripts-1.2.1.zip
-          rm CloudWatchMonitoringScripts-1.2.1.zip
-          cd /tmp/
-          sudo ./aws_monitoring.sh
-          rm ./aws_monitoring.sh
-
           # All is well, so signal AutoScalingGroup.
-          $(which cfn-signal) -e 0 --stack ${AWS::StackName} --resource EC2AutoScalingGroup --region ${AWS::Region}
+          cfn-signal -e 0 --stack ${AWS::StackName} --resource EC2AutoScalingGroup --region ${AWS::Region}
 
   #####################################################################################
   # End of EC2 Auto Scaling
