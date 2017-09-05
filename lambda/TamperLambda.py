@@ -1,71 +1,41 @@
 import boto3
-import base64
-import uuid
-import httplib
-import urlparse
-import json
 import cfnresponse
+from botocore.exceptions import ClientError
 
 
-def getBucketName(bucket):
-  return bucket["Name"]
-
-
-def getLogBuckets(bucket_name):
-  if "logs" in bucket_name and "elb" not in bucket_name:
-    return True
-
-
-def getBucketArn(bucket_name):
-  return "arn:aws:s3:::" + bucket_name + "/AWS"
-
-
-def send_response(request, response, context, status=None, reason=None):
-  if status is not None:
-    response['Status'] = status
-  if reason is not None:
-    response['Reason'] = reason
-
-  try:
-    if 'ResponseURL' in request and request['ResponseURL']:
-      url = urlparse.urlparse(request['ResponseURL'])
-      body = json.dumps(response)
-      https = httplib.HTTPSConnection(url.hostname)
-      https.request('PUT', url.path+'?'+url.query, body)
-      cfnresponse.send(request, context, cfnresponse.SUCCESS, response, response['PhysicalResourceId'])
-  except Exception as e:
-    cfnresponse.send(request, context, cfnresponse.FAILED, response, response['PhysicalResourceId'])
-
-  return response
+accepted_requests = {'Create'}
 
 
 def handler(event, context):
-  client = boto3.client('cloudtrail')
-  s3client = boto3.client('s3')
+    if event['RequestType'] not in accepted_requests:
+        # Send a successful response to CloudFormation and exit
+        cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+        return 0
 
-  body = s3client.list_buckets()
-  bucket_list = map(getBucketArn, filter(getLogBuckets, map(getBucketName, body["Buckets"])))
+    client = boto3.client('cloudtrail')
+    s3client = boto3.client('s3')
 
-  response = client.put_event_selectors(
-    TrailName=event['ResourceProperties']['Trail'],
-    EventSelectors=[
-      {
-        'ReadWriteType': 'All',
-        'IncludeManagementEvents': True,
-        'DataResources': [
-          {
-            'Type': 'AWS::S3::Object',
-            'Values': bucket_list
-          },
-        ]
-      },
-    ]
-  )
-  if 'PhysicalResourceId' in event:
-    response['PhysicalResourceId'] = event['PhysicalResourceId']
-  else:
-    response['PhysicalResourceId'] = str(uuid.uuid4())
-  if event['RequestType'] == 'Delete':
-    cfnresponse.send(event, context, cfnresponse.SUCCESS, response, response['PhysicalResourceId'])
-    return response
-  return send_response(event, response, context)
+    try:
+        cloudtrail_response = client.put_event_selectors(
+            TrailName=event['ResourceProperties']['Trail'],
+            EventSelectors=[
+                {
+                    'ReadWriteType': 'All',
+                    'IncludeManagementEvents': True,
+                    'DataResources': [
+                        {
+                            'Type': 'AWS::S3::Object',
+                            'Values': [
+                                event['ResourceProperties']['BucketArn']+'/AWS'
+                            ]
+                        },
+                    ]
+                },
+            ]
+        )
+        cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+        return 0
+    except ClientError as e:
+        response_data = {'Reason': str(e)}
+        cfnresponse.send(event, context, cfnresponse.FAILED, response_data)
+        return 1

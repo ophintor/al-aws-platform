@@ -712,6 +712,10 @@ Resources:
           - !Ref 'VPCFlowLogsLogGroup'
           - !Ref 'AWS::NoValue'
         - !If
+          - cEnableAdvancedLogging
+          - !Ref 'TamperLambdaLogGroup'
+          - !Ref 'AWS::NoValue'
+        - !If
           - cEnableContainers
           - !Ref 'CodeBuildDockerImageLogGroup'
           - !Ref 'AWS::NoValue'
@@ -3491,8 +3495,9 @@ Resources:
     Properties:
       ServiceToken: !GetAtt TamperLambda.Arn
       Trail: !Sub '${ResourcePrefix}-LogTrail'
+      BucketArn: !Sub '${LogStoreS3Location.Arn}'
   TamperLambda:
-    DependsOn: Trail
+    DependsOn: [Trail, TamperLambdaLogGroup]
     Condition: cEnableAdvancedLogging
     Type: "AWS::Lambda::Function"
     Properties:
@@ -3501,78 +3506,56 @@ Resources:
         # Ref: lambda/TamperLambda.py
         ZipFile: |
           import boto3
-          import base64
-          import uuid
-          import httplib
-          import urlparse
-          import json
           import cfnresponse
-
-          def getBucketName(bucket):
-            return bucket["Name"]
+          from botocore.exceptions import ClientError
 
 
-          def getLogBuckets(bucket_name):
-            if "logs" in bucket_name and "elb" not in bucket_name:
-              return True
-
-
-          def getBucketArn(bucket_name):
-            return "arn:aws:s3:::" + bucket_name + "/AWS"
-
-
-          def send_response(request, response, context, status=None, reason=None):
-            if status is not None:
-              response['Status'] = status
-            if reason is not None:
-              response['Reason'] = reason
-
-            try:
-              if 'ResponseURL' in request and request['ResponseURL']:
-                url = urlparse.urlparse(request['ResponseURL'])
-                body = json.dumps(response)
-                https = httplib.HTTPSConnection(url.hostname)
-                https.request('PUT', url.path+'?'+url.query, body)
-                cfnresponse.send(request, context, cfnresponse.SUCCESS, response, response['PhysicalResourceId'])
-            except Exception as e:
-              cfnresponse.send(request, context, cfnresponse.FAILED, response, response['PhysicalResourceId'])
-
-            return response
+          accepted_requests = {'Create'}
 
 
           def handler(event, context):
-            client = boto3.client('cloudtrail')
-            s3client = boto3.client('s3')
+              if event['RequestType'] not in accepted_requests:
+                  # Send a successful response to CloudFormation and exit
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+                  return 0
 
-            body = s3client.list_buckets()
-            bucket_list = map(getBucketArn, filter(getLogBuckets, map(getBucketName, body["Buckets"])))
+              client = boto3.client('cloudtrail')
+              s3client = boto3.client('s3')
 
-            response = client.put_event_selectors(
-              TrailName = event['ResourceProperties']['Trail'],
-              EventSelectors=[
-                {
-                  'ReadWriteType': 'All',
-                  'IncludeManagementEvents': True,
-                  'DataResources': [
-                    {
-                      'Type': 'AWS::S3::Object',
-                      'Values': bucket_list
-                    },
-                  ]
-                },
-              ]
-            )
-            if 'PhysicalResourceId' in event:
-              response['PhysicalResourceId'] = event['PhysicalResourceId']
-            else:
-              response['PhysicalResourceId'] = str(uuid.uuid4())
-            if event['RequestType'] == 'Delete':
-              cfnresponse.send(event, context, cfnresponse.SUCCESS, response, response['PhysicalResourceId'])
-              return response
-            return send_response(event, response, context)
+              try:
+                  cloudtrail_response = client.put_event_selectors(
+                      TrailName=event['ResourceProperties']['Trail'],
+                      EventSelectors=[
+                          {
+                              'ReadWriteType': 'All',
+                              'IncludeManagementEvents': True,
+                              'DataResources': [
+                                  {
+                                      'Type': 'AWS::S3::Object',
+                                      'Values': [
+                                          event['ResourceProperties']['BucketArn']+'/AWS'
+                                      ]
+                                  },
+                              ]
+                          },
+                      ]
+                  )
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+                  return 0
+              except ClientError as e:
+                  response_data = {'Reason': str(e)}
+                  cfnresponse.send(event, context, cfnresponse.FAILED, response_data)
+                  return 1
       Handler: index.handler
       Role: !GetAtt TamperLambdaRole.Arn
       Runtime: "python2.7"
+  TamperLambdaLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    Condition: cEnableAdvancedLogging
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${ResourcePrefix}-TamperLambda'
+      RetentionInDays: 1
   TamperLambdaRole:
     DependsOn: Trail
     Condition: cEnableAdvancedLogging
@@ -3594,6 +3577,13 @@ Resources:
               - Action: "s3:List*"
                 Effect: "Allow"
                 Resource: "arn:aws:s3:::*"
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource:
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ResourcePrefix}-TamperLambda'
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ResourcePrefix}-TamperLambda:*'
             Version: '2012-10-17'
           PolicyName: tamperlambda-policy
 
