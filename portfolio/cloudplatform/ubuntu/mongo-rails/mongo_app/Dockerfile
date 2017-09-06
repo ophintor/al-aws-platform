@@ -5,12 +5,15 @@ FROM ruby:2.3
 ARG PORT
 
 RUN apt-get update && \
-    apt-get install -y python-dev python-pip node && \
+    apt-get install -y python-dev python-pip nodejs && \
     pip install --upgrade awscli && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-COPY scripts/entrypoint.sh /
+RUN curl -sL https://deb.nodesource.com/setup_6.x | bash -
+RUN apt-get install nodejs
+
+#COPY scripts/entrypoint.sh /
 
 # Create mongo_app directory
 RUN mkdir -p /mongo_app
