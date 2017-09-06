@@ -11,7 +11,7 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 RUN curl -sL https://deb.nodesource.com/setup_6.x | bash -
-RUN apt-get install nodejs
+RUN apt-get install -y nodejs
 
 #COPY scripts/entrypoint.sh /
 
