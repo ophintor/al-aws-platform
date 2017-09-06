@@ -876,6 +876,36 @@ Resources:
                 AWS:
                   - !GetAtt 'TaskRole.Arn'
               Resource: '*'
+          - Sid: Allow Cloudtrail to encrypt logs
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action:
+              - kms:GenerateDataKey
+            Resource: '*'
+            Condition:
+              StringLike:
+                kms:EncryptionContext:aws:cloudtrail:arn:
+                  - !Sub arn:aws:cloudtrail:*:${AWS::AccountId}:trail/*
+          - Sid: Allow Cloudtrail access
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action:
+              - kms:DescribeKey
+            Resource: '*'
+          - Sid: Enable CloudTrail log decrypt permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+            Action: kms:Decrypt
+            Resource: "*"
+            Condition:
+              StringLike:
+                s3:prefix:
+                  - !Sub '${ResourcePrefix}'
+              'Null':
+                kms:EncryptionContext:aws:cloudtrail:arn: 'false'
   MyKeyAlias:
     Type: AWS::KMS::Alias
     Properties:
@@ -1835,7 +1865,7 @@ Resources:
           curl -sL https://deb.nodesource.com/setup_7.x | sudo -E bash -
           apt-get install -y python-pip
 
-          # Intall CloudFormation tools....
+          # Install CloudFormation tools....
           pip install https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz
 
           # Call CFN-INIT to process the metadata for CloudFormation Init. Since ubuntu does not have the tools installed, we install the CFN Bootstrap in the previous step.\n,
@@ -2041,6 +2071,11 @@ Resources:
                   - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${ResourcePrefix}-ecs-image:log-stream:*'
                   - !If [cEnableES, !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${ResourcePrefix}-kibana:log-stream:', !Ref 'AWS::NoValue']
                   - !If [cEnableES, !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${ResourcePrefix}-kibana:log-stream:*', !Ref 'AWS::NoValue']
+              - Effect: Allow
+                Action:
+                  - kms:*
+                Resource:
+                  - !Sub ${MyKey.Arn}
   CodeBuildArtifactLogGroup:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Retain
@@ -2106,6 +2141,7 @@ Resources:
               - '**/*' # All files recursively within the app directory
             base-directory: portfolio/cloudplatform/ubuntu/node-sql/app/
       TimeoutInMinutes: 300  # 5min
+      EncryptionKey: !Sub '${MyKey.Arn}'
   CodeBuildKibana:
     Type: AWS::CodeBuild::Project
     DependsOn:
@@ -2261,6 +2297,7 @@ Resources:
             files: /tmp/build.json
             discard-paths: 'yes'
       TimeoutInMinutes: 300 # 5min
+      EncryptionKey: !Sub '${MyKey.Arn}'
   CodeDeployTrustRole:
     Type: AWS::IAM::Role
     Condition: cEnableEC2
@@ -2357,6 +2394,16 @@ Resources:
               - !Sub 'arn:aws:s3:::${ResourcePrefix}-codepipeline-artifacts'
               - !Sub 'arn:aws:s3:::${ResourcePrefix}-codepipeline-artifacts/*'
             Principal: '*'
+          - Sid: DenyUnEncryptedObjectUploads
+            Effect: Deny
+            Principal: '*'
+            Action:
+              - s3:PutObject
+            Resource:
+              - !Sub 'arn:aws:s3:::${ResourcePrefix}-codepipeline-artifacts/*'
+            Condition:
+              StringNotEquals:
+                s3:x-amz-server-side-encryption: 'aws:kms'
   CloudFormationExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -2851,6 +2898,11 @@ Resources:
                   - s3:PutObject
                 Resource:
                   - !Sub 'arn:aws:s3:::${ResourcePrefix}-logs/*'
+              - Effect: Allow
+                Action:
+                  - kms:*
+                Resource:
+                  - !Sub '${MyKey.Arn}'
   LogMigrationScheduledRule:
     Type: AWS::Events::Rule
     Properties:
@@ -3447,6 +3499,7 @@ Resources:
   #####################################################################################
   # Mapping Log groups to the Lambda that ships them to Elasticsearch
   Trail:
+    Type: AWS::CloudTrail::Trail
     DependsOn: LogStoreS3LocationPolicy
     Condition: cEnableAdvancedLogging
     Properties:
@@ -3457,15 +3510,17 @@ Resources:
       IsMultiRegionTrail: true
       S3BucketName: !Ref LogStoreS3Location
       TrailName: !Sub '${ResourcePrefix}-LogTrail'
-    Type: AWS::CloudTrail::Trail
+      KMSKeyId: !Sub ${MyKey.Arn}
   TrailLogGroup:
+    Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub '/aws/cloudtrail/${ResourcePrefix}'
       RetentionInDays: 7
-    Type: AWS::Logs::LogGroup
     DeletionPolicy: Retain
     Condition: cEnableAdvancedLogging
   TrailLogGroupRole:
+    Type: AWS::IAM::Role
+    Condition: cEnableAdvancedLogging
     Properties:
       AssumeRolePolicyDocument:
         Statement:
@@ -3486,12 +3541,10 @@ Resources:
                 Resource: !GetAtt 'TrailLogGroup.Arn'
             Version: '2012-10-17'
           PolicyName: cloudtrail-policy
-    Type: AWS::IAM::Role
-    Condition: cEnableAdvancedLogging
   TamperLambdaTrigger:
+    Type: "Custom::TamperLambdaTrigger"
     DependsOn: TamperLambda
     Condition: cEnableAdvancedLogging
-    Type: "Custom::TamperLambdaTrigger"
     Properties:
       ServiceToken: !GetAtt TamperLambda.Arn
       Trail: !Sub '${ResourcePrefix}-LogTrail'
@@ -3499,7 +3552,6 @@ Resources:
   TamperLambda:
     DependsOn: [Trail, TamperLambdaLogGroup]
     Condition: cEnableAdvancedLogging
-    Type: "AWS::Lambda::Function"
     Properties:
       FunctionName: !Sub '${ResourcePrefix}-TamperLambda'
       Code:
@@ -3557,9 +3609,9 @@ Resources:
       LogGroupName: !Sub '/aws/lambda/${ResourcePrefix}-TamperLambda'
       RetentionInDays: 1
   TamperLambdaRole:
+    Type: AWS::IAM::Role
     DependsOn: Trail
     Condition: cEnableAdvancedLogging
-    Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
         Statement:
