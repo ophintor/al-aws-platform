@@ -12,6 +12,13 @@ Parameters:
     MaxLength: 16
     MinLength: 1
     Type: String
+  CloudTrailLogging:
+    Description: Enable/Disable CloudTrail logging
+    AllowedValues:
+      - Enable
+      - Disable
+    Default: Enable
+    Type: String
   Cleanup:
     AllowedValues:
       - Enable
@@ -38,7 +45,12 @@ Parameters:
     MaxLength: '18'
     MinLength: '9'
     Type: String
-
+  OperationsEmail:
+    Description: Email address to notify if there are any cloudtrail alarms
+    Type: String
+    AllowedPattern: (^$|([a-zA-Z0-9_\-\.+]+)@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.)|(([a-zA-Z0-9\-]+\.)+))([a-zA-Z]{2,4}|[0-9]{1,3})(\]?))
+    ConstraintDescription: Must be a valid email address.
+    Default: ''
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
@@ -52,6 +64,11 @@ Metadata:
           - ClusterSize
           - IPAccess
       - Label:
+          default: 'CloudTrail'
+        Parameters:
+          - CloudTrailLogging
+          - OperationsEmail
+      - Label:
           default: 'Debug Mode'
         Parameters:
           - Cleanup
@@ -62,6 +79,10 @@ Metadata:
         default: Amazon ES cluster size
       IPAccess:
         default: IP address range that can access Elasticsearch
+      CloudTrailLogging:
+        default: Enable Cloudtrail Logging
+      OperationsEmail:
+        default: Email Address for Notifications
       Cleanup:
         default: Auto Cleanup Stack
 
@@ -75,7 +96,8 @@ Conditions:
   SizeTiny:
     !Equals [!Ref ClusterSize, Tiny]
   cEnableCleanup: !Equals [!Ref Cleanup, 'Enable']
-
+  cEnableCloudTrailLogging: !Equals [!Ref CloudTrailLogging, 'Enable']
+  cEnableEmailNotications: !Not [!Equals [!Ref OperationsEmail, '']]
 Mappings:
   MasterSizing:
     elasticsearch:
@@ -83,21 +105,59 @@ Mappings:
       Medium: m3.medium.elasticsearch
       Small: t2.small.elasticsearch
       Tiny: t2.small.elasticsearch
-
   instanceCount:
     elasticsearch:
       Large: '10'
       Medium: '4'
       Small: '2'
       Tiny: '2'
-
   instanceSizing:
     elasticsearch:
       Large: r3.8xlarge.elasticsearch
       Medium: r3.2xlarge.elasticsearch
       Small: m3.large.elasticsearch
       Tiny: t2.medium.elasticsearch
-
+  FilterPatternLookup:
+    CloudTrail:
+      Pattern: ''
+      SecurityGroupChanges: '{ ($.eventName = AuthorizeSecurityGroupIngress) || ($.eventName
+        = AuthorizeSecurityGroupEgress) || ($.eventName = RevokeSecurityGroupIngress)
+        || ($.eventName = RevokeSecurityGroupEgress) || ($.eventName = CreateSecurityGroup)
+        || ($.eventName = DeleteSecurityGroup) }'
+      NetworkACLChanges: '{ ($.eventName = CreateNetworkAcl) || ($.eventName = CreateNetworkAclEntry)
+        || ($.eventName = DeleteNetworkAcl) || ($.eventName = DeleteNetworkAclEntry)
+        || ($.eventName = ReplaceNetworkAclEntry) || ($.eventName = ReplaceNetworkAclAssociation)
+        }'
+      GatewayChanges: '{ ($.eventName = CreateCustomerGateway) || ($.eventName = DeleteCustomerGateway)
+        || ($.eventName = AttachInternetGateway) || ($.eventName = CreateInternetGateway)
+        || ($.eventName = DeleteInternetGateway) || ($.eventName = DetachInternetGateway)
+        }'
+      VPCChanges: '{ ($.eventName = CreateVpc) || ($.eventName = DeleteVpc) ||
+        ($.eventName = ModifyVpcAttribute) || ($.eventName = AcceptVpcPeeringConnection)
+        || ($.eventName = CreateVpcPeeringConnection) || ($.eventName = DeleteVpcPeeringConnection)
+        || ($.eventName = RejectVpcPeeringConnection) || ($.eventName = AttachClassicLinkVpc)
+        || ($.eventName = DetachClassicLinkVpc) || ($.eventName = DisableVpcClassicLink)
+        || ($.eventName = EnableVpcClassicLink) }'
+      EC2InstanceChanges: '{ ($.eventName = RunInstances) || ($.eventName = RebootInstances)
+        || ($.eventName = StartInstances) || ($.eventName = StopInstances) || ($.eventName
+        = TerminateInstances) }'
+      EC2LargeInstanceChanges: '{ ($.eventName = RunInstances) && (($.requestParameters.instanceType
+        = *.8xlarge) || ($.requestParameters.instanceType = *.4xlarge)) }'
+      CloudTrailChanges: '{ ($.eventName = CreateTrail) || ($.eventName = UpdateTrail)
+        || ($.eventName = DeleteTrail) || ($.eventName = StartLogging) || ($.eventName
+        = StopLogging) }'
+      ConsoleSignInFailures: '{ ($.eventName = ConsoleLogin) && ($.errorMessage = "Failed
+        authentication") }'
+      AuthorizationFailures: '{ ($.errorCode = "*UnauthorizedOperation") || ($.errorCode =
+        "AccessDenied*") }'
+      LogTamper: '{ ($.eventSource = s3*) && (($.errorCode = "*UnauthorizedOperation") ||
+        ($.errorCode = "AccessDenied*")) }'
+      IAMPolicyChanges: '{ ($.eventName=DeleteGroupPolicy) || ($.eventName=DeleteRolePolicy) ||
+        ($.eventName=DeleteUserPolicy) || ($.eventName=PutGroupPolicy) || ($.eventName=PutRolePolicy) ||
+        ($.eventName=PutUserPolicy) || ($.eventName=CreatePolicy) || ($.eventName=DeletePolicy) ||
+        ($.eventName=CreatePolicyVersion) || ($.eventName=DeletePolicyVersion) ||
+        ($.eventName=AttachRolePolicy) || ($.eventName=DetachRolePolicy) || ($.eventName=AttachUserPolicy) ||
+        ($.eventName=DetachUserPolicy) || ($.eventName=AttachGroupPolicy) || ($.eventName=DetachGroupPolicy) }'
 Outputs:
   # Elasticsearch Outputs
   DomainEndpointES:
@@ -110,7 +170,9 @@ Outputs:
     Value: !Sub https://${ElasticsearchAWSLogs.DomainEndpoint}/_plugin/kibana/
     Export:
       Name: !Sub ${ResourcePrefix}-KibanaURL
-
+  DashboardURL:
+    Description: URL of the Cloudwatch logs dashboard which displays cloudtrail related info
+    Value: !Sub 'https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${ResourcePrefix}-Dashboard'
 Resources:
   ####################################################################################
   # Cleanup
@@ -120,9 +182,29 @@ Resources:
     Condition: cEnableCleanup
     Properties:
       ServiceToken: !ImportValue 'CleanupLambdaArn'
-      ResourcePrefix: !Ref 'ResourcePrefix'
-      IsDelLogs: true
-
+      BucketNames:
+        - !Ref 'ArtifactStoreS3Location'
+        - !If
+          - cEnableCloudTrailLogging
+          - !Ref 'LogStoreS3Location'
+          - !Ref 'AWS::NoValue'
+      LogGroupNames:
+        - !Ref 'SnapshotsLambdaLogsGroup'
+        - !If
+          - cEnableCloudTrailLogging
+          - !Ref 'TrailLogGroup'
+          - !Ref 'AWS::NoValue'
+        - !If
+          - cEnableCloudTrailLogging
+          - !Ref 'TamperLambdaLogGroup'
+          - !Ref 'AWS::NoValue'
+        - !If
+          - cEnableCloudTrailLogging
+          - !Ref 'LogStreamerLogsGroup'
+          - !Ref 'AWS::NoValue'
+  ####################################################################################
+  # Start of Elasticsearch
+  ####################################################################################
   ElasticsearchAWSLogs:
     Properties:
       AccessPolicies:
@@ -373,3 +455,613 @@ Resources:
                 "ESSnapshotRepo": "${ResourcePrefix}_repo"
               }
             }
+  #####################################################################################
+  # Start of Cloudtrail
+  #####################################################################################
+  LogStoreS3Location:
+    Type: AWS::S3::Bucket
+    Condition: cEnableCloudTrailLogging
+    DeletionPolicy: Retain
+    Properties:
+      BucketName: !Sub '${ResourcePrefix}-cloudtrail-logs'
+      LifecycleConfiguration:
+        Rules:
+          - ExpirationInDays: 90
+            Id: !Sub '${ResourcePrefix}-LogMigrationLifecycleRule'
+            Status: Enabled
+            Transitions:
+              - StorageClass: STANDARD_IA
+                TransitionInDays: 30
+              - StorageClass: GLACIER
+                TransitionInDays: 60
+  LogStoreS3LocationPolicy:
+    Type: AWS::S3::BucketPolicy
+    Condition: cEnableCloudTrailLogging
+    Properties:
+      Bucket: !Ref 'LogStoreS3Location'
+      PolicyDocument:
+        Statement:
+          - Sid: AWSCloudTrailAclCheck
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource: !Sub 'arn:aws:s3:::${LogStoreS3Location}'
+          - Sid: AWSCloudTrailWrite
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub 'arn:aws:s3:::${LogStoreS3Location}/*'
+            Condition:
+              StringEquals:
+                s3:x-amz-acl: bucket-owner-full-control
+  EmailNotificationTopic:
+    Type: AWS::SNS::Topic
+    Condition: cEnableEmailNotications
+    Properties:
+      TopicName: !Sub '${ResourcePrefix}-EmailSNSTopic'
+      Subscription:
+        - Endpoint: !Ref OperationsEmail
+          Protocol: email
+  ### Trail
+  KMSKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: Master key used by Parameter Store
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: Allow administration of the key
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: '*'
+            Resource: '*'
+          - Sid: Allow Cloudtrail to encrypt logs
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action:
+              - kms:GenerateDataKey
+            Resource: '*'
+            Condition:
+              StringLike:
+                kms:EncryptionContext:aws:cloudtrail:arn:
+                  - !Sub arn:aws:cloudtrail:*:${AWS::AccountId}:trail/*
+          - Sid: Allow Cloudtrail access
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action:
+              - kms:DescribeKey
+            Resource: '*'
+          - Sid: Enable CloudTrail log decrypt permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+            Action: kms:Decrypt
+            Resource: "*"
+            Condition:
+              StringLike:
+                s3:prefix:
+                  - !Sub '${ResourcePrefix}'
+              'Null':
+                kms:EncryptionContext:aws:cloudtrail:arn: 'false'
+  KMSKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub 'alias/${ResourcePrefix}-masterkey'
+      TargetKeyId: !Ref KMSKey
+  Trail:
+    DependsOn: LogStoreS3LocationPolicy
+    Condition: cEnableCloudTrailLogging
+    Properties:
+      CloudWatchLogsLogGroupArn: !GetAtt 'TrailLogGroup.Arn'
+      CloudWatchLogsRoleArn: !GetAtt 'TrailLogGroupRole.Arn'
+      IncludeGlobalServiceEvents: true
+      IsLogging: true
+      IsMultiRegionTrail: true
+      S3BucketName: !Ref LogStoreS3Location
+      TrailName: !Sub '${ResourcePrefix}-LogTrail'
+      KMSKeyId: !Sub ${KMSKey.Arn}
+    Type: AWS::CloudTrail::Trail
+  TrailLogGroup:
+    Properties:
+      LogGroupName: !Sub '/aws/cloudtrail/${ResourcePrefix}'
+      RetentionInDays: 7
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    Condition: cEnableCloudTrailLogging
+  TrailLogGroupRole:
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+        Version: '2012-10-17'
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action: logs:CreateLogStream
+                Effect: Allow
+                Resource: !GetAtt 'TrailLogGroup.Arn'
+              - Action:
+                  - logs:PutLogEvents
+                Effect: Allow
+                Resource: !GetAtt 'TrailLogGroup.Arn'
+            Version: '2012-10-17'
+          PolicyName: cloudtrail-policy
+    Type: AWS::IAM::Role
+    Condition: cEnableCloudTrailLogging
+  TamperLambdaTrigger:
+    DependsOn: TamperLambda
+    Condition: cEnableCloudTrailLogging
+    Type: "Custom::TamperLambdaTrigger"
+    Properties:
+      ServiceToken: !GetAtt TamperLambda.Arn
+      BucketArn: !Sub '${LogStoreS3Location.Arn}'
+  TamperLambda:
+    DependsOn: [Trail, TamperLambdaLogGroup]
+    Condition: cEnableCloudTrailLogging
+    Type: "AWS::Lambda::Function"
+    Properties:
+      FunctionName: !Sub '${ResourcePrefix}-TamperLambda'
+      Code:
+        # Ref: lambda/TamperLambda.py
+        ZipFile: !Sub |
+          import boto3
+          import cfnresponse
+          from botocore.exceptions import ClientError
+
+          accepted_requests = {'Create'}
+
+          def handler(event, context):
+              if event['RequestType'] not in accepted_requests:
+                  # Send a successful response to CloudFormation and exit
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+                  return 0
+
+              client = boto3.client('cloudtrail')
+              s3client = boto3.client('s3')
+
+              try:
+                  cloudtrail_response = client.put_event_selectors(
+                      TrailName='${ResourcePrefix}-LogTrail',
+                      EventSelectors=[
+                          {
+                              'ReadWriteType': 'All',
+                              'IncludeManagementEvents': True,
+                              'DataResources': [
+                                  {
+                                      'Type': 'AWS::S3::Object',
+                                      'Values': [
+                                          event['ResourceProperties']['BucketArn']+'/AWS'
+                                      ]
+                                  },
+                              ]
+                          },
+                      ]
+                  )
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+                  return 0
+              except ClientError as e:
+                  response_data = {'Reason': str(e)}
+                  cfnresponse.send(event, context, cfnresponse.FAILED, response_data)
+                  return 1
+      Handler: index.handler
+      Role: !GetAtt TamperLambdaRole.Arn
+      Runtime: "python2.7"
+  TamperLambdaLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    Condition: cEnableCloudTrailLogging
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${ResourcePrefix}-TamperLambda'
+      RetentionInDays: 1
+  TamperLambdaRole:
+    DependsOn: Trail
+    Condition: cEnableCloudTrailLogging
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+        Version: '2012-10-17'
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action: "cloudtrail:*"
+                Effect: "Allow"
+                Resource: !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${ResourcePrefix}-LogTrail'
+              - Action: "s3:List*"
+                Effect: "Allow"
+                Resource: "arn:aws:s3:::*"
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource:
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ResourcePrefix}-TamperLambda'
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ResourcePrefix}-TamperLambda:*'
+            Version: '2012-10-17'
+          PolicyName: tamperlambda-policy
+  ## Mapping Log groups to the Lambda that ships them to Elasticsearch
+  LambdaInvokePermission:
+    Condition: cEnableCloudTrailLogging
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref LogStreamer
+      Principal: !Sub 'logs.${AWS::Region}.amazonaws.com'
+      SourceAccount: !Ref AWS::AccountId
+    Type: AWS::Lambda::Permission
+  LogGrouptoLambdaMappingCloudTrail:
+    Type: AWS::Logs::SubscriptionFilter
+    Condition: cEnableCloudTrailLogging
+    DependsOn: LambdaInvokePermission
+    Properties:
+      DestinationArn: !GetAtt 'LogStreamer.Arn'
+      FilterPattern: !FindInMap [FilterPatternLookup, CloudTrail, Pattern]
+      LogGroupName: !Ref TrailLogGroup
+  LogStreamerLogsGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    Condition: cEnableCloudTrailLogging
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${ResourcePrefix}-log-streamer'
+      RetentionInDays: 1
+  LogStreamer:
+    Type: AWS::Lambda::Function
+    Condition: cEnableCloudTrailLogging
+    Properties:
+      # The following Function Name for the Lambda needs to contain two - symbols (eg: -log-streamer). This is to ensure that the AWS provided lambda is able to pick up the correct stack name.
+      # Since this lambda is provided by AWS from their bucket, we cannot modify it.
+      FunctionName: !Sub '${ResourcePrefix}-log-streamer'
+      Code:
+        S3Bucket: !Sub 'solutions-${AWS::Region}'
+        S3Key: centralized-logging/v1/centralizedLoggingDownload.zip
+      Description: Lambda function for moving log data to AES.
+      Handler: index.handler
+      Role: !GetAtt 'LogStreamerRole.Arn'
+      Runtime: nodejs4.3
+      Timeout: 300
+  LogStreamerRole:
+    Type: AWS::IAM::Role
+    Condition: cEnableCloudTrailLogging
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+        Version: '2012-10-17'
+      Path: /
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource:
+                  !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ResourcePrefix}*'
+              - Effect: Allow
+                Action:
+                  - es:ESHttpPost
+                Resource: arn:aws:es:*:*:*
+              - Effect: Allow
+                Action:
+                  - cloudformation:DescribeStacks
+                  - Cloudformation:ListStackResources
+                Resource: !Sub 'arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}*'
+            Version: '2012-10-17'
+          PolicyName: logstream_Lambda_Function_Permissions
+  ### TrailLogGroup
+  SecurityGroupChangesMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref 'TrailLogGroup'
+      FilterPattern: !FindInMap [FilterPatternLookup, CloudTrail, SecurityGroupChanges]
+      MetricTransformations:
+        - MetricNamespace: !Sub '${ResourcePrefix}-CloudTrailMetrics'
+          MetricName: SecurityGroupEventCount
+          MetricValue: '1'
+    Condition: cEnableCloudTrailLogging
+  SecurityGroupChangesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ResourcePrefix}-CloudTrailSecurityGroupChanges'
+      AlarmDescription: Alarms when an API call is made to create, update or delete
+        a Security Group.
+      AlarmActions:
+        - !If [cEnableEmailNotications, !Ref EmailNotificationTopic, !Ref 'AWS::NoValue']
+      MetricName: SecurityGroupEventCount
+      Namespace: !Sub '${ResourcePrefix}-CloudTrailMetrics'
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      EvaluationPeriods: '1'
+      Period: '300'
+      Statistic: Sum
+      Threshold: '1'
+    Condition: cEnableCloudTrailLogging
+  NetworkAclChangesMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref 'TrailLogGroup'
+      FilterPattern: !FindInMap [FilterPatternLookup, CloudTrail, NetworkACLChanges]
+      MetricTransformations:
+        - MetricNamespace: !Sub '${ResourcePrefix}-CloudTrailMetrics'
+          MetricName: NetworkAclEventCount
+          MetricValue: '1'
+    Condition: cEnableCloudTrailLogging
+  NetworkAclChangesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ResourcePrefix}-CloudTrailNetworkAclChanges'
+      AlarmDescription: Alarms when an API call is made to create, update or delete
+        a Network ACL.
+      AlarmActions:
+        - !If [cEnableEmailNotications, !Ref EmailNotificationTopic, !Ref 'AWS::NoValue']
+      MetricName: NetworkAclEventCount
+      Namespace: !Sub '${ResourcePrefix}-CloudTrailMetrics'
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      EvaluationPeriods: '1'
+      Period: '300'
+      Statistic: Sum
+      Threshold: '1'
+    Condition: cEnableCloudTrailLogging
+  GatewayChangesMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref 'TrailLogGroup'
+      FilterPattern: !FindInMap [FilterPatternLookup, CloudTrail, GatewayChanges]
+      MetricTransformations:
+        - MetricNamespace: !Sub '${ResourcePrefix}-CloudTrailMetrics'
+          MetricName: GatewayEventCount
+          MetricValue: '1'
+    Condition: cEnableCloudTrailLogging
+  GatewayChangesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ResourcePrefix}-CloudTrailGatewayChanges'
+      AlarmDescription: Alarms when an API call is made to create, update or delete
+        a Customer or Internet Gateway.
+      AlarmActions:
+        - !If [cEnableEmailNotications, !Ref EmailNotificationTopic, !Ref 'AWS::NoValue']
+      MetricName: GatewayEventCount
+      Namespace: !Sub '${ResourcePrefix}-CloudTrailMetrics'
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      EvaluationPeriods: '1'
+      Period: '300'
+      Statistic: Sum
+      Threshold: '1'
+    Condition: cEnableCloudTrailLogging
+  VpcChangesMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref 'TrailLogGroup'
+      FilterPattern: !FindInMap [FilterPatternLookup, CloudTrail, VPCChanges]
+      MetricTransformations:
+        - MetricNamespace: !Sub '${ResourcePrefix}-CloudTrailMetrics'
+          MetricName: VpcEventCount
+          MetricValue: '1'
+    Condition: cEnableCloudTrailLogging
+  VpcChangesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ResourcePrefix}-CloudTrailVpcChanges'
+      AlarmDescription: Alarms when an API call is made to create, update or delete
+        a VPC, VPC peering connection or VPC connection to classic.
+      AlarmActions:
+        - !If [cEnableEmailNotications, !Ref EmailNotificationTopic, !Ref 'AWS::NoValue']
+      MetricName: VpcEventCount
+      Namespace: !Sub '${ResourcePrefix}-CloudTrailMetrics'
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      EvaluationPeriods: '1'
+      Period: '300'
+      Statistic: Sum
+      Threshold: '1'
+    Condition: cEnableCloudTrailLogging
+  EC2InstanceChangesMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref 'TrailLogGroup'
+      FilterPattern: !FindInMap [FilterPatternLookup, CloudTrail, EC2InstanceChanges]
+      MetricTransformations:
+        - MetricNamespace: !Sub '${ResourcePrefix}-CloudTrailMetrics'
+          MetricName: EC2InstanceEventCount
+          MetricValue: '1'
+    Condition: cEnableCloudTrailLogging
+  EC2InstanceChangesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ResourcePrefix}-CloudTrailEC2InstanceChanges'
+      AlarmDescription: Alarms when an API call is made to create, terminate, start,
+        stop or reboot an EC2 instance.
+      AlarmActions:
+        - !If [cEnableEmailNotications, !Ref EmailNotificationTopic, !Ref 'AWS::NoValue']
+      MetricName: EC2InstanceEventCount
+      Namespace: !Sub '${ResourcePrefix}-CloudTrailMetrics'
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      EvaluationPeriods: '1'
+      Period: '300'
+      Statistic: Sum
+      Threshold: '1'
+    Condition: cEnableCloudTrailLogging
+  EC2LargeInstanceChangesMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref 'TrailLogGroup'
+      FilterPattern: !FindInMap [FilterPatternLookup, CloudTrail, EC2LargeInstanceChanges]
+      MetricTransformations:
+        - MetricNamespace: !Sub '${ResourcePrefix}-CloudTrailMetrics'
+          MetricName: EC2LargeInstanceEventCount
+          MetricValue: '1'
+    Condition: cEnableCloudTrailLogging
+  EC2LargeInstanceChangesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ResourcePrefix}-CloudTrailEC2LargeInstanceChanges'
+      AlarmDescription: Alarms when an API call is made to create, terminate, start,
+        stop or reboot a 4x or 8x-large EC2 instance.
+      AlarmActions:
+        - !If [cEnableEmailNotications, !Ref EmailNotificationTopic, !Ref 'AWS::NoValue']
+      MetricName: EC2LargeInstanceEventCount
+      Namespace: !Sub '${ResourcePrefix}-CloudTrailMetrics'
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      EvaluationPeriods: '1'
+      Period: '300'
+      Statistic: Sum
+      Threshold: '1'
+    Condition: cEnableCloudTrailLogging
+  CloudTrailChangesMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref 'TrailLogGroup'
+      FilterPattern: !FindInMap [FilterPatternLookup, CloudTrail, CloudTrailChanges]
+      MetricTransformations:
+        - MetricNamespace: !Sub '${ResourcePrefix}-CloudTrailMetrics'
+          MetricName: CloudTrailEventCount
+          MetricValue: '1'
+    Condition: cEnableCloudTrailLogging
+  CloudTrailChangesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ResourcePrefix}-CloudTrailChanges'
+      AlarmDescription: Alarms when an API call is made to create, update or delete
+        a CloudTrail trail, or to start or stop logging to a trail.
+      AlarmActions:
+        - !If [cEnableEmailNotications, !Ref EmailNotificationTopic, !Ref 'AWS::NoValue']
+      MetricName: CloudTrailEventCount
+      Namespace: !Sub '${ResourcePrefix}-CloudTrailMetrics'
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      EvaluationPeriods: '1'
+      Period: '300'
+      Statistic: Sum
+      Threshold: '1'
+    Condition: cEnableCloudTrailLogging
+  ConsoleSignInFailuresMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref 'TrailLogGroup'
+      FilterPattern: !FindInMap [FilterPatternLookup, CloudTrail, ConsoleSignInFailures]
+      MetricTransformations:
+        - MetricNamespace: !Sub '${ResourcePrefix}-CloudTrailMetrics'
+          MetricName: ConsoleSignInFailureCount
+          MetricValue: '1'
+    Condition: cEnableCloudTrailLogging
+  ConsoleSignInFailuresAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ResourcePrefix}-CloudTrailConsoleSignInFailures'
+      AlarmDescription: Alarms when an unauthenticated API call is made to sign into
+        the console.
+      AlarmActions:
+        - !If [cEnableEmailNotications, !Ref EmailNotificationTopic, !Ref 'AWS::NoValue']
+      MetricName: ConsoleSignInFailureCount
+      Namespace: !Sub '${ResourcePrefix}-CloudTrailMetrics'
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      EvaluationPeriods: '1'
+      Period: '300'
+      Statistic: Sum
+      Threshold: '3'
+    Condition: cEnableCloudTrailLogging
+  AuthorizationFailuresMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref 'TrailLogGroup'
+      FilterPattern: !FindInMap [FilterPatternLookup, CloudTrail, AuthorizationFailures]
+      MetricTransformations:
+        - MetricNamespace: !Sub '${ResourcePrefix}-CloudTrailMetrics'
+          MetricName: AuthorizationFailureCount
+          MetricValue: '1'
+    Condition: cEnableCloudTrailLogging
+  AuthorizationFailuresAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ResourcePrefix}-CloudTrailAuthorizationFailures'
+      AlarmDescription: Alarms when an unauthorized API call is made.
+      AlarmActions:
+        - !If [cEnableEmailNotications, !Ref EmailNotificationTopic, !Ref 'AWS::NoValue']
+      MetricName: AuthorizationFailureCount
+      Namespace: !Sub '${ResourcePrefix}-CloudTrailMetrics'
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      EvaluationPeriods: '1'
+      Period: '300'
+      Statistic: Sum
+      Threshold: '1'
+    Condition: cEnableCloudTrailLogging
+  LogTamperMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref 'TrailLogGroup'
+      FilterPattern: !FindInMap [FilterPatternLookup, CloudTrail, LogTamper]
+      MetricTransformations:
+        - MetricNamespace: !Sub '${ResourcePrefix}-CloudTrailMetrics'
+          MetricName: LogTamperCount
+          MetricValue: '1'
+    Condition: cEnableCloudTrailLogging
+  LogTamperAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ResourcePrefix}-CloudTrailLogTamperAlarm'
+      AlarmDescription: Alarms when an unauthorized action on the log bucket occurs.
+      AlarmActions:
+        - !If [cEnableEmailNotications, !Ref EmailNotificationTopic, !Ref 'AWS::NoValue']
+      MetricName: LogTamperCount
+      Namespace: !Sub '${ResourcePrefix}-CloudTrailMetrics'
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: '1'
+      Period: '60'
+      Statistic: Sum
+      Threshold: '1'
+    Condition: cEnableCloudTrailLogging
+  IAMPolicyChangesMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref 'TrailLogGroup'
+      FilterPattern: !FindInMap [FilterPatternLookup, CloudTrail, IAMPolicyChanges]
+      MetricTransformations:
+        - MetricNamespace: !Sub '${ResourcePrefix}-CloudTrailMetrics'
+          MetricName: IAMPolicyEventCount
+          MetricValue: '1'
+    Condition: cEnableCloudTrailLogging
+  IAMPolicyChangesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ResourcePrefix}-CloudTrailIAMPolicyChanges'
+      AlarmDescription: Alarms when an API call is made to change an IAM policy.
+      AlarmActions:
+        - !If [cEnableEmailNotications, !Ref EmailNotificationTopic, !Ref 'AWS::NoValue']
+      MetricName: IAMPolicyEventCount
+      Namespace: !Sub '${ResourcePrefix}-CloudTrailMetrics'
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      EvaluationPeriods: '1'
+      Period: '300'
+      Statistic: Sum
+      Threshold: '1'
+    Condition: cEnableCloudTrailLogging
+
+  ### CloudWatch Dashboard
+  BasicDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub '${ResourcePrefix}-Dashboard'
+      DashboardBody: !Sub
+        - |
+            {
+              "widgets": [
+                ${CloudTrailwidget}
+              ]
+            }
+        - CloudTrailwidget: !Sub |
+                {"type":"metric","x":6,"y":15,"width":6,"height":3,"properties":{"title":"ALARM: No. of unauthorised access to logs","annotations":{"alarms":["arn:aws:cloudwatch:${AWS::Region}:${AWS::AccountId}:alarm:${ResourcePrefix}-CloudTrailLogTamperAlarm"]},"view":"singleValue"}},
+                {"type":"metric","x":6,"y":18,"width":6,"height":3,"properties":{"title":"ALARM: No. of VPC changes","annotations":{"alarms":["arn:aws:cloudwatch:${AWS::Region}:${AWS::AccountId}:alarm:${ResourcePrefix}-CloudTrailVpcChanges"]},"view":"singleValue"}}
+  #####################################################################################
+  # End of CloudTrail
+  #####################################################################################
