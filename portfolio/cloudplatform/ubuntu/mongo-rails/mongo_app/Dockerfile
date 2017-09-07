@@ -13,12 +13,12 @@ RUN apt-get update && \
 RUN curl -sL https://deb.nodesource.com/setup_6.x | bash -
 RUN apt-get install -y nodejs
 
-# Create mongo_app directory
-RUN mkdir -p /mongo_app
-WORKDIR /mongo_app
+# Create app directory
+RUN mkdir -p /app
+WORKDIR /app
 
-# Bundle mongo_app source
-COPY . /mongo_app
+# Bundle app source
+COPY . /app
 RUN echo $(date) > ./build.date
 RUN bundle install
 
