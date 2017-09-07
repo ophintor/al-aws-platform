@@ -13,8 +13,6 @@ RUN apt-get update && \
 RUN curl -sL https://deb.nodesource.com/setup_6.x | bash -
 RUN apt-get install -y nodejs
 
-#COPY scripts/entrypoint.sh /
-
 # Create mongo_app directory
 RUN mkdir -p /mongo_app
 WORKDIR /mongo_app
@@ -22,8 +20,8 @@ WORKDIR /mongo_app
 # Bundle mongo_app source
 COPY . /mongo_app
 RUN echo $(date) > ./build.date
+RUN bundle install
 
 EXPOSE ${PORT}
 
-RUN bundle install
-CMD chmod +x scripts/*.sh && scripts/entrypoint.sh scripts/start_app.sh
+CMD scripts/entrypoint.sh scripts/start_app.sh
