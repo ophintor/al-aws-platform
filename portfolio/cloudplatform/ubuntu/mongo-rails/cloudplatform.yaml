@@ -2352,7 +2352,8 @@ Resources:
                       "TaskRole": "${TaskRole}",
                       "ECSTargetGroup": "${AppTargetGroup}",
                       "ECSServiceRole": "${ECSServiceRole}",
-                      "DBAddress": !GetAtt 'MongoDBInstance.PrivateIp',
+                      #"DBAddress": !GetAtt 'MongoDBInstance.PrivateIp',
+                      "DBAddress": "${MongoDBInstance.PrivateDnsName}",
                       "AppPort": "${AppPort}"
                     }
                 InputArtifacts:
