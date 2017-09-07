@@ -3285,10 +3285,42 @@ Resources:
       # Since this lambda is provided by AWS from their bucket, we cannot modify it.
       FunctionName: !Sub '${ResourcePrefix}-log-streamer'
       Code:
-        S3Bucket: !Sub 'solutions-${AWS::Region}'
-        S3Key: centralized-logging/v1/centralizedLoggingDownload.zip
+        ZipFile: |
+          function transform(e){if("CONTROL_MESSAGE"===e.messageType)return null;
+          var t="";
+          return e.logEvents.forEach(function(n){var o=new Date(1*n.timestamp),s=["cwl-"+o.getUTCFullYear(),("0"+(o.getUTCMonth()+1)).slice(-2),("0"+o.getUTCDate()).slice(-2)].join("."),r=buildSource(n.message,n.extractedFields);
+          r["@id"]=n.id,r["@timestamp"]=new Date(1*n.timestamp).toISOString(),r["@message"]=n.message,r["@owner"]=e.owner,r["@log_group"]=e.logGroup,r["@log_stream"]=e.logStream;
+          var i={index:{}};
+          i.index._index=s,i.index._type=e.logGroup,i.index._id=n.id,t+=[JSON.stringify(i),JSON.stringify(r)].join("\n")+"\n"}),t}function buildSource(e,t){if(t){var n={};
+          for(var o in t)if(t.hasOwnProperty(o)&&t[o]){var s=t[o];
+          if(isNumeric(s)){n[o]=1*s;continue}jsonSubString=extractJson(s),null!==jsonSubString&&(n["$"+o]=JSON.parse(jsonSubString)),n[o]=s}return n}return jsonSubString=extractJson(e),null!==jsonSubString?JSON.parse(jsonSubString):{}}function extractJson(e){var t=e.indexOf("{");
+          if(0>t)return null;
+          var n=e.substring(t);return isValidJson(n)?n:null}function isValidJson(e){try{JSON.parse(e)}catch(t){return!1}return!0}function isNumeric(e){return!isNaN(parseFloat(e))&&isFinite(e)}function post(e,t){console.log("endpoint:",endpoint);
+          var n=buildRequest(endpoint,e);
+          console.log("requestParams:",n);
+          var o=https.request(n,function(e){var n="";
+          e.on("data",function(e){n+=e}),e.on("end",function(){var o,s,r=JSON.parse(n);
+          console.log("post info:",r),e.statusCode>=200&&e.statusCode<299&&(o=r.items.filter(function(e){return e.index.status>=300}),s={attemptedItems:r.items.length,successfulItems:r.items.length-o.length,failedItems:o.length});
+          var i=200!==e.statusCode||r.errors===!0?{statusCode:e.statusCode,responseBody:n}:null;
+          console.log("post error:",i),t(i,s,e.statusCode,o)})}).on("error",function(e){t(e)});
+          o.end(n.body)}function buildRequest(e,t){var n=e.match(/^([^\.]+)\.?([^\.]*)\.?([^\.]*)\.amazonaws\.com$/),o=n[2],s=n[3],r=(new Date).toISOString().replace(/[:\-]|\.\d{3}/g,""),i=r.substr(0,8),a=hmac("AWS4"+process.env.AWS_SECRET_ACCESS_KEY,i),u=hmac(a,o),c=hmac(u,s),l=hmac(c,"aws4_request"),d={host:e,method:"POST",path:"/_bulk",body:t,headers:{"Content-Type":"application/json",Host:e,"Content-Length":Buffer.byteLength(t),"X-Amz-Security-Token":process.env.AWS_SESSION_TOKEN,"X-Amz-Date":r}},g=Object.keys(d.headers).sort(function(e,t){return e.toLowerCase()<t.toLowerCase()?-1:1}).map(function(e){return e.toLowerCase()+":"+d.headers[e]}).join("\n"),S=Object.keys(d.headers).map(function(e){return e.toLowerCase()}).sort().join(";"),f=[d.method,d.path,"",g,"",S,hash(d.body,"hex")].join("\n"),p=[i,o,s,"aws4_request"].join("/"),h=["AWS4-HMAC-SHA256",r,p,hash(f,"hex")].join("\n");
+          return d.headers.Authorization=["AWS4-HMAC-SHA256 Credential="+process.env.AWS_ACCESS_KEY_ID+"/"+p,"SignedHeaders="+S,"Signature="+hmac(l,h,"hex")].join(", "),d}function hmac(e,t,n){return crypto.createHmac("sha256",e).update(t,"utf8").digest(n)}function hash(e,t){return crypto.createHash("sha256").update(e,"utf8").digest(t)}var https=require("https"),zlib=require("zlib"),crypto=require("crypto");
+          const util=require("util");
+          var endpoint=process.env.es_domain_endpoint;
+          exports.handler=function(e,t){console.log(e);
+          var n=new Buffer(e.awslogs.data,"base64");
+          zlib.gunzip(n,function(e,n){if(e)return void t.fail(e);
+          var o=JSON.parse(n.toString("utf8")),s=transform(o);
+          return s?(console.log('elasticsearchBulkData:',s),void post(s,function(e,n,o,s){console.log('Response:'+JSON.stringify({statusCode:o})),e?(console.log('postElasticSearchBulkData Error:'+JSON.stringify(e,null,2)),s&&s.length>0&&console.log('Failed Items:'+JSON.stringify(s,null,2)),t.fail(JSON.stringify(e))):(console.log('Success:'+JSON.stringify(n)),t.succeed('Success'))})):(console.log('Received a control message'),void t.succeed('Control message handled successfully'))})};
       Description: Lambda function for moving log data to AES.
       Handler: index.handler
+      Environment:
+        Variables:
+          es_domain_endpoint: !If
+            - cEnableESCentral
+            - Fn::ImportValue:
+                !Sub '${ElasticsearchStack}-DomainEndpointES'
+            - !Sub '${ElasticsearchAWSLogs.DomainEndpoint}'
       Role: !GetAtt 'LogStreamerRole.Arn'
       Runtime: nodejs4.3
       Timeout: 300
