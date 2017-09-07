@@ -5,7 +5,7 @@ FROM ruby:2.3
 ARG PORT
 
 RUN apt-get update && \
-    apt-get install -y python-dev python-pip nodejs && \
+    apt-get install -y python-dev python-pip && \
     pip install --upgrade awscli && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
