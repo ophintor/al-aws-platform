@@ -11,6 +11,68 @@ products:
     template: cloudplatform/ubuntu/node-sql/cloudplatform.yaml
     owner: info@automationlogic.com
     description: Creates a ready-to-use infrastructure for your NodeJS App
+    constraints:
+      - description: Enforce Cleanup
+        rules: |
+          {
+            "Rules": {
+              "Cleanup": {
+                "Assertions": [
+                  {
+                    "Assert": {
+                      "Fn::Equals": [
+                        "Enable",
+                        {
+                          "Ref": "Cleanup"
+                        }
+                      ]
+                    },
+                    "AssertDescription": "Ensures no resources remain in account after a version of this product is deleted"
+                  }
+                ]
+              }
+            }
+          }
+      - description: Instance Size Constraints
+        rules: |
+          {
+            "Rules": {
+              "DB Instance Size": {
+                "Assertions": [
+                  {
+                    "Assert": {
+                      "Fn::Equals": [
+                        "db.t2.large",
+                        {
+                          "Ref": "DBClass"
+                        }
+                      ]
+                    },
+                    "AssertDescription": "Limits DB instance sizes used for development"
+                  }
+                ]
+              },
+              "EC2 Instance Size": {
+                "Assertions": [
+                  {
+                    "Assert": {
+                      "Fn::Contains": [
+                        [
+                          "t2.micro",
+                          "m3.medium",
+                          "m3.large"
+                        ],
+                        {
+                          "Ref": "InstanceType"
+                        }
+                      ]
+                    },
+                    "AssertDescription": "Limits instance sizes used for development"
+                  }
+                ]
+              }
+            }
+          }
   - name: CentralLogging
     template: central-logging/central-logging-elasticsearch.yaml
     owner: info@automationlogic.com

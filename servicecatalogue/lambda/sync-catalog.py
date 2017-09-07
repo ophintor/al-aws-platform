@@ -116,7 +116,7 @@ def sync_service_catalog(s3, artifact, jobid):
                             '/tmp/portfolio/' + productsInFile['template'],
                             bucket, s3key)
                         # TODO: use list_provisioning_artifacts to get last version?
-                        create_provisioning_artifact(productsInFile, productid, bucket + "/" + s3key)
+                        create_provisioning_artifact(productsInFile, portfolio_id, productid, bucket + "/" + s3key)
                     else:
                         s3key = 'sc-templates/' + productsInFile['name'] + '/templates/' + str(
                             uuid.uuid4()) + '.yaml'
@@ -276,11 +276,47 @@ def list_products_for_portfolio(id):
             break
     return lst_products
 
+def refresh_constraints(objProduct, portfolioid, productid):
+    """
+
+    :param objProduct: Product object to be created. Has all the mandatory details for product creation
+    :param portfolioid: Portfolio ID with which the constraints would be associated with
+    :param productid: Product ID with which the constraints would be associated with for the specified portfolio
+
+    might need to rewrite the loop with the example  from above.
+
+    :return: None
+    """
+
+    while True:
+      current_constraints = client.list_constraints_for_portfolio(
+          PortfolioId=portfolioid,
+          ProductId=productid
+      )
+
+      for constraint in current_constraints['ConstraintDetails']:
+          client.delete_constraint(Id=constraint['ConstraintId'])
+
+      if 'NextPageToken' not in current_constraints:
+          break
+
+    if 'constraints' in objProduct:
+        for constraint in objProduct['constraints']:
+            create_constraint_response = client.create_constraint(
+                PortfolioId=portfolioid,
+                ProductId=productid,
+                Parameters=constraint['rules'],
+                Type='TEMPLATE',
+                Description=constraint['description'],
+                IdempotencyToken=str(uuid.uuid4())
+            )
+    else:
+        print("No constraints for {}".format(objProduct['name']))
 
 def create_product(objProduct, portfolioid, s3objectkey):
     """
 
-    :param objProduct: Product object to be created. has all the mandatory details for product creation
+    :param objProduct: Product object to be created. Has all the mandatory details for product creation
     :param portfolioid: Portfolio ID with which the newly created product would be associated with
     :param s3objectkey: S3Object Key, which has the cloudformation template for the product
     :return: None
@@ -308,8 +344,10 @@ def create_product(objProduct, portfolioid, s3objectkey):
         PortfolioId=portfolioid
     )
 
+    refresh_constraints(objProduct, portfolioid, create_product_response['ProductViewDetail']['ProductViewSummary']['ProductId'])
 
-def create_provisioning_artifact(objProduct, productid, s3objectkey):
+
+def create_provisioning_artifact(objProduct, portfolioid, productid, s3objectkey):
     """
 
     :param objProduct: Product object for which the provisioning artifact (version of the product) will be created. has all the mandatory details for product.
@@ -335,6 +373,7 @@ def create_provisioning_artifact(objProduct, productid, s3objectkey):
         IdempotencyToken=str(uuid.uuid4())
     )
 
+    refresh_constraints(objProduct, portfolioid, productid)
 
 def create_portfolio(objMappingFile, bucket):
     """
