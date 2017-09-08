@@ -20,8 +20,7 @@ WORKDIR /app
 # Bundle app source
 COPY . /app
 RUN echo $(date) > ./build.date
-RUN bundle install
 
 EXPOSE ${PORT}
 
-CMD chmod +x scripts/*.sh && scripts/entrypoint.sh scripts/app_start.sh
+CMD chmod +x scripts/*.sh; scripts/after_install.sh; scripts/app_start.sh
