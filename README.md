@@ -147,11 +147,18 @@ The following steps need to be run in order to get the demo to work;
         ```
 
 5. When the platform / stack is no longer needed, it can be terminated from the list of provisioned products in the service catalogue.
-    - If the **auto cleanup** options are enabled, the retained resources of a stack will be cleaned up automatically.
-    - If **manual cleanup** is required, the *utils/cleanup/cleanup.sh* script can be used. To use run the following command from the terminal.
-      ```
-      PREFIX=<resource prefix> REGION=<region> ./utils/cleanup.sh
-      ```
+      - If the **auto cleanup** options are enabled, the retained resources of a stack will be cleaned up automatically.
+      - If **manual cleanup** is required, the *utils/cleanup/cleanup.sh* script can be used. To use run the following command from the terminal.
+
+        ```
+        PREFIX=<resource prefix> REGION=<region> ./utils/cleanup.sh
+        ```
+
+      - The **mastertemplate.yaml** needs to be deleted with the **manual cleanup** as auto cleanup is not possible. To use run the following command from the terminal.
+
+        ```
+        STACK_NAME=<Stack_Name> REGION=<region> MASTER=true ./utils/cleanup.sh
+        ```
 
 ### Parameters Conditions Explained
 
