@@ -24,4 +24,4 @@ RUN bundle install
 
 EXPOSE ${PORT}
 
-CMD scripts/entrypoint.sh scripts/start_app.sh
+CMD chmod +x scripts/*.sh && scripts/entrypoint.sh scripts/start_app.sh
