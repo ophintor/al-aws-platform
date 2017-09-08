@@ -23,4 +23,4 @@ RUN echo $(date) > ./build.date
 
 EXPOSE ${PORT}
 
-CMD chmod +x scripts/*.sh; scripts/after_install.sh; scripts/app_start.sh; scripts/app_check.sh
+CMD chmod +x scripts/*.sh; scripts/after_install.sh; scripts/app_start.sh
