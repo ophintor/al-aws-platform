@@ -20,7 +20,8 @@ WORKDIR /app
 # Bundle app source
 COPY . /app
 RUN echo $(date) > ./build.date
+RUN bundle install
 
 EXPOSE ${PORT}
 
-CMD chmod +x scripts/*.sh; scripts/after_install.sh; scripts/entrypoint.sh rails s -b 0.0.0.0
+CMD chmod +x scripts/*.sh; scripts/entrypoint.sh rails s -b 0.0.0.0
