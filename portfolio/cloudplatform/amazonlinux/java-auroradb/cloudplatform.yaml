@@ -19,9 +19,15 @@ Mappings:
     # Oregon
     us-west-2:
       AmazonLinux: ami-6df1e514
+    # Canada
+    ca-central-1:
+      AmazonLinux: ami-a7aa15c3
     # Ireland
     eu-west-1:
       AmazonLinux: ami-d7b9a2b1
+    # London
+    eu-west-2:
+      AmazonLinux: ami-ed100689
     # Frankfurt
     eu-central-1:
       AmazonLinux: ami-82be18ed
@@ -40,15 +46,21 @@ Mappings:
     # Ohio
     us-east-2:
       ecs: ami-207b5a45
-    # North California
-    us-west-1:
-      ecs: ami-7d664a1d
+    # # North California
+    # us-west-1:
+    #   ecs: ami-7d664a1d
     # Oregon
     us-west-2:
       ecs: ami-57d9cd2e
+    # Canada
+    ca-central-1:
+      ecs: ami-3da81759
     # Ireland
     eu-west-1:
       ecs: ami-809f84e6
+    # London
+    eu-west-2:
+      ecs: ami-ff15039b
     # Frankfurt
     eu-central-1:
       ecs: ami-a3a006cc

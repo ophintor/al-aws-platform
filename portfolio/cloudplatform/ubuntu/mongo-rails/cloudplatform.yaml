@@ -23,10 +23,18 @@ Mappings:
     us-west-2:
       Ubuntu16x04: ami-835b4efa
       MongoDB: ami-11099171
+    # Canada
+    ca-central-1:
+      Ubuntu16x04: ami-7ed56a1a
+      MongoDB: ami-18912d7c
     # Ireland
     eu-west-1:
       Ubuntu16x04: ami-6d48500b
       MongoDB: ami-8c717cea
+    # London
+    eu-west-2:
+      Ubuntu16x04: ami-cc7066a8
+      MongoDB: ami-24b0a440
     # Frankfurt
     eu-central-1:
       Ubuntu16x04: ami-1c45e273
@@ -48,15 +56,21 @@ Mappings:
     # Ohio
     us-east-2:
       ecs: ami-207b5a45
-    # North California
-    us-west-1:
-      ecs: ami-7d664a1d
+    # # North California
+    # us-west-1:
+    #   ecs: ami-7d664a1d
     # Oregon
     us-west-2:
       ecs: ami-57d9cd2e
+    # Canada
+    ca-central-1:
+      ecs: ami-3da81759
     # Ireland
     eu-west-1:
       ecs: ami-809f84e6
+    # London
+    eu-west-2:
+      ecs: ami-ff15039b
     # Frankfurt
     eu-central-1:
       ecs: ami-a3a006cc

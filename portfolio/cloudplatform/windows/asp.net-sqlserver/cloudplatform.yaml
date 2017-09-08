@@ -23,9 +23,15 @@ Mappings:
     # Oregon
     us-west-2:
       WindowsServer2016: ami-c4ffe3bd
+    # Canada
+    ca-central-1:
+      WindowsServer2016: ami-ce54ebaa
     # Ireland
     eu-west-1:
       WindowsServer2016: ami-e1876a98
+    # London
+    eu-west-2:
+      WindowsServer2016: ami-5a80963e
     # Frankfurt
     eu-central-1:
       WindowsServer2016: ami-b0e240df

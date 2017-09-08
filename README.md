@@ -66,15 +66,24 @@ You can use the [AWS User Interface](https://console.aws.amazon.com/console/home
 
 ### Prerequisites
 
-There are 7 regions supporting all the resources required to create the stack:
+There are 9 regions supporting all the resources required to create the stack:
 
  * Virginia: **us-east-1**
  * Ohio: **us-east-2**
  * Oregon: **us-west-2**
+ * Montreal: **ca-central-1**
  * Ireland: **eu-west-1**
+ * London: **eu-west-2**
  * Frankfurt: **eu-central-1**
  * Sydney: **ap-southeast-2**
  * Tokyo: **ap-northeast-1**
+
+Unsupported Regions and Missing Resources on AWS
+* Northern California - Service Catalog 
+* Sao Paulo - Glacier, Service Catalog, Code Build
+* Singapore - Glacier
+* Seoul - Service Catalog, Code Build
+* Mumbai  - Service Catalog, Code Build
 
 If you intend on using the [AWS CLI](https://aws.amazon.com/cli/) you must configure the following:
 
