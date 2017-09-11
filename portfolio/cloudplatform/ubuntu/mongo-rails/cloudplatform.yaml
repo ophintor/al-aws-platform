@@ -767,6 +767,7 @@ Resources:
               Principal:
                 AWS:
                   - !GetAtt 'TaskRole.Arn'
+                  - !GetAtt 'DBInstanceRole.Arn'
               Resource: '*'
   MyKeyAlias:
     Type: AWS::KMS::Alias
