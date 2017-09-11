@@ -1,0 +1,148 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  AWS CloudFormation ECS MyApp service deploy
+
+Parameters:
+  # Resources
+  Cluster:
+    Type: String
+  TaskRole:
+    Type: String
+  ECSTargetGroup:
+    Type: String
+  ECSServiceRole:
+    Type: String
+  CloudwatchLogsGroup:
+    Type: String
+  # Configurations
+  ParentStackName:
+    Type: String
+  ResourcePrefix:
+    Type: String
+  DBAddress:
+    Type: String
+  DockerImage:
+    Type: String
+  DockerImageTag:
+    Type: String
+  AppPort:
+    Type: Number
+
+# Resources documentation
+# http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-template-resource-type-ref.html
+Resources:
+  #####################################################################################
+  # Start of ECS Service
+  #####################################################################################
+  MyApp:
+    Type: "AWS::ECS::Service"
+    Properties:
+      Cluster: !Ref Cluster
+      DesiredCount: 2
+      TaskDefinition: !Ref MyAppDefinition
+      LoadBalancers:
+        - ContainerName: myapp
+          ContainerPort: !Sub '${AppPort}'
+          TargetGroupArn: !Ref ECSTargetGroup
+      Role: !Ref ECSServiceRole
+  MyAppDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub "${ResourcePrefix}-myapp"
+      TaskRoleArn: !Ref TaskRole
+      ContainerDefinitions:
+        - Name: myapp
+          Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${DockerImage}:${DockerImageTag}
+          Memory: '300'
+          Environment:
+            - Name: SSM_DB_USERNAME
+              Value: !Sub "${ParentStackName}/db/username"
+            - Name: SSM_DB_PASSWORD
+              Value: !Sub "${ParentStackName}/db/password"
+            - Name: SSM_DB_NAME
+              Value: !Sub "${ParentStackName}/db/name"
+            - Name: SSM_PORT
+              Value: !Sub "${ParentStackName}/app/port"
+            - Name: DB_CONNECTIONSTRING
+              Value: !Ref DBAddress
+          PortMappings:
+            - ContainerPort: !Sub '${AppPort}'
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref 'CloudwatchLogsGroup'
+              awslogs-region: !Ref 'AWS::Region'
+              awslogs-stream-prefix: myapp
+  #####################################################################################
+  # End of ECS
+  #####################################################################################
+
+  #####################################################################################
+  # Start of Service AutoScaling
+  #####################################################################################
+  AutoscalingRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${ResourcePrefix}-ECS-Service-AutoScaling
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [application-autoscaling.amazonaws.com]
+            Action: ['sts:AssumeRole']
+      Path: /
+      Policies:
+        - PolicyName: ecs-service-autoscaling
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'application-autoscaling:*'
+                  - 'cloudwatch:DescribeAlarms'
+                  - 'cloudwatch:PutMetricAlarm'
+                  - 'ecs:DescribeServices'
+                  - 'ecs:UpdateService'
+                Resource: '*'
+  ServiceScalingTarget:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    DependsOn: MyApp
+    Properties:
+      MaxCapacity: 6
+      MinCapacity: 1
+      ResourceId: !Sub 'service/${Cluster}/${MyApp.Name}'
+      RoleARN: !GetAtt [AutoscalingRole, Arn]
+      ScalableDimension: ecs:service:DesiredCount
+      ServiceNamespace: ecs
+  ServiceScalingPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: AStepPolicy
+      PolicyType: StepScaling
+      ScalingTargetId: !Ref ServiceScalingTarget
+      StepScalingPolicyConfiguration:
+        AdjustmentType: PercentChangeInCapacity
+        Cooldown: 60
+        MetricAggregationType: Average
+        StepAdjustments:
+          - MetricIntervalLowerBound: 0
+            ScalingAdjustment: 200
+  ALB500sAlarmScaleUp:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${ResourcePrefix}-ALB_500s_alarm_scale_up
+      EvaluationPeriods: 1
+      Statistic: Average
+      Threshold: 10
+      AlarmDescription: Alarm if our ALB generates too many HTTP 500s.
+      Period: 60
+      AlarmActions: [!Ref ServiceScalingPolicy]
+      Namespace: AWS/ApplicationELB
+      Dimensions:
+        - Name: ECSService
+          Value: !Ref MyApp
+      ComparisonOperator: GreaterThanThreshold
+      MetricName: HTTPCode_ELB_5XX_Count
+
+  #####################################################################################
+  # End of Service AutoScaling
+  #####################################################################################

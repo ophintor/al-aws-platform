@@ -311,7 +311,7 @@ Parameters:
     Type: String
     Default: Disable
     AllowedValues:
-      # - Enable  # TODO: FIX ECS for MONGO RAILS DEMO
+      - Enable
       - Disable
   InstanceType:
     AllowedValues:
@@ -910,11 +910,17 @@ Resources:
     Properties:
       GroupDescription: Frontend Access
       SecurityGroupIngress:
-        - IpProtocol: TCP
-          FromPort: 27017
-          ToPort: 27017
-          CidrIp: 10.0.0.0/16
-      VpcId: !Ref 'VPC'
+        - !If
+          - cEnableContainers
+          - SourceSecurityGroupId: !Ref ECSSecurityGroup
+            FromPort: !FindInMap [DBEngines, !Ref 'DBEngine', port]
+            ToPort: !FindInMap [DBEngines, !Ref 'DBEngine', port]
+            IpProtocol: tcp
+          - SourceSecurityGroupId: !Ref AppSecurityGroup
+            FromPort: !FindInMap [DBEngines, !Ref 'DBEngine', port]
+            ToPort: !FindInMap [DBEngines, !Ref 'DBEngine', port]
+            IpProtocol: tcp
+      VpcId: !Ref VPC
   MongoDBInstance:
     Type: AWS::EC2::Instance
     Metadata:
