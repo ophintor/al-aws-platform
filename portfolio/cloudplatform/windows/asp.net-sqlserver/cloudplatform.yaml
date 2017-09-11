@@ -3,7 +3,11 @@ Description: >
   Automation Logic Cloud Platform Windows Demo
 Mappings:
   DBEngines:
-    sqlserver-ex:
+    sqlserver-web:
+      port: 1433
+    sqlserver-se:
+      port: 1433
+    sqlserver-ee:
       port: 1433
   RMProtocolPort:
     # Remote Management
@@ -195,8 +199,17 @@ Parameters:
     AllowedValues:
       - db.t2.small
       - db.t2.medium
+      - db.m4.large
+      - db.m4.xlarge
+      - db.m4.2xlarge
+      - db.m4.4xlarge
+      - db.m4.10xlarge
+      - db.r3.xlarge
+      - db.r3.2xlarge
+      - db.r3.4xlarge
+      - db.r3.8xlarge
     ConstraintDescription: must select a valid database instance type.
-    Default: db.t2.medium
+    Default: db.t2.small
     Description: Database instance class
     Type: String
   DBName:
@@ -226,9 +239,20 @@ Parameters:
     NoEcho: true
     Type: String
   DBEngine:
-    AllowedValues: ["sqlserver-ex"]
-    Default: sqlserver-ex
-    Description: Which DB Engine to use
+    AllowedValues:
+      - sqlserver-web
+      - sqlserver-se
+      - sqlserver-ee
+    Default: sqlserver-web
+    Description: |
+      Which DB Engine to use.
+      WARNING!!!
+      If web is chosen:  min allowed value for allocated storage is 20 and allowed instances are db.t2.small-db.m4.4xlarge |
+      If se is chosen: min allowed value for allocated storage is 200 and allowed instances are db.m4.large-db.m4.4xlarge |
+      If ee is chosen: min allowed value for allocated storage is 200 and allowed instaces are db.m4.xlarge onwards |
+      Please note - in case instance requirements do not match the chosen engine,
+      the value will automatically be changed up to the nearest allowed value
+
     Type: String
   ElasticsearchLogs:
     Description: Enable/Disable Elasticsearch; Central Logging relies on a standalone stack with ES. Integrated starts an ES cluster as part of the stack's resources.
@@ -441,6 +465,8 @@ Metadata:
         default: Resource Prefix Name / Stack Name
       AppPort:
         default: Application TCP Port
+      DBEngine:
+        default: Database Engine
       DBName:
         default: Database Name
       DBUsername:
@@ -507,7 +533,28 @@ Conditions:
   cEnableEmailNotications: !Not [!Equals [!Ref OperationsEmail, '']]
   cEnableSlackAndLambdaLogging: !And [!Condition cEnableSlackApprovals, !Condition cEnableAdvancedLogging]
   cEnableEmailNoticationsAndLambdaLogging: !And [!Condition cEnableEmailNotications, !Condition cEnableAdvancedLogging]
-
+  dbInstanceTooBigForWeb: !Or
+    - !Equals [!Ref DBClass, 'db.m4.10xlarge']
+    - !Equals [!Ref DBClass, 'db.r3.xlarge']
+    - !Equals [!Ref DBClass, 'db.r3.2xlarge']
+    - !Equals [!Ref DBClass, 'db.r3.4xlarge']
+    - !Equals [!Ref DBClass, 'db.r3.8xlarge']
+  dbInstanceTooSmallForSE: !Or
+    - !Equals [!Ref DBClass, 'db.t2.small']
+    - !Equals [!Ref DBClass, 'db.t2.medium']
+  dbInstanceTooBigForSE: !Or
+    - !Equals [!Ref DBClass, 'db.m4.10xlarge']
+    - !Equals [!Ref DBClass, 'db.r3.xlarge']
+    - !Equals [!Ref DBClass, 'db.r3.2xlarge']
+    - !Equals [!Ref DBClass, 'db.r3.4xlarge']
+    - !Equals [!Ref DBClass, 'db.r3.8xlarge']
+  dbInstanceTooSmallForEE: !Or
+    - !Equals [!Ref DBClass, 'db.t2.small']
+    - !Equals [!Ref DBClass, 'db.t2.medium']
+    - !Equals [!Ref DBClass, 'db.m4.large']
+  dbIsWeb: !Equals [!Ref DBEngine, 'sqlserver-web']
+  dbIsSE: !Equals [!Ref DBEngine, 'sqlserver-se']
+  dbIsEE: !Equals [!Ref DBEngine, 'sqlserver-ee']
 # Resources documentation
 # http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-template-resource-type-ref.html
 Resources:
@@ -836,7 +883,28 @@ Resources:
     Type: AWS::RDS::DBInstance
     Properties:
       AllocatedStorage: !Ref DBAllocatedStorage
-      DBInstanceClass: !Ref DBClass
+      DBInstanceClass: !If
+        - dbIsWeb
+        - !If
+          - dbInstanceTooBigForWeb
+          - db.m4.4xlarge
+          - !Ref DBClass
+        - !If
+          - dbIsSE
+          - !If
+            - dbInstanceTooBigForSE
+            - db.m4.4xlarge
+            - !If
+              - dbInstanceTooSmallForSE
+              - db.m4.large
+              - !Ref DBClass
+          - !If
+            - dbIsEE
+            - !If
+              - dbInstanceTooSmallForEE
+              - db.m4.xlarge
+              - !Ref DBClass
+            - !Ref AWS::NoValue
       VPCSecurityGroups: [!Ref DBSecurityGroup]
       Engine: !Ref DBEngine
       LicenseModel: license-included
@@ -844,6 +912,8 @@ Resources:
       MasterUsername: !Ref DBUsername
       BackupRetentionPeriod: 0 # NOTE: This disables backups and speedups the provisioning tests...!
       DBSubnetGroupName: !Ref DBSubnetGroup
+      StorageEncrypted: "True"
+      KmsKeyId: !GetAtt 'MyKey.Arn'
   StoreDBAddress:
     Type: AWS::SSM::Parameter
     DeletionPolicy: Delete

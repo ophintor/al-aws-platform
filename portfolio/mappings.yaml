@@ -81,6 +81,49 @@ products:
     template: cloudplatform/windows/asp.net-sqlserver/cloudplatform.yaml
     owner: info@automationlogic.com
     description: Creates a ready-to-use infrastructure for your .NET App
+    constraints:
+      - description: DB Instance Size Constraints
+        rules: |
+          {
+            "Rules": {
+              "dbWebInstanceSizes": {
+                "RuleCondition": {
+                  "Fn::Equals": [{"Ref": "DBEngine"},"sqlserver-web"]
+                },
+                "Assertions": [
+                  {
+                    "Assert": {
+                      "Fn::Contains": [["db.t2.small","db.t2.medium","db.m4.large","db.m4.xlarge","db.m4.2xlarge","db.m4.4xlarge"],{"Ref": "DBClass"}]},
+                    "AssertDescription": "Ensures only SQLServer Web compatible instance classes are available, if the engine is chosen."
+                  }
+                ]
+              },
+              "dbSEInstanceSizes": {
+                "RuleCondition": {
+                  "Fn::Equals": [{"Ref": "DBEngine"},"sqlserver-se"]
+                },
+                "Assertions": [
+                  {
+                    "Assert": {
+                      "Fn::Contains": [["db.m4.large","db.m4.xlarge","db.m4.2xlarge","db.m4.4xlarge"],{"Ref": "DBClass"}]},
+                    "AssertDescription": "Ensures only SQLServer SE compatible instance classes are available, if the engine is chosen."
+                  }
+                ]
+              },
+              "dbEEInstanceSizes": {
+                "RuleCondition": {
+                  "Fn::Equals": [{"Ref": "DBEngine"},"sqlserver-ee"]
+                },
+                "Assertions": [
+                  {
+                    "Assert": {
+                      "Fn::Contains": [["db.m4.xlarge","db.m4.2xlarge","db.m4.4xlarge","db.m4.10xlarge","db.r3.xlarge","db.r3.2xlarge","db.r3.4xlarge","db.r3.8xlarge"],{"Ref": "DBClass"}]},
+                    "AssertDescription": "Ensures only SQLServer EE compatible instance classes are available, if the engine is chosen."
+                  }
+                ]
+              }
+            }
+          }
   - name: Java-CloudPlatform
     template: cloudplatform/amazonlinux/java-auroradb/cloudplatform.yaml
     owner: info@automationlogic.com
@@ -96,7 +139,7 @@ products:
 accounts:
   - identifier: AL
     number: 505076813643
-#Place Holder for tags. The Sync Lambda expects some tags values which is the reason behind the following tags block being present in this mappings file.
+# Place Holder for tags. The Sync Lambda expects some tags values which is the reason behind the following tags block being present in this mappings file.
 tags:
   - Key: keyname1
     Value: value1
