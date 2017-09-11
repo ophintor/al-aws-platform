@@ -910,16 +910,13 @@ Resources:
     Properties:
       GroupDescription: Frontend Access
       SecurityGroupIngress:
-        - !If
-          - cEnableContainers
-          - SourceSecurityGroupId: !Ref ECSSecurityGroup
-            FromPort: !FindInMap [DBEngines, !Ref 'DBEngine', port]
-            ToPort: !FindInMap [DBEngines, !Ref 'DBEngine', port]
-            IpProtocol: tcp
-          - SourceSecurityGroupId: !Ref AppSecurityGroup
-            FromPort: !FindInMap [DBEngines, !Ref 'DBEngine', port]
-            ToPort: !FindInMap [DBEngines, !Ref 'DBEngine', port]
-            IpProtocol: tcp
+        - SourceSecurityGroupId: !If
+            - cEnableContainers
+            - !Ref ECSSecurityGroup
+            - !Ref AppSecurityGroup
+          FromPort: !FindInMap [DBEngines, !Ref 'DBEngine', port]
+          ToPort: !FindInMap [DBEngines, !Ref 'DBEngine', port]
+          IpProtocol: tcp
       VpcId: !Ref VPC
   MongoDBInstance:
     Type: AWS::EC2::Instance
