@@ -8,7 +8,7 @@ REGION="${REGION:-eu-west-1}"
 MASTER="${MASTER:-false}"
 
 # If MASTER is true then delete the Service Catalog stacks
-if [ "${MASTER}" -ne false ]
+if [ "${MASTER}" == false ]
 then
 # Delete CLOUD PLATFORM Product Stack Stuff
 	aws ecr delete-repository \
