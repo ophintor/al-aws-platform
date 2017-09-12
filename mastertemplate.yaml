@@ -281,6 +281,119 @@ Resources:
       ArtifactStore:
         Type: S3
         Location: !Ref ArtifactBucket
+  DevGroup:
+    Type: AWS::IAM::Group
+    Properties:
+      GroupName: !Sub '${AWS::StackName}-Dev'
+      ManagedPolicyArns:
+        # ServiceCatalog Full non-Adminup Access
+        - arn:aws:iam::aws:policy/ServiceCatalogEndUserFullAccess
+      Policies:
+        - PolicyName: readonly-dev
+          PolicyDocument:
+            Statement:
+              # EC2 Basic Access
+              - Effect: Allow
+                Action:
+                  - autoscaling:Describe*
+                  - ec2:CreateKeyPair
+                  - ec2:Describe*
+                  - elasticloadbalancing:Describe*
+                Resource: '*'
+              # KMS Basic Access
+              - Effect: Allow
+                Action:
+                  - kms:ListAliases
+                  - kms:ListKeys
+                Resource: '*'
+              # ECS Console RO
+              - Effect: Allow
+                Action:
+                  - ecs:DescribeClusters
+                  - ecr:DescribeRepositoriess
+                  - ecs:List*
+                  - ecr:List*
+                Resource: '*'
+              # Lambda Console RO
+              - Effect: Allow
+                Action:
+                  - lambda:List*
+                Resource: '*'
+              # RDS Console RO
+              - Effect: Allow
+                Action:
+                  - rds:DescribeDBClusters
+                  - rds:DescribeEvent*
+                  - rds:DescribeDBInstances
+                Resource: '*'
+              # DynamoDB Console RO
+              - Effect: Allow
+                Action:
+                  - dynamodb:List*
+                  - dynamodb:DescribeLimits
+                  - dynamodb:DescribeReservedCapacity
+                Resource: '*'
+              # CloudWatch Console RO
+              - Effect: Allow
+                Action:
+                  - cloudwatch:DescribeAlarms*
+                  - cloudwatch:GetMetric*
+                  - cloudwatch:ListMetrics
+                  - logs:DescribeLogGroups
+                Resource: '*'
+              # CloudFront Console RO
+              - Effect: Allow
+                Action:
+                  - cloudfront:List*
+                Resource: '*'
+              # Route53 Console RO
+              - Effect: Allow
+                Action:
+                  - route53:GetHealth*
+                  - route53:GetHostedZoneCount
+                  - route53:GetTrafficPolicyInstanceCount
+                  - route53:List*
+                  - route53domains:List*
+                Resource: '*'
+              # CodeCommit/CodeBuild/CodeDeploy/CodePipeline Console RO
+              - Effect: Allow
+                Action:
+                  - codebuild:ListProjects
+                  - codecommit:ListRepositories
+                  - codedeploy:BatchGetApplications
+                  - codedeploy:ListApplications
+                  - codepipeline:ListPipelines
+                Resource: '*'
+              # CloudFormation Console RO
+              - Effect: Allow
+                Action:
+                  - cloudformation:ListChangeSets
+                  - cloudformation:ListStacks
+                Resource: '*'
+              # Elasticsearch Console RO
+              - Effect: Allow
+                Action:
+                  - es:DescribeElasticsearchDomains
+                  - es:List*
+                  - es:ListElasticsearchVersions
+                Resource: '*'
+              # SQS Console RO
+              - Effect: Allow
+                Action:
+                  - sqs:ListQueues
+                Resource: '*'
+              # SNS Console RO
+              - Effect: Allow
+                Action:
+                  - sns:List*
+                Resource: '*'
+              # ACM Console RO
+              - Effect: Allow
+                Action:
+                  - acm:DescribeCertificate
+                  - acm:List*
+                Resource: '*'
+
   ######################################
   # Cleanup Section
   ######################################
