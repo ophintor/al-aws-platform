@@ -228,7 +228,7 @@ Parameters:
     Type: String
   AppPort:
     ConstraintDescription: must be a valid TCP port number (1-65535)
-    Default: 3000
+    Default: 80
     Description: Which TCP port the app listens on
     MaxValue: 65535
     MinValue: 1
@@ -283,7 +283,7 @@ Parameters:
     NoEcho: true
     Type: String
   DBEngine:
-    AllowedValues: ["PostreSQL"]
+    AllowedValues: ["postgres"]
     Default: postgres
     Description: Which DB Engine to use
     Type: String
@@ -1672,8 +1672,14 @@ Resources:
           packages:
             apt:
               postgresql-client: []
-#              libwww-perl: []
-#              libdatetime-perl: []
+              php: []
+              libapache2-mod-php: []
+              php-pgsql: []
+              apache2: []
+              ruby: []
+              nodejs: []
+              libwww-perl: []
+              libdatetime-perl: []
             python:
               awscli: []
           sources:
@@ -1697,11 +1703,13 @@ Resources:
                 - |
                     [general]
                     state_file= /var/awslogs/agent-state
-                    [php-serverlog]
-                    file = /tmp/server.log
+
+                    [php-errorlog]
+                    file = /var/log/apache2/error.log
                     log_group_name =  ${LogGroupAppLog}
-                    log_stream_name = nodejs.serverlog-{instance_id}
+                    log_stream_name = php.errorlog-{instance_id}
                     datetime_format = %d/%b/%Y:%H:%M:%S
+
                     [cloud-init-outputlog]
                     file = /var/log/cfn-init.log
                     log_group_name =  ${LogGroupCloudInit}
@@ -2413,7 +2421,7 @@ Resources:
                   ActionMode: CREATE_UPDATE
                   StackName: !Sub '${AWS::StackName}-ContainerApp'
                   Capabilities: CAPABILITY_NAMED_IAM
-                  TemplatePath: SourceOutput::portfolio/cloudplatform/ubuntu/node-sql/app/containerapp.template.yaml
+                  TemplatePath: SourceOutput::portfolio/cloudplatform/ubuntu/php-postgres/app/containerapp.template.yaml
                   RoleArn: !GetAtt 'CloudFormationExecutionRole.Arn'
                   # Can't be a YAML object:  Value of property Configuration must be an object with String (or simple type) properties
                   ParameterOverrides: !Sub |
@@ -2596,7 +2604,7 @@ Resources:
             - !Sub '"${CodeBuildKibana}",'
             - !Ref AWS::NoValue
           - !Sub |
-                "${CodeBuildArtifact}"
+              "${CodeBuildArtifact}"
                   ]
                 }
               }
