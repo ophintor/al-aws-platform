@@ -838,6 +838,8 @@ Resources:
               Principal:
                 AWS:
                   - !GetAtt 'TaskRole.Arn'
+                  - !GetAtt 'CodePipelineServiceRole.Arn'
+                  - !GetAtt 'CloudFormationExecutionRole.Arn'
               Resource: '*'
   MyKeyAlias:
     Type: AWS::KMS::Alias
