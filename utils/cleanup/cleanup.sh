@@ -66,6 +66,7 @@ then
 		"/aws/lambda/${PREFIX}-slack-notifications"
 		"/aws/lambda/${PREFIX}-AutoCleanup"
 		"/aws/lambda/${PREFIX}-SC-SyncLambda"
+		"/aws/lambda/${PREFIX}-add-target-with-transform"
 		"${PREFIX}-ecs"
 		"${PREFIX}-applog"
 		"${PREFIX}-cloudinitoutput"
